@@ -1,0 +1,103 @@
+.globl _fill_flag
+.globl _put_tile_block
+.globl _put_tile_block_asm_direct
+.globl _fill_block_asm_direct
+.globl _fill_block_addr_asm_direct
+
+WRTVRM = 0x004d
+
+FILLBLOCK = 0x00
+PUTTILE   = 0x01
+
+_put_tile_block::
+	ld hl, #2
+	add hl, sp
+
+	ld c, (hl) ;x
+	inc hl
+	ld b, (hl) ;y
+	inc hl
+
+	ld a, (hl) ;start_tile
+	
+	inc hl
+	ld d,(hl) ;width
+	;TODO: check if width=0
+	inc hl
+	ld e,(hl) ;height
+	;TODO: check if height=0
+	jr _put_tile_block_asm_direct
+
+_fill_block_addr_asm_direct::	
+; if calling direct from an ASM routine, no need to use the stack
+; A = Fixed Tile
+; HL = Destination VRAM addreess
+; D = Width
+; E = Height
+	push ix
+	ld ix, #_fill_flag
+	ld (ix), #FILLBLOCK
+	jr _do_fill_addr_block
+
+_fill_block_asm_direct::	
+; if calling direct from an ASM routine, no need to use the stack
+; A = Fixed Tile
+; C = X
+; B = Y
+; D = Width
+; E = Height
+	push ix
+	ld ix, #_fill_flag
+	ld (ix), #FILLBLOCK
+	jr _do_fill_block
+
+; if calling direct from an ASM routine, no need to use the stack
+; A = Start Tile
+; C = X
+; B = Y
+; D = Width
+; E = Height
+_put_tile_block_asm_direct::	
+	push ix
+	ld ix, #_fill_flag
+	ld (ix), #PUTTILE
+_do_fill_block :
+	ld h, #0
+	ld l, b
+	rlc l
+	rlc l
+	rlc l; L = L * 8
+	add hl, hl
+	add hl, hl ;hl=y*32
+	ld b, #0
+	add hl, bc ;hl=y*32+x
+
+	ld bc, #0x1800
+	add hl, bc ;hl=VRAM_NAME_TBL+y*32+x
+
+_do_fill_addr_block :
+	ld b,e ;height
+new_row:
+	push bc
+	push hl
+	ld b,d ;width
+write_tile:
+	call WRTVRM ;Writes data (1 byte) in VRAM (HL,A)
+	add a, (ix)
+	inc hl
+	djnz write_tile
+	pop hl
+	ld bc, #32
+	add hl, bc ;hl=next row
+	pop bc
+	djnz new_row
+	pop ix
+	ret
+	
+;--------------------------------------------------------
+; ram data
+;--------------------------------------------------------
+
+.area _DATA
+
+_fill_flag: .ds 1

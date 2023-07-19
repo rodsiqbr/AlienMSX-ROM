@@ -1,0 +1,65 @@
+; 16-bit xorshift pseudorandom number generator by John Metcalf
+; 20 bytes, 86 cycles (excluding ret)
+; seed parameter + C interface by Rodrigo Siqueira (2021)
+; -----------------------------------------------------------------------------
+; Parameters:
+;   A = seed (if seed=0 keep stored seed; else use this seed
+; Returns:
+;   HL: pseudorandom number
+;   Corrupts A
+; -----------------------------------------------------------------------------
+; hl ^= hl << 7
+; hl ^= hl >> 9
+; hl ^= hl << 8
+; some alternative shift triplets which also perform well are:
+; 6, 7, 13; 7, 9, 13; 9, 7, 13.
+
+;--------------------------------------------------------
+; ram data
+;--------------------------------------------------------
+	.area _DATA (REL, CON) 
+_internalseed: .dw #1
+;.globl _internalseed
+
+	.area _CODE
+; C convention
+.globl _msx_random
+
+_msx_random::
+    ld hl,#2
+    add hl,sp 	;bypass return address
+
+    ld l,(hl)  	;seed(low)
+    ld h,#0	;seed(high)=0
+    ld a,l
+    or a 	;seed param=0?
+    jp nz,genrand
+    ld hl,(_internalseed) ;seed=0?
+    ld a,l
+    or a 	;l=0?
+    jp nz,genrand 	;no - uses current seed
+    ld a,h
+    or a	;and h=0?
+    jp z,xrnd
+    jp genrand
+msx_random::
+xrnd:
+  ld hl,#1       ; seed must not be 0
+genrand:
+  ld a,h
+  rra
+  ld a,l
+  rra
+  xor h
+  ld h,a
+  ld a,l
+  rra
+  ld a,h
+  rra
+  xor l
+  ld l,a
+  xor h
+  ld h,a
+
+  ld (_internalseed),hl
+  ret

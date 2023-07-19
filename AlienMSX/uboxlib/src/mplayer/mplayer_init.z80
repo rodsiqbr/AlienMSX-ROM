@@ -1,0 +1,25 @@
+.globl _mplayer_init
+.globl _mplayer_init_asm_direct
+
+.globl _PLY_AKM_INIT
+
+_mplayer_init::
+; RS: preserve IX register
+	push ix
+	ld ix, #2 + #2
+	add ix, sp
+
+	ld l, 0 (ix)
+	ld h, 1 (ix)
+	ld a, 2 (ix)
+	jr _go_mplayer_init
+
+_mplayer_init_asm_direct::
+	push ix
+_go_mplayer_init:
+	di
+	call _PLY_AKM_INIT
+; RS: restoree IX register
+	pop ix
+	ei
+	ret

@@ -1,0 +1,7435 @@
+// ----------------------------------------------------------
+//	ALIEN ROM program (32K cartridge) for MSX
+// ----------------------------------------------------------
+
+
+// TODOS: Bugs list:
+// 1. trocar ubox_put_tile para 
+//; if calling direct from an ASM routine, no need to use the stack
+//; A = Tile
+//; C = X
+//; B = Y
+//_put_tile_asm_direct::
+// 2. mapgen.py deve garantir que não hava 2 Lockers com o mesmo ID em um mesmo Level
+// 3. Mission complete SFX
+// 4. Criar SXF_INTERACTIVE sound FX
+
+
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include "targetconfig.h"
+#include "MSX/BIOS/msxbios.h"
+
+#include "uboxlib/include/ubox.h"
+#include "uboxlib/include/ap.h"
+#include "uboxlib/include/spman.h"
+#include "uboxlib/include/mplayer.h"
+#include "uboxlib/include/ubox_ext.h"
+
+// Disable "z80instructionSize() failed to parse line node" SDCC error with ASM inline labels
+#pragma disable_warning 218
+#pragma disable_warning 85	// because some variables not used in C context
+#pragma disable_warning 59	// because asm code inside C functions doesn´t return a value
+
+#define LOCAL
+
+// Include all Tilesets
+#include "data/font1ts.h"    // font 1 Tileset
+#include "data/font2ts.h"    // font 2 Tileset
+//#include "data/font3ts.h"  // font 3 Tileset - NOT USED
+#include "data/scorets.h"    // score Tileset
+#include "data/introts.h"    // intro Tileset
+#include "data/game0ts.h"    // game map level 1 and 3 Tileset
+#include "data/game1ts.h"    // game map level 2 Tileset
+
+// Include all texts, maps, sprites(player, objects and all the enemies)
+#include "data/gametext.h"   // Intro text, Credits text, GameOver text ...
+#include "data/player.h"     // Ash + Ripley sprite data
+#include "data/objects.h"    // Objects sprite data
+#include "data/maplvl1.h"    // Map Level 1
+#include "data/maplvl2.h"    // Map Level 2
+//#include "data/maplvl3.h"    // Map Level 3 (differential from Level 1)
+
+
+// ----------------------------------------------------------
+// DATA STRUCTURES SECTION
+// ----------------------------------------------------------
+
+typedef struct
+{
+	uint8_t x;             //    0 | entity x position
+	uint8_t y;             //    1 | entity y position
+	uint8_t dir;           //    2 | entity direction
+	uint8_t status;        //    3 | entity status
+	uint8_t hitflag;       //    4 | player was hit flag
+	uint8_t pat;           //    5 | entity sprite pattern #
+	uint8_t frame;         //    6 | entity sprite frame #
+	uint8_t delay;         //    7 | entity sprite frame delay counter
+	uint8_t type;          //    8 | entity type
+	void (*update)();      // 9-10 | not used, global update routine used instead
+} LiveEntity;
+
+struct AnimatedTile
+{
+	uint16_t iPosition;    // 0-1 | relative tile position in VRAM NAME TABLE (values from 0 - 767)
+	uint8_t cCycleMode;    //   2 | index at cycle table
+	uint8_t cStep;         //   3 | current frame step in the cycle table (LEFT_MOST_TILE, 0x00 or RIGHT_MOST_TILE if this object is a Slider)
+	uint8_t cLastFrame;    //   4 | last frame offset used for Tile pattern
+	uint8_t cTile;	       //   5 | base tile
+	uint8_t cTimer;        //   6 | **timer (in cycles) - only for special tiles (Locker ID or Mission # if object is an Interactive)
+	uint8_t cTimeLeft;     //   7 | **remaining time (in cycles) - only for special tiles
+	uint8_t cSpTileStatus; //   8 | **status - only for special tiles (ST_ENABLED[1], ST_DISABLED[0], ST_TIMEWAIT[2])
+	uint8_t cSpObjID;      //   9 | **ObjectID - only for special tiles
+};
+
+struct AnimTileList
+{
+	uint8_t cTile;         //   0 | tile #
+	uint16_t iPosition;    // 1-2 | relative tile position in VRAM NAME TABLE (values from 0 - 767)
+};
+
+struct ObjTileHistory
+{
+	uint8_t cScreenMap;    //   0 | screen map #. 0xFF if free record
+	uint16_t iPosition;    // 1-2 | relative tile position in VRAM NAME TABLE (values from 0 - 767)
+	uint8_t cTile;         //   3 | tile stored in the history
+};
+
+struct ObjectScreen
+{
+	uint8_t cObjID;        // 0 | Object ID. 0xFF if free record
+	uint8_t cX0;           // 1 | x0 top left (0 - 255)
+	uint8_t cX1;           // 2 | x1 bottom right (0 - 255)
+	uint8_t cY0;           // 3 | y0 top left (0 - 192)
+	uint8_t cY1;           // 4 | y1 bottom right (0 - 192)
+//uint8_t cObjStatus;    // 4 | if Object Class = ANIM_CYCLE_FACEHUG_EGG (ST_EGG_CLOSED, ST_EGG_OPENED, ST_EGG_RELEASED, ST_EGG_DESTROYED)
+	uint8_t cObjClass;     // 5 | Object Class (ANIM_CYCLE_NULL, ANIM_CYCLE_SLIDER_UP, ANIM_CYCLE_SLIDER_DOWN, ANIM_CYCLE_SLIDER_RIGHT, ANIM_CYCLE_SLIDER_LEFT, ANIM_CYCLE_FACEHUG_EGG)
+};
+
+struct FlashLightStatusData
+{
+	uint8_t  bFLightJustEnabled;    //    0 | Flag - true if FlashLight was just enabled
+	uint16_t iCurrPlyPositionOffs;  //  1-2 | Player position (upper left block) absolute offset (values from 0 - 767)
+	uint8_t  cCurrPlyTileX;         //    3 | Player tile X position
+	uint8_t  cCurrPlyTileY;         //    4 | Player tile Y position
+	uint8_t  cOffSetXLeft;          //    5 | FlashLight offset X at left (0, 1 or 2)
+	uint8_t  cOffSetXRight;         //    6 | FlashLight offset X at right (0, 1 or 2)
+	uint8_t  cOffSetYTop;           //    7 | FlashLight offset Y at top (0, 1 or 2)
+	uint8_t  cOffSetYBottom;        //    8 | FlashLight offset Y at bottom (0, 1 or 2)
+  uint16_t iVRAMAddrStartFL;      // 9-10 | VRAM Address from 1st flashlight tile
+	uint8_t  cWidthFL;              //   11 | FlashLight Width
+	uint8_t  cHeightFL;             //   12 | FlashLight Height
+};
+
+
+// ----------------------------------------------------------
+// CONSTANT DATA AND DEFINES SECTION
+// ----------------------------------------------------------
+
+//TODO: create 1 single compressed data package with all data set
+// N = {0, 1, 2}: Tile offset to print at screen = basetile + N
+// N = 0xFF			: Blank Tile to print at screen
+// N = 0xFE			: Stop animation (until animation restarts by an user action or a timer)
+const uint8_t cCycleTable[] = {
+                                0, 1, 0, 1, 0, 1, 1, 0, 1, 0,                         // 0 = acid
+                                0, 1, 2, 2, 2, 1, 0xFF, 0xFF, 0xFF, 0xFF,             // 1 = steam
+                                0, 1, 1, 0, 1, 0xFF, 0xFF, 0xFF, 1, 1,                // 2 = energy ray AND force field
+                                0, 1, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,    // 3 = oil drop
+                                0, 1, 2, 0, 1, 2, 0, 1, 2, 0,                         // 4 = mat, anti-clockwise = 0
+                                2, 1, 0, 2, 1, 0, 2, 1, 0, 2,                         // 5 = mat, clockwise = 1
+																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 6 = gate open
+																1, 1, 1, 0, 0xFE, 0xFF, 0xFF, 0xFF, 0, 0xFE,          // 7 = gate close
+																0, 0xFE, 1, 0xFE, 0xFF, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, // 8 = break wall 3 stages
+																1, 0xFE, 0, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, // 9 = interactive 2 stages (0 = on -> off / 2 = off -> on)
+																0, 1, 2, 0, 1, 2, 0, 1, 2, 0xFF,                      // 10 = portal
+																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 11 = locker open
+																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 2, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
+																// Intro logo animation blocks
+																16, 1, 1, 1, 1,							// I
+																5, 3, 2, 2, 2,							// A
+																26, 2, 2, 3, 3,							// N
+																11, 1, 1, 1, 1,							// L
+																20, 1, 1, 1, 1,							// E
+																6, 2, 2, 3, 3,							// A		
+																28, 1, 1, 1, 1,							// N		
+																21, 2, 2, 0, 2,							// E		
+																12, 0, 0, 0, 2,							// L		
+																26, 1, 1, 1, 1,							// N		
+																6, 0, 0, 2, 2,              // A		
+                                21, 0, 2, 2, 0,             // E
+																// several control frame animation
+																0, 1, 2, 3, 4, 3, 2, 1,                               // cCtrl_frames[INTRO_CTRL_CYCLE]
+																0, 1, 0, 2,                                           // walk_frames[PLYR_WALK_CYCLE]
+};
+/*
+#include "data/datapkg.h"
+#define DATA_TILE_CYCLE_SIZE				(10 * 10)
+#define DATA_INTRO_BLOCK_SIZE				(5 * 12)
+#define DATA_INTRO_CTRL_CYCLE_SIZE	(1 * 8)
+#define DATA_PLYR_WALK_CYCLE_SIZE		(1 * 4)
+
+uint8_t cGlbDataPackage[DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + DATA_INTRO_CTRL_CYCLE_SIZE + DATA_PLYR_WALK_CYCLE_SIZE + 1];
+uint8_t *cCycleTable;
+uint8_t *cIntroData;
+uint8_t *cCtrl_frames;
+uint8_t *cWalk_frames;
+
+zx0_uncompress(cGlbDataPackage, data_package);
+cCycleTable = cGlbDataPackage;
+cIntroData = cGlbDataPackage + DATA_TILE_CYCLE_SIZE;
+cCtrl_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE;
+cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + DATA_INTRO_CTRL_CYCLE_SIZE;
+*/
+
+#define ANIM_CYCLE_NULL         0
+#define ANIM_CYCLE_FORCEFIELD   2
+#define ANIM_CYCLE_BELT         4
+#define ANIM_CYCLE_GATE_OPEN    6
+#define ANIM_CYCLE_GATE_CLOSE   7
+#define ANIM_CYCLE_WALL_BREAK   8
+#define ANIM_CYCLE_INTERACTIVE  9
+#define ANIM_CYCLE_PORTAL       10
+#define ANIM_CYCLE_LOCKER_OPEN  11
+#define ANIM_CYCLE_FACEHUG_EGG  12
+#define ANIM_CYCLE_SLIDER_UP    50
+#define ANIM_CYCLE_SLIDER_DOWN  51
+#define ANIM_CYCLE_SLIDER_RIGHT 52
+#define ANIM_CYCLE_SLIDER_LEFT  53
+
+#define INTRO_BLOCK_OFFSET      13 // start row for Intro block animation data at cCycleTable[]
+
+#define INTRO_GAMESTAGE    1
+#define LEVEL_GAMESTAGE    2
+#define GAME_GAMESTAGE     3
+#define GAMEOVER_GAMESTAGE 4
+#define FINAL_GAMESTAGE    5
+
+// Special Tiles animation status
+#define ST_DISABLED 0
+#define ST_ENABLED  1
+#define ST_TIMEWAIT 2
+
+#define LEFT_MOST_TILE     0xE0
+#define RIGHT_MOST_TILE    0xF0
+
+//#define UPD_OBJECT_UP_1    10
+//#define UPD_OBJECT_DOWN_1  11
+//#define UPD_OBJECT_RIGHT_1 12
+//#define UPD_OBJECT_LEFT_1  13
+#define UPD_OBJECT_EGG     0b00001111             // 0bxxxx1111 where xxxx = new status (ST_EGG_OPENED, ST_EGG_RELEASED, ST_EGG_DESTROYED) + 1111 = UPDATE_OBJ_EGG (15)
+#define UPD_OBJECT_UP_8    ANIM_CYCLE_SLIDER_UP
+#define UPD_OBJECT_DOWN_8  ANIM_CYCLE_SLIDER_DOWN
+#define UPD_OBJECT_RIGHT_8 ANIM_CYCLE_SLIDER_RIGHT
+#define UPD_OBJECT_LEFT_8  ANIM_CYCLE_SLIDER_LEFT
+
+// entity types in the same order
+// used in the map (see map_conf.json)
+enum EntityType
+{
+	ET_UNUSED = 0,
+	ET_PLAYER,          // entity - not a tile
+	ET_EGG,             // ** special animated tile
+	ET_ANIMATE,         // simple animated tile
+	ET_BELT,            // simple animated tile
+	ET_DROPPER,         // simple animated tile
+	ET_GATE,            // ** special animated tile
+	ET_PORTAL,          // simple animated tile
+	ET_WALL,            // ** special animated tile
+	ET_INTERACTIVE,     // ** special animated tile
+	ET_SAFEPLACE,       // no animation - not a tile
+	ET_FORCEFIELD,      // simple animated tile
+	ET_SLIDERFLOOR,     // ** special animated tile
+	ET_LOCKER           // ** special animated tile
+};
+
+// types for our pattern groups used by spman
+enum pattern_type
+{
+	PAT_PLAYER_WALK = 0,
+	PAT_PLAYER_WALK_FLIP,
+	PAT_PLAYER_FALL,
+	PAT_PLAYER_JUMP,
+	PAT_PLAYER_JUMP_FLIP,
+	PAT_PLAYER_CLIMB,
+	PAT_SHIELD,
+	PAT_SHOT,
+	PAT_SHOT_FLIP,
+	PAT_EXPLOSION,
+	PAT_MINIMAP,
+	PAT_ENEMY,
+	PAT_ENEMY_FLIP,
+};
+
+// sub-songs matching our Arkos song
+// configure the song to use MSX AY
+#define SONG_IN_GAME   0
+#define SONG_SILENCE   1
+#define SONG_GAME_OVER 2
+#define SONG_INTRO     3
+
+// sound effects matching our Arkos efx song
+// configure the song to use MSX AY
+#define SFX_NONE       0
+#define SFX_SELECT     1
+#define SFX_GET_OBJECT 2
+#define SFX_GATE       3
+#define SFX_HIT        4
+#define SFX_HURT       5
+#define SFX_SHOOT      6
+#define SFX_EXPLODE    7
+#define SFX_TIMEOFF    8
+#define SFX_PORTAL     9
+#define SFX_TYPING     10
+
+#define SFX_CHAN_NO    1
+
+
+#define MAX_ANIM_TILES           32                 // max animated tiles per map
+#define MAX_OBJECTS_PER_MAP      12                 // max objects / animated entities in a single map
+#define MAX_ANIM_SPEC_TILES_FULL (9*2 + 2*1 + 3*3)  // max animated special tiles per map [MAX=31] ((5 gates + 1 locker + 3 walls * 2 tiles each) + 2 interactives * 1 tile each + 3 slider * 3 tiles each)
+#define MAX_ANIM_SPEC_TILES      (9*2 + 2*1)        // max animated special tiles per map ((5 gates + 1 locker + 3 walls * 2 tiles each) + 2 interactives * 1 tile each (no sliders))
+
+// map size in tiles
+#define MAP_W 32
+#define MAP_H 21
+#define MAP_BYTES_SIZE (MAP_W * MAP_H)
+
+#define INITIAL_LIVES 3
+#define MAX_LIVES     5
+#define MAX_POWER     100   // 100% = full power
+#define MAX_LEVEL     3     // # of levels
+
+#define MAX_ENEMIES 2
+//void update_player(void);
+
+
+// several player control status: sprite direction, status, jump stage, jump direction, color
+#define PLYR_SPRT_DIR_RIGHT    0
+#define PLYR_SPRT_DIR_LEFT     1
+
+#define PLYR_STATUS_STAND      0x00
+#define PLYR_STATUS_WALKING    0x01
+#define PLYR_STATUS_FALLING    0x02
+#define PLYR_STATUS_JUMPING    0x03
+#define PLYR_STATUS_CLIMB      0x04
+#define PLYR_STATUS_CLIMB_UP   0x05
+#define PLYR_STATUS_CLIMB_DOWN 0x06
+#define PLYR_STATUS_DEAD       0x0F
+
+#define PLYR_JUMP_STAGE_UP     0
+#define PLYR_JUMP_STAGE_DOWN   1
+
+#define PLYR_JUMP_DIR_NONE     0
+#define PLYR_JUMP_DIR_LEFT     1
+#define PLYR_JUMP_DIR_RIGHT    2
+
+#define PLYR_UP_JUMP_CYCLES    20  // # of cycles (Y offset) for a jump (8 + 8 + 4)
+
+#define PLYR_SPRITE_L1_COLOR_NORMAL 0xDF  // Magenta(13) and White(15)
+#define PLYR_SPRITE_L1_COLOR_HIT    0x8A  // Red(08) and Yellow(10)
+#define PLYR_SPRITE_L1_COLOR_DEAD   0x9E  // Light Red(09) and Gray(14)
+#define PLYR_SPRITE_L1_COLOR_DARK   0xFE  // White(15) and Gray(14)
+
+#define SHIELD_SPRITE_COLOR_1       07    // Cyan(07) and Gray(14)
+#define SHIELD_SPRITE_COLOR_2       14
+
+uint8_t PLYR_PAT_WALK_IDX;
+uint8_t PLYR_PAT_FALL_IDX;
+uint8_t PLYR_PAT_CLIMB_IDX;
+uint8_t PLYR_PAT_JUMP_IDX;
+
+#define PLYR_WALK_CYCLE        4
+const uint8_t walk_frames[PLYR_WALK_CYCLE] = { 0, 1, 0, 2 };  // walk animation frames
+
+#define SPRT_MAP_COLOR_CYCLE   4
+const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
+
+
+#define COLISION_FATAL 0b00000001
+#define COLISION_SOLID 0b00000010
+#define COLISION_GATE  0b00000100
+#define COLISION_EMPTY 0b00001000
+#define COLISION_FLOOR 0b00010000
+#define COLISION_NEXTM 0b00100000
+#define COLISION_OBJCT 0b01000000
+#define COLISION_INTER 0b10000000
+
+// fonts usefull info
+uint8_t FONT1_TILE_OFFSET;  // first font tile (' ') position in the Tileset
+uint8_t FONT2_TILE_OFFSET; 
+
+#define INTRO_CTRL_TILE_NR (TS_FONT1_SIZE + 65) // first Control tile starts at position 65 in the 'Intro' Tileset
+#define INTRO_BOX_TILE_NR  (TS_FONT1_SIZE + 94) // first Box Tile tile starts at position 94 in the 'Intro' Tileset
+#define INTRO_MENU_POS 16                           // Y position for Intro menu
+
+#define INTRO_CTRL_CYCLE 8
+const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
+
+// score tile #defines for C & ASM code
+#define SCORE_POWER_TL_OFFSET   11
+#define SCORE_SLASH_TL_OFFSET   17     // SLASH character offset in 'Score' Tileset
+#define SCORE_MISSION_TL_OFFSET 18
+#define SCORE_MAP_TL_OFFSET     22
+#define SCORE_PAUSE_TL_OFFSET   38     // PAUSE text offset in 'Score' Tileset
+#define SCORE_ARISE_TL_OFFSET   41     // ARISE text offset in 'Score' Tileset
+#define SCORE_BLACK_TL_OFFSET   44     // BLACK tile offset
+#define SCORE_OBJ_TL_OFFSET     46	   // start tile offset for Object tiles in 'Score' Tileset
+#define SCORE_BATTERY_TL_OFFSET 46     // BATTERY Object offset in 'Score' Tileset
+#define SCORE_AMNO_TL_OFFSET    47     // AMNO Object offset in 'Score' Tileset
+#define SCORE_FLASHL_TL_OFFSET  56     // FLASHLIGHT Object offset in 'Score' Tileset
+#define SCORE_GUN_TL_OFFSET     57     // GUN Object offset in 'Score' Tileset
+#define SCORE_SHIELD_TL_OFFSET  59     // SHIELD Object offset in 'Score' Tileset
+#define SCORE_LIFE_TL_OFFSET    60     // LIFE Object offset in 'Score' Tileset
+#define SCORE_PORTAL_TL_OFFSET  61     // start tile offset for Portal tiles
+
+#define SCORE_MINIMAP_Y_POS     0
+#define SCORE_MINIMAP_X_POS     22
+
+
+// Game tile #defines for C & ASM code
+#define GAME_SPEC_TL_OFFSET	       07     // start tile offset for <Special> tiles
+#define GAME_SPECSD_TL_OFFSET	     12 	  // start tile offset for <Special> <Solid> tiles
+#define GAME_SP_BLT_TL_OFFSET      15 	  // start tile offset for <Special> Belt tiles
+#define GAME_SP_GAT_TL_OFFSET	     24 	  // start tile offset for <Special> Gate (animated) tiles
+#define GAME_WALL_BRK_TL_OFFSET    38 	  // Broken Wall tile offset
+#define GAME_PWR_SWITCH_TL_OFFSET  40 	  // Power Switch <Interactive> tile offset
+#define GAME_PWR_BUTTON_TL_OFFSET  42 	  // Power Button <Interactive> tile offset
+#define GAME_PWR_LOCK_TL_OFFSET    44 	  // Lock Device <Interactive> tile offset
+#define GAME_SOLD_TL_OFFSET	       46 	  // start tile offset for Solid tiles
+#define GAME_EGG_TL_OFFSET	       70 	  // start tile offset for Egg tiles
+#define GAME_FATL_TL_OFFSET	       76 	  // start tile offset for Fatal(animated) tiles
+
+#define BLANK_TILE               0x00                    // BLANK tile position in any Tileset
+#define BLACK_TILE               SCORE_BLACK_TL_OFFSET   // BLACK tile position in Score Tileset [SCORE_BLACK_TL_OFFSET]
+
+#define GAME_TEXT_CREDITS_LABEL_ID   0
+#define GAME_TEXT_CREDITS_VALUE_ID   1
+#define GAME_TEXT_LEVEL_1_INFO_ID    2
+#define GAME_TEXT_LEVEL_2_INFO_ID    3
+#define GAME_TEXT_LEVEL_3_INFO_ID    4
+#define GAME_TEXT_LEVEL_COMPLETED_ID 5
+#define GAME_TEXT_GAME_OVER_ID       6
+#define GAME_TEXT_GAME_WIN_ID        7
+#define GAME_TEXT_INTRO_CONTROL_ID   8
+#define GAME_TEXT_INTRO_MENU_ID      9
+
+#define TILE_TYPE_BLANK	         0b00000000    // Blank tile
+#define TILE_TYPE_OBJECT         0b00000001    // Object tile
+#define TILE_TYPE_SPECIAL        0b01000010    // Special tile (stair, cable)
+#define TILE_TYPE_SPECIAL_SOLID  0b11000010    // Special Solid tile
+#define TILE_TYPE_SPECIAL_BELT   0b10000011    // Belt tile
+#define TILE_TYPE_SPECIAL_GATE   0b10010100    // Gate tile
+#define TILE_TYPE_INTERACTIVE    0b10010101    // Interactive tile
+#define TILE_TYPE_WALL           0b10010110    // Wall tile
+#define TILE_TYPE_EGG            0b10000101    // Alien Egg tile
+#define TILE_TYPE_SOLID          0b10000111    // Solid tile
+#define TILE_TYPE_FATAL	         0b00100111    // Fatal tile
+#define TILE_TYPE_PORTAL         0b00001111    // Portal tile
+//                                 ||||||||
+//                                 |||||| L 0 - ID
+//                                 |||||L-- 2 - ID
+//                                 ||||L--- 3 - Portal Class Flag
+//                                 |||L---- 4 - Gate Class Flag
+//                                 ||L----- 5 - Fatal Flag
+//                                 |L------ 6 - Special Class (Stair) Flag
+//                                 L------- 7 - Solid Flag
+
+// primary object flags - cPlyObjects
+#define MAX_OBJECTS              8
+#define HAS_NO_OBJECT            0b00000000
+#define HAS_OBJECT_KEY           0b00000001
+#define HAS_OBJECT_YELLOW_CARD   0b00000010
+#define HAS_OBJECT_GREEN_CARD    0b00000100
+#define HAS_OBJECT_RED_CARD      0b00001000
+#define HAS_OBJECT_TOOL          0b00010000
+#define HAS_OBJECT_MAP           0b00100000
+#define HAS_OBJECT_SCREW         0b01000000
+#define HAS_OBJECT_KNIFE         0b10000000
+
+// secondary object flags - cPlyAddtObjects
+#define HAS_OBJECT_GUN           0b00000001
+#define HAS_OBJECT_FLASHLIGHT    0b00000010
+
+#define LIGHT_SCENE_ON_FL_ANY    0b00000001
+#define LIGHT_SCENE_OFF_FL_OFF   0b00000000
+#define LIGHT_SCENE_OFF_FL_ON    0b00000010
+//                                       ||
+//                                       |L 0 - Scene Lights Flag Off (0) / On (1)
+//                                       L- 1 - FlashLight   Flag Off (0) / On (1)
+
+#define INTERACTIVE_ACTION_LIGHT_ONOFF  0
+#define INTERACTIVE_ACTION_LOCKER_OPEN  1
+#define INTERACTIVE_ACTION_MISSION_CPLT 2
+
+#define GAME_LIGHTS_ACTION_NONE 0
+#define GAME_LIGHTS_ACTION_ON   1
+#define GAME_LIGHTS_ACTION_OFF  2
+
+#define YELLOW_CARD_PTS        02
+#define GREEN_CARD_PTS         03
+#define RED_CARD_PTS           04
+
+#define HEALTH_PACK_PTS        20
+#define GUN_AMNO_PTS           10
+#define AMNO_AMNO_PTS          15
+#define SHIELD_PTS             15
+#define FLASHLIGHT_BATTR_PTS   30
+#define INVULNERABILITY_SHIELD 05
+#define MAX_AMNO_SHIELD        99
+#define ONE_SECOND_TIMER       26  // = 1 sec
+
+#define EGG_SHOTS_TO_DESTROY   7
+#define ST_EGG_CLOSED          0
+#define ST_EGG_OPENED          2
+#define ST_EGG_RELEASED        3
+#define ST_EGG_DESTROYED       4
+
+
+#define HIT_PTS_SMALL          04
+#define HIT_PTS_MEDIUM         08
+#define HIT_PTS_HIGH           12
+#define HIT_PTS_DEATH          MAX_POWER
+
+#define SCORE_OBJECT_POINTS    07  //   7 points to the score when getting an object
+#define SCORE_INTERACTV_POINTS 20  //  20 points to the score when activating an interactive
+#define SCORE_MISSION_POINTS   50  //  50 points to the score when complete a mission
+#define SCORE_LEVELUP_POINTS  100  // 100 points to the score when level complete
+
+#define SCORE_ADD_ANIM         04  // score points to increase for each score animation cycle
+#define HIT_ANIM_TIMER         07
+#define DEAD_ANIM_TIMER        21
+#define KEY_PRESS_DELAY        16  // delay in cycles before accept a new key press
+
+
+#define CACHE_INVALID      0xFF
+
+#define MAX_MISSIONS           4
+#define MISSION_NOT_SET        0
+#define MISSION_INCOMPLETE     1
+#define MISSION_COMPLETE       2
+
+#define LEVEL_01_MISSIONS_QTTY 3
+#define LEVEL_02_MISSIONS_QTTY 2
+#define LEVEL_03_MISSIONS_QTTY 4
+
+#define SCR_SHIFT_RIGHT    0
+#define SCR_SHIFT_LEFT     1
+#define SCR_SHIFT_UP       2
+#define SCR_SHIFT_DOWN     3
+#define SCR_SHIFT_PORTAL   4
+
+#define ANIMATE_OBJ_WALL   1
+#define ANIMATE_OBJ_GATE   2
+#define ANIMATE_OBJ_INTER  3
+#define ANIMATE_OBJ_LOCKER 4
+#define ANIMATE_OBJ_EGG    5
+
+#define BOOL_FALSE 0
+#define BOOL_TRUE  1
+
+
+// ----------------------------------------------------------
+// GLOBAL VARIABLES SECTION
+// ----------------------------------------------------------
+
+// Arkos data
+extern uint8_t SONG[];
+extern uint8_t EFFECTS[];
+
+uint8_t cGameStage, cLevel, cScreenMap, cScreenShiftDir, cMapX, cMapY;
+uint8_t cPower,cLastPower;
+uint16_t iScore;
+uint8_t cScoretoAdd;
+uint8_t cMissionStatus[MAX_MISSIONS]; // up to 4 missions per level
+uint8_t cMissionQty, cRemainMission;
+bool bIntroAnim;                      // enable/disable Intro animation with ESC key
+uint8_t cCtrl, cCtrlCmd;
+struct sprite_attr sGlbSpAttr;        // sprite attribute - used by all entities
+
+// Global variables for runtime speed optimization
+uint16_t iGameCycles;
+uint16_t iGlbPosition; // values from 0 - 767
+uint8_t cAnimTilesQty;
+uint8_t cAnimSpecialTilesQty;
+uint8_t cGlbSpecialTilesActive;
+uint8_t cFatalFlag;   // used at is_player_jumping()
+uint8_t cPortalFlag;  // used at is_player_jumping()
+uint8_t cAnimCycleParityFlag;
+bool bGlbSpecialProcessing;
+bool bChangeMap, bGlbMMEnabled;
+uint8_t cGlbTimer;
+uint8_t cGlbWidth;
+uint8_t cGlbCyle;
+uint8_t cGlbStep;
+uint8_t cGlbFlag;
+uint8_t cGlbTile;    // used at Load_Entities() and Run_Game() + its subroutines
+uint8_t cGlbObjData; // used at Load_Entities() and Run_Game() + its subroutines
+uint8_t cGlbSpObjID; // used at Load_Entities() and Run_Game() + its subroutines
+uint8_t cGlbFLDelay;
+
+// our live entities - enemies and the player
+LiveEntity sEnemies[MAX_ENEMIES];
+LiveEntity* pCurEntities;
+LiveEntity sThePlayer;
+
+// Global variables for player control
+uint8_t cGlbPlyFlag; // special flag to describe player conflict with screen tiles
+uint8_t cGlbPlyJumpCycles;
+uint8_t cGlbPlyJumpStage;
+uint8_t cGlbPlyJumpDirection;
+uint8_t cGlbPlyJumpDirCmd;
+uint8_t cGlbPlyColor;
+uint8_t cGlbWalkDir;
+uint8_t cGlbPlyHitCount;
+uint8_t cPlyNewX, cPlyNewY;
+uint8_t cPlySafePlaceX, cPlySafePlaceY, cPlySafePlaceDir;
+uint8_t cPlyPortalDestinyX, cPlyPortalDestinyY;
+bool bGlbPlyMoved;            // TRUE if player has walked RIGHT/LEFT, climbed UP/DOWN or falling DOWN
+bool bGlbPlyChangedPosition;  // TRUE if player has changed position (belt, colision, Moved)
+bool bGlbPlyJumpOK; // avoid a jump just after a climp up
+
+uint8_t cPlyObjects, cPlyAddtObjects;
+uint8_t cLives;
+uint8_t cPlyRemainAmno;
+uint8_t cPlyRemainShield;
+uint8_t cPlyRemainFlashlight;
+uint8_t cPlyHitTimer;
+uint8_t cPlyDeadTimer;
+uint8_t cRemainYellowCard;
+uint8_t cRemainGreenCard;
+uint8_t cRemainRedCard;
+uint8_t cRemainKey;
+uint8_t cRemainScrewdriver;
+uint8_t cRemainKnife;
+
+uint8_t cShotCount;
+uint8_t cShotX, cShotY;
+uint8_t cShotDir;
+uint8_t cShotFrame;
+uint8_t cShotPattern;
+uint8_t cShotTrigTimer;
+
+uint8_t cShieldFrame;
+uint8_t cShieldUpdateTimer;
+uint8_t cShieldPattern;
+
+uint8_t cExplosionX, cExplosionY;
+uint8_t cExplosionFrame;
+uint8_t cShotExplosionPattern;
+
+uint8_t cMiniMapX, cMiniMapY;
+uint8_t cMiniMapFrame;
+uint8_t cMiniMapPattern;
+
+uint8_t cLastMMColor;     // color cache for MiniMap
+uint8_t cLastShieldColor; // color cache for Shield
+uint8_t cLastShotColor;   // color cache for Shot
+
+uint8_t cGlbFlashLightAction;
+uint8_t cGlbGameSceneLight;
+
+uint8_t cFlashLUpdateTimer;
+
+uint8_t cScreenEggsQtty;
+
+unsigned char cGlbBufNum[10];            // global buffer to support display_number(), display_objects(), display_power() and display_minimap() routines
+unsigned char cBuffer[2048];             // general purpose buffer to unpack Tilesets, Colors, Maps and Sprites
+unsigned char cGameText[GAMETEXT_SIZE];  // buffer to unpack Texts
+unsigned char cPowerTile[8 * 3];         // copy buffer - Power tile from original Pattern table
+
+// current map tile_map (uncompressed map data + entities)
+// can't use ROM directly because its compressed
+uint8_t cMap_TileClass[MAP_BYTES_SIZE];
+uint8_t cMap_ObjIndex[MAP_BYTES_SIZE];
+uint8_t cMap_Data[MAP_BYTES_SIZE + (MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL + MAX_ENEMIES + 1) * 4];
+uint8_t cTemp_Map_Data[MAP_BYTES_SIZE];
+
+
+struct AnimatedTile sAnimTiles[MAX_ANIM_TILES];
+struct AnimatedTile sAnimSpecialTiles[MAX_ANIM_SPEC_TILES_FULL];
+
+struct AnimTileList sAnimTileList[MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL];
+
+#define MAX_OBJ_HISTORY_SIZE ((MAX_ANIM_SPEC_TILES + MAX_OBJECTS_PER_MAP) * WMAPS)
+struct ObjTileHistory sObjTileHistory[MAX_OBJ_HISTORY_SIZE + 1];
+
+#define MAX_ANIMATED_OBJECTS (MAX_ENEMIES + MAX_OBJECTS_PER_MAP)
+struct ObjectScreen sObjScreen[MAX_ANIMATED_OBJECTS + 1];
+
+#define MAX_LOCKERS_PER_LEVEL 16
+bool cLockerOpened[MAX_LOCKERS_PER_LEVEL];
+
+struct FlashLightStatusData sFlashLightStatusData;
+struct FlashLightStatusData sFlashLightStatusDataAux;
+
+struct AnimatedTile* pCurAnimTile;
+struct AnimatedTile* pCurAnimSpecialTile;
+struct AnimatedTile* pInsertAnimTile;
+
+struct AnimTileList* pAnimTileList;
+
+struct ObjTileHistory* pFreeObjTileHistory;
+
+struct ObjectScreen* pFreeObjectScreen;
+
+
+// ----------------------------------------------------------
+// GAME CODE SECTION
+// ----------------------------------------------------------
+
+/*
+ * Unpack and load the right TileSet (pattern & color) to VDP memory.
+ * IMPORTANT: must explicitly disable/enable screen when calling load_tileset()
+ */
+void load_tileset()
+{
+__asm
+	ld a, (#_cGameStage)
+	cp #INTRO_GAMESTAGE
+	jr nz, _test_levelgs
+
+  ; INTRO STAGE
+_intro_stage :
+	call _gameover_step_1
+	ld a, #TS_FONT1_SIZE + #TS_INTRO_SIZE
+	ld (#_FONT2_TILE_OFFSET), a
+
+	; upload font1 + intro + font 2 tileset
+	; zx0_uncompress(cBuffer + TS_FONT1_SIZE * 8, intro);
+	ld hl, #TS_FONT1_SIZE
+	ld bc, #_intro
+	call _do_uncompress
+	; zx0_uncompress(cBuffer + FONT2_TILE_OFFSET * 8, font2);
+	ld hl, (#_FONT2_TILE_OFFSET)
+	ld h, #00
+	ld bc, #_font2
+	call _do_uncompress
+	; ubox_set_tiles(cBuffer);
+	ld hl, #_cBuffer
+	call _ubox_set_tiles
+
+	; and the color information
+	call _gameover_step_2
+	; zx0_uncompress(cBuffer + TS_FONT1_SIZE * 8, intro_colors);
+	ld hl, #TS_FONT1_SIZE
+	ld bc, #_intro_colors
+	call _do_uncompress
+	; zx0_uncompress(cBuffer + FONT2_TILE_OFFSET * 8, font2_colors);
+	ld hl, (#_FONT2_TILE_OFFSET)
+	ld h, #00
+	ld bc, #_font2_colors
+	call _do_uncompress
+	; ubox_set_tiles_colors(cBuffer);
+	ld hl, #_cBuffer
+	call _ubox_set_tiles_colors
+	ret
+
+_test_levelgs :
+	cp #LEVEL_GAMESTAGE
+	jr nz, _test_gamegs
+
+  ; GAME LEVEL STAGE
+	; lets use same tiles from INTRO - FONT1 and FONT2
+	jp _intro_stage
+
+_do_uncompress :
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld de, #_cBuffer
+	add hl, de
+	ex de, hl
+	ld h, b
+	ld l, c
+	call _zx0_uncompress_asm_direct
+	ret
+
+_test_gamegs :
+	cp #GAME_GAMESTAGE
+	jp nz, _test_gameovergs
+
+	; GAME STAGE
+	ld a, #TS_SCORE_SIZE + #TS_GAME0_SIZE
+	ld (#_FONT1_TILE_OFFSET), a
+
+	; upload score + gameX + font1 tileset
+	; zx0_uncompress(cBuffer, score);
+	ld hl, #_score
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+	; zx0_uncompress(cBuffer + GAME_TILE_OFFSET * 8, game0);
+	ld hl, #TS_SCORE_SIZE
+	ld a, (#_cLevel)
+	cp #2
+	jr z, _ts_Level2
+	ld bc, #_game0
+	jr _continue_game_ts
+_ts_Level2 :
+	ld bc, #_game1
+_continue_game_ts :
+	call _do_uncompress
+
+	; zx0_uncompress(cBuffer + FONT1_TILE_OFFSET * 8, font1);
+	ld hl, (#_FONT1_TILE_OFFSET)
+	ld h, #00
+	ld bc, #_font1
+	call _do_uncompress
+
+	; ubox_set_tiles(cBuffer);
+	ld hl, #_cBuffer
+	call _ubox_set_tiles
+
+	; memcpy(cPowerTile, cBuffer + (SCORE_POWER_TILE + 1) * 8, 8 * 3); //copy the original power tile pattern
+	ld a, #SCORE_POWER_TL_OFFSET + #01
+	ld h, #0
+	ld l, a
+	add hl, hl
+	add hl, hl
+	add hl, hl
+	ld de, #_cBuffer
+	add hl, de
+	ld de, #_cPowerTile
+	ld bc, #08* #03
+	ldir  ; ld (DE), (HL), then increments DE, HL, and decrements BC until BC = 0
+
+	; and the color information
+	; zx0_uncompress(cBuffer, score_colors);
+	ld hl, #_score_colors
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+	; zx0_uncompress(cBuffer + GAME_TILE_OFFSET * 8, game0_colors);
+	ld hl, #TS_SCORE_SIZE
+	ld a, (#_cLevel)
+	cp #2
+	jr z, _colorts_Level2
+	ld bc, #_game0_colors
+	jr _continue_game_colorts
+_colorts_Level2 :
+	ld bc, #_game1_colors
+_continue_game_colorts :
+	call _do_uncompress
+
+	; zx0_uncompress(cBuffer + FONT1_TILE_OFFSET * 8, font1_colors);
+	ld hl, (#_FONT1_TILE_OFFSET)
+	ld h, #00
+	ld bc, #_font1_colors
+	call _do_uncompress
+
+	; ubox_set_tiles_colors(cBuffer);
+	ld hl, #_cBuffer
+	call _ubox_set_tiles_colors
+	ret
+
+_test_gameovergs :
+	cp #GAMEOVER_GAMESTAGE
+	jr nz, _test_finalgs
+
+	; GAME OVER STAGE
+	jp _intro_stage
+
+_gameover_step_1 :
+	xor a
+	ld (#_FONT1_TILE_OFFSET), a
+
+	; upload font1 tileset
+	; zx0_uncompress(cBuffer, font1);
+	ld hl, #_font1
+_gameover_step_1_ex :
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+	ret
+
+_gameover_step_2 :
+	;and the color information
+	; zx0_uncompress(cBuffer, font1_colors);
+	ld hl, #_font1_colors
+	jr _gameover_step_1_ex
+
+_test_finalgs :
+	cp #FINAL_GAMESTAGE
+	ret nz
+__endasm;
+}  // void load_tileset()
+
+/*
+ * Put a zero terminated string on the screen using tiles.
+ * The font starts on the first tile from tileset cOffset and the first char has
+ * ASCII value 31 (' ') - adjusted so we can use ASCII *uppercase* directly in our C code.
+ * Returns the number of displayed characters.
+ */
+uint8_t display_text(uint8_t cX, uint8_t cY, uint8_t cOffset, const uint8_t* sMsg)
+{
+cX;
+cY;
+cOffset;
+sMsg;
+
+__asm
+	push ix		;need to store IX and IY to secure C caller
+	ld ix, #5 + #2
+	add ix,sp
+	ld l, 0 (ix)
+	ld h, 1 (ix); HL = sMsg
+	ld a, (hl)
+	or a
+	jr nz, _startText	; if sMsg==NULL, theres nothing to do
+	ld l,#0
+	pop ix
+	ret
+
+; Input: A = Text block # to be found (0 - 9)
+; Output: A = BOOL_TRUE, HL = text buffer address
+;         A = BOOL_FALSE
+; Changes: A, B, C, E, H, L
+_search_text_block :
+	ld hl, #_cGameText
+	ld bc, #GAMETEXT_SIZE
+	ld e, a
+
+_loop_text_search :
+	ld a, #'<'
+	cpir
+	jr nz, _search_next_start_char
+	cp (hl)
+	jr nz, _search_next_start_char
+	inc hl
+	dec bc
+	ld a, e
+	add a, #'0'
+	cp (hl)
+	jr nz, _search_next_start_char
+	inc hl
+	ld a, #BOOL_TRUE
+	ret
+
+_search_next_start_char :
+	ld a, b
+	or c
+	ld a, #BOOL_FALSE
+	ret z
+	dec bc
+	inc hl
+	jr _loop_text_search
+
+_startText :
+	ld	ix, #2 + #2
+	add	ix, sp; IX = cX
+	push de
+
+	ld h, #0
+	ld l, 1 (ix); HL = cY
+	rlc l
+	rlc l
+	rlc l; L = cY * 8
+	add hl, hl
+	add hl, hl; HL = cY * 32
+	ld b, #0
+	ld c, 0 (ix); C = cX
+	add hl, bc; HL = cY * 32 + cX
+	ld bc, #UBOX_MSX_NAMTBL_ADDR
+	add hl, bc; HL = VRAM_NAME_TBL + cY * 32 + cX
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+
+	ld l, 3 (ix)
+	ld h, 4 (ix); HL = sMsg
+	ld d, 2 (ix); D = cOffset
+	ld b, #0			; B = # of printed chars
+_nextChar :
+	ld a,(hl)
+	or a
+	jr z, _endText
+	add	a, #0xe0; A = A - ' '
+	add a, d	; A = A + cOffset
+	out (#0x98), a; write to VRAM
+	inc b
+	inc hl
+	jr _nextChar
+
+_endText :
+	pop de
+	pop ix
+	ld l, b
+__endasm;
+}  // uint8_t display_text()
+
+/*
+ * Put an integer number (0 left formated) on the screen using tiles.
+ */
+void display_number(uint8_t cX, uint8_t cY, uint8_t cSize, uint16_t iValue)
+{
+__asm
+	push ix; need to store IX and IY to restore after a C function call
+	push iy
+	ld	ix, #2 + #4
+	add	ix, sp		; IX = cX
+
+  ; fill cGlbBufNum with the right '0' tile#
+	ld b,#5
+	ld a, #1
+	ld hl,#_cGlbBufNum
+_fillLoop :
+	ld (hl),a
+	inc hl
+	djnz _fillLoop
+	dec hl      ; back IY to last buffer position
+	push hl
+	pop iy
+	
+;Binary to decimal ASCII
+;Convert a 16-bit unsigned binary number to ASCII data
+;HL = 16 bit unsigned to convert
+	ld l, 3 (ix)
+	ld h, 4 (ix)	; HL = iValue
+_Cnvert :
+	ld e,#0	    ;remainder = 0
+	ld b,#16    ;16 bits in dividend
+	or a        ;clear Carry to start
+
+_DvLoop :
+							;SHIFT THE NEXT BIT OF THE QUOTIENT INTO BIT 0 OF THE DIVIDEND
+							;SHIFT NEXT MOST SIGNIFICANT BIT OF DIVIDEND INTO LEAST SIGNIFICANT BIT OF REMAINDER
+							;HL HOLDS BOTH DIVIDEND AND QUOTIENT. QUOTIENT IS SHIFTED IN AS THE DIVIDEND IS SHIFTED OUT.
+							;E IS THE REMAINDER.
+
+							;DO A 24-BIT SHIFT LEFT, SHIFTING , CARRY TO L, L TO H, H TO E
+	rl l				;CARRY (NEXT BIT OF QUOTIENT) TO BIT 0
+	rl h				;SHIFT HIGH BYTE
+	rl e				;SHIFT NEXT BIT OF DIVIDEND
+
+							;IF REMAINDER IS 10 OR MORE, NEXT BIT OF QUOTIENT IS 1 (THIS BIT IS PLACED IN CARRY)
+	ld a, e
+	sub #10			;SUBTRACT 10 FROM REMAINDER;
+	ccf					;COMPLEMENT CARRY
+							;(THIS IS NEXT BIT OF QUOTIENT)
+	jr nc, _DecCnt ;JUMP IF REMAINDER IS LESS THAN 10
+	ld e, a			;OTHERWISE REMAINDER = DIFFERENCE BETWEEN PREVIOUS REMAINDER AND 10
+
+_DecCnt :
+	djnz _DvLoop ;CONTINUE UNTIL ALL BITS ARE DONE
+
+							;SHIFT LAST CARRY INTO QUOTIENT
+	rl l				;LAST BIT OF QUOTIENT TO BIT 0
+	rl h
+
+							;AT THIS POINT
+							; HL = HL / 10
+							; E = HL % 10
+	ld a, #1
+	add a, e
+	ld 0 (iy), a		; INSERT THE NEXT CHARACTER IN ASCII
+	dec iy
+
+	ld a, h	; IF QUOTIENT IS NOT 0 THEN KEEP DIVIDING
+	or l
+	jr nz, _Cnvert
+
+  ; _cGlbBufNum is now filled. Print it
+	ld h, #0
+	ld l, 1 (ix); HL = cY
+	rlc l
+	rlc l
+	rlc l ; L = cY * 8
+	add hl, hl
+	add hl, hl; HL = cY * 32
+	ld b, #0
+	ld c, 0 (ix); C = cX
+	add hl, bc; HL = cY * 32 + cX
+	ld bc, #UBOX_MSX_NAMTBL_ADDR
+	add hl, bc
+	ex de,hl; DE = VRAM_NAME_TBL + cY * 32 + cX
+	ld a, 2 (ix); A = cSize
+	cp #5; Max cSize = 5
+	jr c, _okSize
+	ld a, #5
+_okSize :
+	ld c, a
+	ld b, #0 ; BC = buffer size
+	ld hl, #_cGlbBufNum + #05
+	xor a; clear Carry Flag
+	sbc hl, bc; set HL to the right buffer position based on cSize
+	call #0x005C; LDIRVM - Block transfer to VRAM from memory
+	pop iy
+	pop ix
+__endasm;
+}  // void display_number()
+
+/*
+ * Update the Power battery based on cPower global variable (0-100).
+ */
+void display_power()
+{
+__asm
+	ld a, (#_cPower)
+	ld e, a
+	ld a, (#_cLastPower)
+	cp e
+	ret z ; nothing to update
+	ld b, #0xFF
+	cp b
+	jp nz, _calcPowerTile
+	; first time, diplay the power tiles
+	ld a, #SCORE_POWER_TL_OFFSET
+	ld b, #5
+	ld hl, #_cGlbBufNum
+_fillBufP :
+	ld (hl), a
+	inc a
+	inc hl
+	djnz _fillBufP
+	ld hl, #UBOX_MSX_NAMTBL_ADDR + (#2 * #32) + #2; (2, 2)
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+	ld hl, #_cGlbBufNum
+	ld b, #5
+	ld c, #0x98
+	;otir; writes B bytes from(HL) to VRAM
+_lpOuti4 :
+	outi; write 1 bytes from(HL) to VRAM and decrement B
+	jr nz, _lpOuti4
+_calcPowerTile :
+	ld a,e
+	ld (#_cLastPower), a
+	; Calculate # of full power blocks and # of remainer for a non-full power block
+	and #0b11111100
+	rrca
+	rrca
+	ld e, a
+	and #0b11111000
+	rrca
+	rrca
+	rrca
+	ld d, a ; D = # of full blocks
+	ld a, e ; A = _cPower / 4
+_mod8loop :
+	cp #8
+	jp c, _mod8found
+	sub a, #8
+	jp _mod8loop
+_mod8found :
+	ld e, a ; E = remain for a non-full power block
+
+	; update the tiles based on the current power level
+	ld c, #1 ; 3 blocks to fill
+_newBlock :
+	ld a, d ; full blocks
+	cp c
+	jp nc, _fill0xFF
+	ld a,e ; remain
+	or a
+	jp z, _fill0x00
+	; fill with Remainer
+	ld a,#8
+	sub e
+	ld b, a
+	ld a, #1
+_sftRight :
+	add a,a
+	djnz _sftRight
+	dec a
+	cpl
+	ld b,a
+	ld e,#0
+	jp _fillBuf
+_fill0xFF :
+	ld b, #0xFF
+	jp _fillBuf
+_fill0x00 :
+	ld b, #0x00
+_fillBuf :
+	ld hl, #_cPowerTile
+	ld a, c
+	dec a
+	add a,a
+	add a,a
+	add a,a
+	inc a
+	push de
+	ld e,a
+	ld d,#0
+	add hl,de
+	ld a, b
+	ld b, #5
+_lpFilBuf :
+	ld (hl),a
+	inc hl
+	djnz _lpFilBuf
+	pop de
+	inc c
+	ld a,c
+	cp #4
+	jp nz, _newBlock
+
+	ld a, #SCORE_POWER_TL_OFFSET + #01
+	ld h, #0
+	ld l, a
+	add hl,hl
+	add hl, hl
+	add hl, hl
+	ld bc, #UBOX_MSX_PATTBL_ADDR
+	add hl,bc
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+
+	ld hl, #_cPowerTile
+	ld b, #8 * #3
+	ld c, #0x98
+_lpOuti6 :
+	outi; write 1 bytes from(HL) to VRAM and decrement B
+	jr nz, _lpOuti6
+__endasm;
+}  // void display_power()
+
+/*
+ * Increase the Player power.
+ */
+void increase_power(uint8_t cQtty)
+{
+__asm
+	ld hl, #2
+	add hl, sp
+	ld a, (#_cPower)
+	add a, (hl)
+	cp #MAX_POWER + #1
+	jr c, _PowerOk
+	ld a, #MAX_POWER
+_PowerOk :
+	ld (#_cPower), a
+	jp _display_power
+__endasm;
+}  // void increase_power()
+
+/*
+* Player was hit by something. Update status and decrease power
+*/
+void player_hit(uint8_t cPowerQtty)
+{
+__asm
+	ld hl, #2
+	add hl, sp
+	ld a, (hl)
+_player_hit_asm_direct :
+	; if HIT_PTS_SMALL, check for Shield. If Shield active, no hit is set.
+	; if HIT_PTS_MEDIUM, HIT_PTS_HIGH or HIT_PTS_DEATH, hit happens regardless of the Shield.
+	cp #HIT_PTS_SMALL
+	jr nz, _hit_execute
+	ld h, a
+	ld a, (#_cPlyRemainShield)
+	or a
+	ret nz
+	ld a, h
+_hit_execute :
+	ld (#_cGlbPlyHitCount), a
+	ld a, #BOOL_TRUE
+	ld (#_sThePlayer + #4), a  ; player.hitflag = TRUE
+__endasm;
+}  // void player_hit()
+
+/*
+* Update Color table from Mission tiles based on mission accomplished status
+*/
+void update_mission_status()
+{
+__asm
+	ld b, #MAX_MISSIONS
+	ld hl, #_cMissionStatus
+	ld c, #0
+	ld d, #0
+_check_mission_complete :
+	ld a, #MISSION_COMPLETE
+	cp (hl)
+	jr nz, _next_mission
+	push bc
+	push hl
+	xor a ; clear carry flag
+	ld a, #SCORE_MISSION_TL_OFFSET
+	add a, c
+	rla
+	rla
+	rla
+	ld e, a
+	ld hl, #UBOX_MSX_COLTBL_ADDR
+	add hl, de
+	ld a, #0xFC  ; Background = green, Foreground = white
+	ld bc, #7
+	call #0x0056  ; FILVRM - Fill VRAM with value
+	pop hl
+	pop bc
+_next_mission :
+	inc hl
+	inc c
+	djnz _check_mission_complete
+__endasm;
+}  // void update_mission_status()
+
+/*
+* Display the number of lives
+*/
+void display_lives()
+{
+__asm
+  ld hl, #UBOX_MSX_NAMTBL_ADDR + #2
+	ld bc, #MAX_LIVES
+	ld a, #BLANK_TILE
+	call #0x0056; FILVRM - Fill VRAM with value
+	ld a, (#_cLives)
+	ld c, a
+	ld a, #SCORE_LIFE_TL_OFFSET
+	call #0x0056; FILVRM - Fill VRAM with value
+__endasm;
+}  // void display_lives()
+
+/*
+* Display/Hide the mini-map
+*/
+void display_minimap()
+{
+__asm
+	ld a, #SCORE_MAP_TL_OFFSET
+	ld (#_bGlbMMEnabled), a  ; bGlbMMEnabled = true
+	ld hl, #_cGlbBufNum
+	ld b, #6
+_fillBufX :
+	ld (hl), a
+	inc a
+	inc hl
+	djnz _fillBufX
+
+	ld bc, #3
+	ld de, #UBOX_MSX_NAMTBL_ADDR + #SCORE_MINIMAP_Y_POS * #32 + #SCORE_MINIMAP_X_POS
+	ld hl, #_cGlbBufNum
+	call #0x005C  ; LDIRVM - Copia um bloco da RAM para a VRAM
+	ld bc, #3
+	ld de, #UBOX_MSX_NAMTBL_ADDR + (#SCORE_MINIMAP_Y_POS + #1) * #32 + #SCORE_MINIMAP_X_POS
+	ld hl, #_cGlbBufNum + #3
+	call #0x005C; LDIRVM - Copia um bloco da RAM para a VRAM
+__endasm;
+}  // void display_minimap()
+
+/*
+* Display the objects carried by the player
+*/
+void display_objects()
+{
+__asm
+	ld a, #SCORE_OBJ_TL_OFFSET + #2  ; amno and battery
+	ld c, a
+	ld hl, #_cGlbBufNum + #MAX_OBJECTS
+	ld a, (#_cPlyObjects)
+	ld e, #0
+	ld b, #MAX_OBJECTS
+_stObjLoop :
+	bit 0, a
+	jr z, _noObj
+	ld (hl), c
+	dec hl
+	inc e
+_noObj :
+	srl a
+	inc c
+	djnz _stObjLoop
+	; add extra blank tile in the begining
+  ld (hl), #0
+	push hl
+	inc e
+	ld b, e  ; B = # of objects + blank tile
+	ld hl, #UBOX_MSX_NAMTBL_ADDR + (#2 * #32) + (#32)
+	ld d, #0
+	xor a
+	sbc hl, de
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+	pop hl
+	ld c, #0x98
+	;otir; writes B bytes from(HL) to VRAM
+_lpOuti3 :
+	outi; write 1 bytes from(HL) to VRAM and decrement B
+	jr nz, _lpOuti3
+__endasm;
+}  // void display_objects()
+
+void display_score()
+{
+__asm
+  ; display_number(2, 1, 5, iScore);
+  ld	bc, (#_iScore)
+	push	bc
+	ld	de, #0x0501
+	push	de
+	ld	a, #2
+	jr _displ_num
+__endasm;
+} // void display_score()
+
+void display_level()
+{
+	display_number(28, 0, 1, cLevel);
+__asm
+	; display_number(30, 0, 2, cScreenMap);
+	ld	a, (#_cScreenMap)
+	ld	c, a
+	ld	b, #0x00
+	push	bc
+	ld	de, #0x0200
+	push	de
+	ld	a, #30
+	jr _displ_num
+__endasm;
+}  // void display_level()
+
+void display_gun_amno()
+{
+__asm
+	; display_number(15, 2, 2, cPlyRemainAmno);
+  ld	a, (#_cPlyRemainAmno)
+	ld	c, a
+	ld	b, #0x00
+	push	bc
+	ld	de, #0x0202
+	push	de
+	ld	a, #15
+_displ_num :
+	push	af
+	inc	sp
+	call	_display_number
+	pop	af
+	pop	af
+	inc	sp
+__endasm;
+} // void display_gun_amno()
+
+void display_shield()
+{
+__asm
+	; display_number(10, 2, 2, cPlyRemainShield);
+	ld	a, (#_cPlyRemainShield)
+	ld	c, a
+	ld	b, #0x00
+	push	bc
+	ld	de, #0x0202
+	push	de
+	ld	a, #10
+	jr _displ_num
+__endasm;
+} // void display_shield()
+
+void display_flashlight()
+{
+__asm
+  ; display_number(20, 2, 2, cPlyRemainFlashlight);
+	ld	a, (#_cPlyRemainFlashlight)
+	ld	c, a
+	ld	b, #0x00
+	push	bc
+	ld	de, #0x0202
+	push	de
+	ld	a, #20
+	jr _displ_num
+__endasm;
+} // void display_flashlight()
+
+/*
+* Draw the Score text for all Map Level screens
+* LIVES, LEVEL, SCORE, POWER, AMNO, SHIELD, MISSIONS
+*/
+void Draw_Score_Panel()
+{
+	put_tile_block(0, 0, SCORE_MAP_TL_OFFSET + 6, 2, 3);  // LIFE:, SCORE: & POWER:
+	put_tile_block(26, 0, SCORE_MAP_TL_OFFSET + 6 + 2 * 3, 2, 2);  // LEVEL: & MISSIONS:
+
+__asm
+  ; ubox_put_tile(9, 2, SCORE_SHIELD_TL_OFFSET);
+  ld a, #SCORE_SHIELD_TL_OFFSET
+  ld bc, #0x0209
+  call _put_tile_asm_direct
+	; ubox_put_tile(14, 2, SCORE_AMNO_TL_OFFSET);
+	ld a, #SCORE_AMNO_TL_OFFSET
+	ld bc, #0x020E
+	call _put_tile_asm_direct
+	; ubox_put_tile(19, 2, SCORE_BATTERY_TL_OFFSET);
+	ld a, #SCORE_BATTERY_TL_OFFSET
+	ld bc, #0x0213
+	call _put_tile_asm_direct
+	; ubox_put_tile(29, 0, SCORE_SLASH_TL_OFFSET);
+	ld a, #SCORE_SLASH_TL_OFFSET
+	ld bc, #0x001D
+	call _put_tile_asm_direct
+__endasm;
+
+	display_lives();
+	display_score();
+	display_power();
+	display_level();
+	display_gun_amno();
+	display_flashlight();
+	display_shield();
+	put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1,2,3,4
+}  // Draw_Score_Panel()
+
+void display_intro_credits()
+{
+__asm
+	call _clear_box
+	
+	ld a, #GAME_TEXT_CREDITS_LABEL_ID
+	call _search_text_block
+	ld b, #INTRO_MENU_POS
+	ld c, #0x01
+	ld de, #0x0000
+	call _display_format_text_block
+
+	ld a, #GAME_TEXT_CREDITS_VALUE_ID
+	call _search_text_block
+	ld b, #INTRO_MENU_POS + #1
+	ld c, #14
+	ld de, #0x0000
+	call _display_format_text_block
+
+_clean_buff :
+	call	_ubox_wait
+	; while (ubox_read_ctl(cCtrl) & UBOX_MSX_CTL_FIRE1);
+	ld	a, (#_cCtrl)
+	ld	l, a
+	call	_ubox_read_ctl
+	bit	4, l
+	jr	nz, _clean_buff
+
+	call _wait_fire
+
+	; execute _clear_box again before returns
+_clear_box :
+	; Fill_Box(1, INTRO_MENU_POS, 30, 7, BLANK_TILE);
+	xor a
+	ld c, #0x01
+	ld b, #INTRO_MENU_POS
+	ld de, #0x1E07
+	jp _fill_block_asm_direct
+
+_wait_fire :
+	call	_ubox_wait
+	; while (!(ubox_read_ctl(cCtrl) & UBOX_MSX_CTL_FIRE1));
+	ld a, (#_cCtrl)
+	ld l, a
+	call _ubox_read_ctl
+	bit	4, l
+	jr z, _wait_fire
+__endasm;
+}  // display_intro_credits()
+
+void display_game_logo()
+{
+__asm
+	push iy
+
+	; Set IY at Block size matrix
+	ld iy, #_cCycleTable + #INTRO_BLOCK_OFFSET * #10
+	ld b, #12 ; 12 animation steps
+	ld c, #TS_FONT1_SIZE; First Intro tile
+_new_anim_step :
+	push bc
+	call _anim_intro_block
+	ld de, #05
+	add iy, de
+	ld	a, (#_bIntroAnim)
+	or a
+	jr	z, _no_wait
+	ld	l, #0x08
+	call	_ubox_wait_for
+_no_wait :
+	ld d, c ; D = Last tile used
+	pop bc
+	ld c, d
+	djnz _new_anim_step
+
+	; Display_Text(18, 7, FONT2_TILE_OFFSET, ".UNOFFICIAL");
+	ld	hl, #__intro_str_0
+	push	hl
+	ld	a, (#_FONT2_TILE_OFFSET)
+	push	af
+	inc	sp
+	ld	de, #0x0712
+	push	de
+	call	_display_text
+	pop	af
+	inc	sp
+	pop af
+	pop iy
+	ret
+
+	; C = First intro tile for this block
+	; (iy + 0) = X
+	; (iy + 1) = Block Size
+	; Returns C = Last used tile
+_anim_intro_block :
+	push bc ; store initial C for future use
+	ld b, #04 ; Logo height = 4
+	push iy
+	pop hl
+	ld e, #2 ; Y
+	ld a, (hl); X
+	ld d, a; D = X
+_new_logo_line :
+	inc hl
+	ld a, (hl) ; Block size
+	or a
+	jr z, _next_logo_line
+	push bc
+
+	ld a, c ; A = Tile
+	ld c, d ; C = X
+	ld d, (hl) ; D = Width
+	ld b, e ; B = Y
+	ld e, #01; Height
+
+	push bc
+	push hl	
+	call	_put_tile_block_asm_direct
+	push af
+	call _check_escape
+	pop af
+	pop hl
+	pop bc
+
+	ld e, b
+	ld d, c
+	ld c, a ; Tile+=Block size
+
+	pop af
+	ld b, a
+_next_logo_line :
+	inc e
+	djnz _new_logo_line
+	
+	pop de ; E = restore initial tile block
+	ld a, e
+	sub c ; A = # of diplayed tiles
+
+	push bc ; C = Last block tile used
+
+	; change color table for selected tiles
+	ld b, #4 ; 4 color animation
+	push ix
+	ld ix, #__intro_color_tbl
+_new_color_anim :
+	push bc
+
+	ld h, #0
+	ld l, e
+	rlc l
+	add hl, hl
+	add hl, hl
+	ld bc, #UBOX_MSX_COLTBL_ADDR
+	add hl, bc
+
+	ld c, a
+	rlc c
+	rlc c
+	rlc c
+	ld b, #0
+
+	push af
+	ld a, (ix)
+	inc ix
+
+	call #0x0056; FILVRM - Fill VRAM with value(HL, BC, A)
+	call _check_escape
+	ld	a, (#_bIntroAnim)
+	or a
+	jr	z, _no_wait2
+	ld	l, #0x02
+	call	_ubox_wait_for
+_no_wait2 :
+	pop af
+	pop bc
+	djnz _new_color_anim
+	pop ix
+	pop bc ; recover last block tile used
+	ret
+
+_check_escape :
+	; if (ubox_read_keys(7) == UBOX_MSX_KEY_ESC) bIntroAnim = false;
+	ld	l, #0x07
+	call	_ubox_read_keys
+	ld	a, l
+	sub #UBOX_MSX_KEY_ESC
+	ret	nz
+	ld (#_bIntroAnim), a
+	ret
+
+__intro_str_0:
+.ascii ".UNOFFICIAL"
+.db 0x00
+
+__intro_color_tbl:
+.db 0b11100000; 14 << 4; // Gray
+.db 0b01010000; 5 << 4;  // Light Blue
+.db 0b01000000; 4 << 4;  // Dark Blue
+.db 0b11110000; 15 << 4; // White
+__endasm;
+}  // void display_game_logo()
+
+/*
+* Display Intro Screen and waits for user interaction
+*/
+void Draw_Intro()
+{
+	uint8_t cCont, cMenuOption;
+ 
+	mplayer_init(SONG, SONG_SILENCE);
+	ubox_disable_screen();
+	// upload intro tileset
+	cGameStage = INTRO_GAMESTAGE;
+	load_tileset();
+	//Load_Tileset(INTRO_TS);
+	// clear the screen
+	ubox_fill_screen(BLANK_TILE);
+	ubox_enable_screen();
+
+	display_game_logo();
+
+	mplayer_init(SONG, SONG_INTRO);
+
+	if (cCtrl == UBOX_MSX_CTL_NONE)
+	{
+		//display_text(3, INTRO_MENU_POS, FONT1_TILE_OFFSET, "PRESS FIRE OR TRIGGER >");
+__asm
+	ld a, #GAME_TEXT_INTRO_CONTROL_ID
+	call _search_text_block
+	ld b, #INTRO_MENU_POS
+	ld c, #0x03
+	ld de, #0x0000
+	call _display_format_text_block
+__endasm;
+
+		ubox_reset_tick();
+		cCont = 0;
+		// wait until fire is pressed
+		// can be space (control will be cursors), or any fire button on a joystick
+		while (cCtrl == UBOX_MSX_CTL_NONE)
+		{
+			cCtrl = ubox_select_ctl();
+			if (ubox_tick >= 15)
+			{
+				put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 9 + (cCtrl_frames[cCont] << 2), 2, 2);
+				if (++cCont == INTRO_CTRL_CYCLE) cCont=0;
+				ubox_reset_tick();
+			}
+		}
+//		display_text(3, INTRO_MENU_POS, FONT1_TILE_OFFSET, "                       ");
+__asm
+		; put_tile_block(3, INTRO_MENU_POS, BLANK_TILE, 23, 1);
+		xor a
+		ld b, #INTRO_MENU_POS
+		ld c, #0x03
+		ld de, #0x1701
+		call	_fill_block_asm_direct
+__endasm;
+	}
+
+Redraw_Intro_Menu:
+	// display the selected control
+	if (cCtrl == UBOX_MSX_CTL_CURSOR) // keyboard
+	{
+		put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 5, 2, 2);
+	}
+	else if (cCtrl == UBOX_MSX_CTL_PORT1) // joystick 1
+	{
+		put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR, 2, 2);
+	}
+	else // cCtrl == UBOX_MSX_CTL_PORT2 - joystick 2
+	{
+__asm
+		; ubox_put_tile(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR);
+		ld a, #INTRO_CTRL_TILE_NR
+		ld b, #INTRO_MENU_POS
+		ld c, #26
+		call _put_tile_asm_direct
+		; ubox_put_tile(27, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 4);
+		ld a, #INTRO_CTRL_TILE_NR + #4
+		ld b, #INTRO_MENU_POS
+		ld c, #27
+		call _put_tile_asm_direct
+__endasm;
+		put_tile_block(26, INTRO_MENU_POS + 1, INTRO_CTRL_TILE_NR + 2, 2, 1);
+	}
+
+__asm
+  ; display_text(8, INTRO_MENU_POS, FONT1_TILE_OFFSET, "START GAME");
+  ; display_text(8, INTRO_MENU_POS + 1, FONT1_TILE_OFFSET, "GAME CREDITS");
+  ld a, #GAME_TEXT_INTRO_MENU_ID
+  call _search_text_block
+  ld b, #INTRO_MENU_POS
+  ld c, #0x08
+  ld de, #0x0000
+  call _display_format_text_block
+__endasm;
+
+	cMenuOption = 0;
+__asm
+	; ubox_put_tile(6, INTRO_MENU_POS, FONT1_TILE_OFFSET + '_' - ' ') ; // >
+	ld a, (#_FONT1_TILE_OFFSET)
+	add a, #'_' - #' '
+	ld b, #INTRO_MENU_POS
+	ld c, #6
+	call _put_tile_asm_direct
+__endasm;
+
+	do
+	{
+		ubox_wait();
+	} while (ubox_read_ctl(cCtrl) & UBOX_MSX_CTL_FIRE1);
+	while (true) // continuous loop until 'Start Game' selected
+	{
+		ubox_reset_tick();
+		while (ubox_tick < 10)
+		{
+			cCtrlCmd = ubox_read_ctl(cCtrl);
+		}
+		if (cCtrlCmd & (UBOX_MSX_CTL_UP | UBOX_MSX_CTL_DOWN))
+		{
+			ubox_put_tile(6, INTRO_MENU_POS + cMenuOption, FONT1_TILE_OFFSET + ' ' - ' '); // blank
+			cMenuOption = cMenuOption ^ 1;
+			ubox_put_tile(6, INTRO_MENU_POS + cMenuOption, FONT1_TILE_OFFSET + '_' - ' '); // >
+			continue;
+		}
+		if (cCtrlCmd & UBOX_MSX_CTL_FIRE1)
+		{
+			if (!cMenuOption) break; //Start Game
+			// Credits
+			display_intro_credits();
+			goto Redraw_Intro_Menu;
+		}
+	}
+} // void Draw_Intro()
+
+/*
+* Display the right game map
+* Tileset must already be set
+* cMap_Data variable must alredy be set to the right map data
+*/
+void draw_map()
+{
+__asm
+	ld a, (#_cGlbGameSceneLight)
+	bit 0, a ; A = LIGHT_SCENE_ON_FL_ANY?
+	halt
+	jr nz, _do_draw_map
+
+_do_scenelights_off :
+	ld a, #BLACK_TILE
+	ld bc, #MAP_BYTES_SIZE
+	ld hl, #UBOX_MSX_NAMTBL_ADDR + #MAP_W * #3
+	call #0x0056  ; FILVRM [Preenche um bloco da VRAM com um byte A = Byte de dado, BC = Comprimento, HL = Endereço VRAM]
+	ret
+
+_do_draw_map :
+	ld hl, #_cMap_Data
+	ld de, #UBOX_MSX_NAMTBL_ADDR + #MAP_W * #3
+	ld bc, #MAP_BYTES_SIZE
+	call #0x005C ; LDIRVM - Copia um bloco da RAM para a VRAM / BC = Comprimento, DE = Endereço VRAM, HL = Endereço RAM / Modifica : AF, BC, DE, HL, EI
+__endasm;
+} // void draw_map()
+
+/*
+* Reset the list of animated Objects at screen for each new screen
+*/
+void reset_screen_objects()
+{
+__asm
+	ld hl, #_sObjScreen
+	ld(#_pFreeObjectScreen), hl
+	ld b, #MAX_ANIMATED_OBJECTS + #01
+	ld de, #06
+_reset_loop_2 :
+	ld(hl), #0xFF
+	add hl, de
+	djnz _reset_loop_2
+	xor a
+	ld (#_cScreenEggsQtty), a
+__endasm;
+}  // void reset_screen_objects()
+
+/*
+* Detect if current animated object (slider) colides with the player. If YES, update player position and status accordly
+* Input: C = update mode (UPD_OBJECT_UP_8, UPD_OBJECT_DOWN_8, UPD_OBJECT_RIGHT_8, UPD_OBJECT_LEFT_8)
+*				 DE = struct ObjectScreen * 
+* Changes: A, B, C, D, E, H, L
+*/
+void detect_player_colision()
+{
+__asm
+	push ix
+	push de
+	pop ix ; IX = struct ObjectScreen*
+	ld a, c
+
+	cp #UPD_OBJECT_UP_8
+	jp nz, _check_down_8
+	; if (player.y >= Object.cY1) or (player.y + 15 < Object.cY0) then no_vertical_colision
+	ld a, (#_sThePlayer + #1); A = player->y
+	cp 4 (ix); ScreenObject->cY1
+	jp nc, _no_vertical_colision
+	add a, #15
+	cp 3 (ix); ScreenObject->cY0
+	jp c, _no_vertical_colision
+	; if (player.x + 3 >= Object.cX1) or (player.x + 12 - 1 < Object.cX0) then no_horizontal_colision
+	ld a, (#_sThePlayer); A = player->x
+	add a, #3
+	cp 2 (ix); ScreenObject->cX1
+	jp nc, _no_horizontal_colision
+	add a, #9 - #1
+	cp 1 (ix); ScreenObject->cX0
+	jp c, _no_horizontal_colision
+	; colision detected. Need to check if its a body colision (update player X coordinate) or a foot colision (update player Y coordinate)
+	; if (player.x + 5 >= Object.cX1) or (player.x + 10 < Object.cX0) then no_horizontal_colision
+	sub #6
+	cp 2 (ix); ScreenObject->cX1
+	jp nc, _no_foot_colision
+	add a, #5
+	cp 1 (ix); ScreenObject->cX0
+	jp c, _no_foot_colision
+	; foot colision detected. Update player Y coordinate above the object and stop falling
+	ld a, #PLYR_STATUS_STAND
+	ld (#_sThePlayer + #03), a ; A = sThePlayer.status
+	ld e, #256 - #16
+_updt_Y_coordinate :
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a
+	ld a, 3 (ix); A = ScreenObject->cY0
+	add a, e
+	ld (#_sThePlayer + #1), a ; player->y = ScreenObject->cY0 - 16 / player->y = ScreenObject->cY0 + 8
+	ld a, e
+	cp #8 ; if it comes from #UPD_OBJECT_DOWN_8, no need to check colision
+	jp z, _end_detection
+
+	ld b, #HIT_PTS_HIGH; strong colision - decrease HIT_PTS_HIGH power units
+	ld d, #0
+	; if (player.x + 4 >= Object.cX0) then no_horizontal_left_colision
+	ld a, (#_sThePlayer); A = player->x
+	add a, #4
+	cp 1 (ix); ScreenObject->cX0
+	jr nc, _no_horiz_left_colision
+	; possible top left colision to be checked
+	ld c, #4
+	call _calcTileXYAddrInt
+	ld a, (hl)
+	; lets check the tile at player head for a solid one
+	bit #7, a ; test if bit 7 (SOLID BIT) is set
+	jp z, _end_detection
+	ld a, 1 (ix); A = ScreenObject->cX0
+	ld e, #256 - #4
+	jp _end_horiz_upd
+
+_no_horiz_left_colision :
+	; if (player.x + 10 < Object.cX1) then end_detection (no horizontal right colision)
+	add a, #6
+	cp 2 (ix); ScreenObject->cX1
+	jp c, _end_detection
+	; possible top right colision to be checked
+	ld c, #11
+	call _calcTileXYAddrInt
+	ld a, (hl)
+	; lets check the tile at player head for a solid one
+	bit #7, a; test if bit 7 (SOLID BIT) is set
+	jp z, _end_detection
+	ld a, 2 (ix); A = ScreenObject->cX1
+	ld e, #256 - #11
+  jp _end_horiz_upd
+
+_check_down_8 :
+	cp #UPD_OBJECT_DOWN_8
+	jr nz, _check_right_8
+	; if (player.x + 3 >= Object.cX1) or (player.x + 12 - 1 < Object.cX0) then no_horizontal_colision
+	ld a, (#_sThePlayer); A = player->x
+	add a, #3
+	cp 2 (ix); ScreenObject->cX1
+	jp nc, _no_horizontal_colision
+	add a, #9 - #1
+	cp 1 (ix); ScreenObject->cX0
+	jp c, _no_horizontal_colision
+	; if (player.y - 1 >= Object.cY1) or (player.y + 15 < Object.cY0) then no_vertical_colision
+	ld a, (#_sThePlayer + #1); A = player->y
+	dec a
+	cp 4 (ix); ScreenObject->cY1
+	jp nc, _no_vertical_colision
+	add a, #15 + #1
+	cp 3 (ix); ScreenObject->cY0
+	jp c, _no_vertical_colision
+	; colision detected. if ((player.status <> PLYR_STATUS_STAND) and (player.status <> PLYR_STATUS_WALKING)) then update Y coordinate, else update X coordinate
+	ld e, #8
+	ld a, (#_sThePlayer + #03) ; A = sThePlayer.status
+	cp #PLYR_STATUS_FALLING
+	jr nc, _updt_Y_coordinate
+
+_no_foot_colision :
+	; if (player.x + 8) < ((Object.cX1 + Object.cX0 + 1) / 2) move player LEFT else move player RIGHT
+	ld a, 1 (ix); ScreenObject->cX0
+	add a, 2 (ix); ScreenObject->cX1
+	inc a
+	rr a
+	ld e, a
+	ld a, (#_sThePlayer)
+	add a, #8
+	ld b, #HIT_PTS_HIGH ; strong colision - decrease HIT_PTS_HIGH power units
+	cp e
+	jr c, _left_colision_upd
+	jr _right_colision_upd
+
+_check_right_8 :
+	cp #UPD_OBJECT_RIGHT_8
+	jr nz, _check_left_8
+	ld e, #8
+_check_left_8_ex :
+	; if (player.y + 16 <> Object.cY0) then no_vertical_colision
+	ld a, (#_sThePlayer + #1); A = player->y
+	add a, #16
+	cp 3 (ix); ScreenObject->cY0
+	jr nz, _test_side_colision
+	; if ((player.x +- 8) + 5 >= Object.cX1) or ((player.x +- 8) + 10 < Object.cX0) then no_horizontal_colision
+	ld a, (#_sThePlayer); A = player->x
+	add a, e
+	add a, #5
+	cp 2 (ix); ScreenObject->cX1
+	jr nc, _no_horizontal_colision
+	add a, #5
+	cp 1 (ix); ScreenObject->cX0
+	jr c, _no_horizontal_colision
+	; colision detected. Update player X coordinate above the object
+	ld a, (#_sThePlayer); A = player->x
+	add a, e
+	ld (#_sThePlayer), a; player->x = ScreenObject->cX1 - 4 / player->x = ScreenObject->cX0 - 12
+
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a
+
+	jr _end_detection
+
+_test_side_colision :
+	; if (player.y >= Object.cY1) or (player.y + 15 < Object.cY0) then no_vertical_colision
+	ld a, (#_sThePlayer + #1); A = player->y
+	cp 4 (ix); ScreenObject->cY1
+	jr nc, _no_vertical_colision
+	add a, #15
+	cp 3 (ix); ScreenObject->cY0
+	jr c, _no_vertical_colision
+	; possible vertical colision - check for horizontal
+	; if (player.x + 3 >= Object.cX1) or (player.x + 12 - 1 < Object.cX0) then no_horizontal_colision
+	ld a, (#_sThePlayer); A = player->x
+	add a, #3
+	cp 2 (ix); ScreenObject->cX1
+	jr nc, _no_horizontal_colision
+	add a, #9 - #1
+	cp 1 (ix); ScreenObject->cX0
+	jr c, _no_horizontal_colision
+	; check for right or left colision
+	ld b, #HIT_PTS_MEDIUM ; medium colision - decrease HIT_PTS_MEDIUM power units
+	ld a, c
+	cp #UPD_OBJECT_RIGHT_8
+	jr z, _right_colision_upd
+	; left side colision detected. Update player X coordinate
+_left_colision_upd :
+	ld a, 1 (ix); A = ScreenObject->cX0
+	ld e, #256 - #12
+	jr _end_horiz_upd
+_right_colision_upd :
+	; right side colision detected. Update player X coordinate
+	ld a, 2 (ix) ; A = ScreenObject->cX1
+	inc a ; A = ScreenObject->cX1 + 1
+	ld e, #256 - #4
+_end_horiz_upd :
+	add a, e
+	ld (#_sThePlayer), a   ; player->x = ScreenObject->cX1 - 4 / player->x = ScreenObject->cX0 - 12
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a
+	ld a, b
+	call _player_hit_asm_direct
+	jr _end_detection
+
+_check_left_8 :
+	cp #UPD_OBJECT_LEFT_8
+	jr nz, _end_detection
+	ld e, #256 - #8
+	jr _check_left_8_ex
+
+_no_horizontal_colision :
+_no_vertical_colision :
+_end_detection :
+	pop ix
+__endasm;
+}  // void detect_player_colision()
+
+/* Input:
+*   _cGlbSpObjID => ObjectScreen->cObjID
+*   _iGlbPosition => ObjectScreen->cX0, ObjectScreen->cY0
+*   _cGlbWidth => ObjectScreen->cX1, ObjectScreen->cY1
+*   _cGlbCyle => ObjectScreen->cObjClass
+*   _cGlbStep => ObjectScreen->cObjStatus for ANIM_CYCLE_FACEHUG_EGG only
+*/
+void insert_new_screen_object()
+{
+__asm
+	; TODO: precisa refazer completamente quando converter Load_Entities() para ASM e depois novamente quando suportar ENEMIES[_iGlbPosition não usaddo]
+	ld hl, (#_pFreeObjectScreen)
+	ld a, (#_cGlbSpObjID)
+	ld (hl), a; cObjID
+
+	ld de, (#_iGlbPosition)
+	ld bc, #0x0500  ; C=0, B=5(loop counter)
+	or a; clear carry
+_div32_loop :
+	rr d
+	rr e
+	rr c
+	djnz _div32_loop
+	; E = #_iGlbPosition div 32 (tile Y)
+	; C = (#_iGlbPosition mod 32) * 8 (pixel X)
+	ld a, e
+	and #0b00011111
+	rlca
+	rlca
+	rlca
+	ld b, a
+	; B = (#_iGlbPosition div 32) * 8 (pixel Y)
+	inc hl
+	ld(hl), c; cX0
+	ld a, (#_cGlbWidth)
+	and #0b00011111
+	rlca
+	rlca
+	rlca
+	dec a
+	; A = (#_cGlbWidth * 8) - 1
+	add a, c
+	inc hl
+	ld(hl), a; cX1
+	ld a, b
+	inc hl
+	ld(hl), a; cY0
+	add a, #8 - #1
+	inc hl
+	ld (hl), a; cY1
+	ld d, h
+	ld e, l
+	ld a, (#_cGlbCyle)
+	inc hl
+	ld (hl), a; cObjClass
+	inc hl
+	ld (#_pFreeObjectScreen), hl
+
+	cp #ANIM_CYCLE_FACEHUG_EGG
+	ret nz
+  ex de, hl
+	ld a, (#_cGlbStep)
+	ld (hl), a  ; ST_EGG_CLOSED(0), ST_EGG_OPENED(2)
+	ld hl, #_cScreenEggsQtty
+	inc (hl)
+__endasm;
+}  // void insert_new_screen_object()
+
+/* Input:
+*   IX = struct AnimatedTile * => (IX+9)=ObjectID
+*   A = update mode (UPD_OBJECT_UP_8, UPD_OBJECT_DOWN_8, UPD_OBJECT_RIGHT_8, UPD_OBJECT_LEFT_8, UPD_OBJECT_EGG)
+*  Changes: A, B, C, D, E, H, L
+*/
+void update_screen_object()
+{
+__asm
+	; first lets find the screen object with same ObjectID
+	ld b, 9 (ix); B = Object ID
+_update_screen_object_ex :
+	ld c, a
+	ld hl, #_sObjScreen
+	ld de, #6
+_find_next_obj_scr :
+	ld a, (hl)
+	cp b; Object ID
+	jr z, _obj_scr_found
+	cp #0xFF; not found
+	ret z
+	add hl, de
+	jr _find_next_obj_scr
+
+_obj_scr_found :
+	; HL = *ObjScreen
+	ld d, h
+	ld e, l; DE = struct ObjectScreen* (used at detect_player_colision())
+	inc hl
+
+	cp #UPD_OBJECT_UP_8
+	jr nz, _test_8_down
+	; cY0 -= 8; cY1 -= 8
+	inc hl
+	inc hl
+	ld a, #256 - #8
+	add a, (hl)
+	ld(hl), a
+	inc hl
+	ld a, #256 - #8
+	add a, (hl)
+	ld(hl), a
+	jr _upd_vertical
+
+_test_8_down :
+	cp #UPD_OBJECT_DOWN_8
+	jr nz, _test_8_right
+	; cY0 += 8; cY1 += 8
+	inc hl
+	inc hl
+	ld a, #8
+	add a, (hl)
+	ld(hl), a
+	inc hl
+	ld a, #8
+	add a, (hl)
+	ld(hl), a
+  jr _upd_vertical
+
+_test_8_right :
+	cp #UPD_OBJECT_RIGHT_8
+	jr nz, _test_8_left
+	; cX0 += 8; cX1 += 8
+	ld a, #8
+	add a, (hl)
+	ld(hl), a
+	inc hl
+	ld a, #8
+	add a, (hl)
+	ld(hl), a
+	jr _upd_horizontal
+
+_test_8_left :
+	cp #UPD_OBJECT_LEFT_8
+	jr nz, _test_egg_upd
+	; cX0 -= 8; cX1 -= 8
+	ld a, #256 - #8
+	add a, (hl)
+	ld(hl), a
+	inc hl
+	ld a, #256 - #8
+	add a, (hl)
+	ld(hl), a
+_upd_horizontal :
+	inc hl
+	inc hl
+_upd_vertical :
+	inc hl
+	ld(hl), c
+	jp _detect_player_colision
+
+_test_egg_upd :
+	ld a, c; Update mode
+	and #UPD_OBJECT_EGG
+	cp #UPD_OBJECT_EGG
+	ret nz
+	ld a, c
+	rra
+	rra
+	rra
+	rra
+	and #UPD_OBJECT_EGG
+	inc hl
+	inc hl
+	inc hl
+	ld (hl),a ; set new status
+	cp #ST_EGG_DESTROYED  ; if ST_EGG_DESTROYED, decrease # of eggs and invalidate this record
+	ret nz
+  inc hl
+	ld (hl), #ANIM_CYCLE_NULL
+	ld hl, #_cScreenEggsQtty
+	dec (hl)
+__endasm;
+}  // void update_screen_object()
+
+/*
+* Display the Level info before showing the game map
+*/
+void draw_game_level_info()
+{
+__asm
+  ld a, #SONG_SILENCE
+  ld hl, #_SONG
+  call _mplayer_init_asm_direct
+  ld a, #LEVEL_GAMESTAGE
+	ld (#_cGameStage), a
+	call _load_tileset
+
+  ; load correct level info
+	ld a, (#_cLevel)
+	add a, #GAME_TEXT_LEVEL_1_INFO_ID - #1
+  call _search_text_block
+
+	ld bc, #0x0202
+	ld de, #0x0106
+	call _display_format_text_block
+	jp _wait_fire
+
+; Input: B = Y (0 - 23)
+;        C = X (0 - 31)
+;        D = 0 (SFX OFF), 1 (SFX ON)
+;        E = wait cycles between text lines
+;        HL = text block address
+; Output: none
+; Changes: A, B, C, D, E, H, L
+_display_format_text_block :
+	push ix
+	push hl
+	pop ix
+	ld a, 0 (ix)
+_loop_LvlInfo_line :
+	cp #'1'
+	jr nz, _test0
+	ld a, (#_FONT2_TILE_OFFSET)
+	jr _do_LvlInfo
+_test0 :
+	ld a, (#_FONT1_TILE_OFFSET)
+
+_do_LvlInfo :
+	inc ix
+	push ix  ; text address
+	push af  ; tile offset
+	inc sp
+	push bc  ; Y, X
+	call	_display_text
+	xor a
+	or d
+	jr z, _no_sfx
+	push hl; L = text lenght
+	push de
+	; mplayer_play_effect_p(SFX_TYPING, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x000A; 00 + SFX_TYPING
+	call	_mplayer_play_effect_p_asm_direct
+	pop de
+	ld	l, e
+	call	_ubox_wait_for
+	pop hl
+_no_sfx :
+  pop bc
+	inc b
+	pop af
+	dec sp
+	pop ix
+
+	ld h, #0
+	inc l
+	ex de, hl
+	add ix, de
+	ex de, hl
+	
+	ld a, 0 (ix)
+	or a
+	jr nz, _loop_LvlInfo_line
+	pop ix
+__endasm;
+} // void draw_game_level_info()
+
+/*
+* Uncompress and load Sprites
+*/
+void Load_Sprites()
+{
+unsigned int iBuffOffset;
+
+	//uncompress "player_ash" + "player_ripley" sprite data
+  zx0_uncompress(cBuffer, player_obj);
+  if (cLevel == 1)
+	  iBuffOffset=0;
+  else
+		iBuffOffset = PLAYER_OBJ_LEN / 2;
+
+	// Walking Player: 3 frames x 2 sprites per frame = 6 sprites (16 x 16 each sprite) + Sprite Flip
+	PLYR_PAT_WALK_IDX = spman_alloc_pat(PAT_PLAYER_WALK, cBuffer + iBuffOffset, 6, 0);
+	spman_alloc_pat(PAT_PLAYER_WALK_FLIP, cBuffer + iBuffOffset, 6, 1);
+	// Falling Player: 2 frames x 2 sprites per frame = 4 sprites (16 x 16 each sprite)
+	PLYR_PAT_FALL_IDX = spman_alloc_pat(PAT_PLAYER_FALL, cBuffer + iBuffOffset + (3 * 2 * 4 * 8), 4, 0);
+	// Jumping Player: 1 frames x 2 sprites per frame = 2 sprites (16 x 16 each sprite) + Sprite Flip
+	PLYR_PAT_JUMP_IDX = spman_alloc_pat(PAT_PLAYER_JUMP, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8), 2, 0);
+	spman_alloc_pat(PAT_PLAYER_JUMP_FLIP, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8), 2, 1);
+	// Climbing Player: 2 frames x 2 sprites per frame = 4 sprites (16 x 16 each sprite)
+	PLYR_PAT_CLIMB_IDX = spman_alloc_pat(PAT_PLAYER_CLIMB, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8) + (1 * 2 * 4 * 8), 4, 0);
+
+	//TODO: verificar se a compressão é melhor juntando player com objects
+	//uncompress "object_sprite"
+	zx0_uncompress(cBuffer, object_sprite);
+	// Shield: 2 frames x 1 sprite per frame = 2 sprites (16 x 16 each sprite)
+	cShieldPattern = spman_alloc_pat(PAT_SHIELD, cBuffer, 2, 0);
+	// Shot: 1 frame x 1 sprite per frame = 1 sprite (16 x 16 each sprite) + Sprite Flip
+	cShotPattern = spman_alloc_pat(PAT_SHOT, cBuffer + (2 * 1 * 4 * 8), 1, 0);
+	spman_alloc_pat(PAT_SHOT_FLIP, cBuffer + (2 * 1 * 4 * 8), 1, 1);
+
+	// Shot Explosion: 1 frame x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
+	cShotExplosionPattern = spman_alloc_pat(PAT_EXPLOSION, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) , 1, 0);
+
+	// Minimap: 1 frame x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
+	cMiniMapPattern = spman_alloc_pat(PAT_MINIMAP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+
+	//uncompress "enemy_sprite"
+
+} // void Load_Sprites()
+
+/*
+* Uncompress and load entities data from Map
+*/
+void Load_Entities()
+{
+	uint8_t* pMapData;
+	uint8_t cObjType;
+
+	reset_screen_objects();
+	//memset(cMap_ObjIndex, 0x00, MAP_W * MAP_H);
+	//memset(sAnimTiles, 0x00, sizeof(struct AnimatedTile) * MAX_ANIM_TILES);
+	//memset(sAnimSpecialTiles, 0x00, sizeof(struct AnimatedTile) * MAX_ANIM_SPEC_TILES);
+	//memset(sEnemies, 0x00, sizeof(LiveEntity) * MAX_ENEMIES);
+	//memset(&sThePlayer, 0x00, sizeof(LiveEntity));
+	pCurAnimTile = sAnimTiles;
+	pCurAnimSpecialTile = sAnimSpecialTiles;
+	//pCurEntities = sEntities;
+
+	// get to the beginning of the entities:
+	//pMapData = pCurMapData + (MAP_H * MAP_W);
+
+	pMapData = cMap_Data + (MAP_H * MAP_W);
+	cAnimTilesQty = cAnimSpecialTilesQty = cGlbSpecialTilesActive = cGlbSpObjID = 0;
+
+//player: dd..tttt | x | y (3 bytes)
+//          dd = direction: look right(0) / look left(1)
+//          tttt = type(1)
+//          x = x position (0 - 256)
+//          y = y position (0 - 192)
+
+//egg: ....tttt | X | Y | 00000100 (4 bytes)
+//          tttt = type(2)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          00000100 = width 4
+
+//animate: cc..tttt | X | Y | ffff0001 (4 bytes)
+//          cc = cycle#
+//          tttt = type(3)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          ffff = frame#
+//          0001 = width 1
+
+//belt: dd..tttt | X | Y | ....wwww (4 bytes)
+//          dd = direction: anti - clockwise(0) / clockwise(1)
+//					tttt = type(4)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          wwww = horizontal width
+
+//dropper: 11..tttt | X | Y | ffffhhhh (4 bytes)
+//          11 = cycle# always 3
+//          tttt = type(5)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          ffff = frame#
+//          hhhh = vertical Height
+
+//gate: dKKKtttt | X | Y | TTTTwwww (4 bytes)
+//          d = direction: vertical(0) / horizontal(1)
+//          KKK = Key [0-5] (0 = none, 1 = key, 2 = yellow cart, 3 = green card, 4 = red card, 5 = tool)
+//          tttt = type(6)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          TTTT = time in seconds to close gate
+//          wwww = horizontal / vertical width
+
+//portal: d...tttt | X | Y | DDDD0011 (4 bytes)
+//          d = player position in the destination portal : left(0) / right(1)
+//          tttt = type(7) 
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          DDDD = screen destination (0 - 15, same level)
+//					0011 = vertical width is always 3
+
+//wall: ....tttt | X | Y | HHHH0010 (4 bytes)
+//          tttt = type(8)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          HHHH = hardness: # of shots to break the wall
+//          0010 = vertical width is always 2
+
+//interactive: aa..tttt | X | Y | eeee0001 (4 bytes)
+//          aa = action [0-3] (0 = lights on/off, 1 = locker open, 2 = mission complete )
+//          tttt = type(9)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          eeee = locker ID / misssion #
+//					0001 =  width is always 1
+
+//safeplace: dd..tttt | x | y (3 bytes)
+//          dd = direction: look right(0) / look left(1)
+//          tttt = type(10)
+//          x = x position (0 - 256)
+//          y = y position (0 - 192)
+
+//forcefield: 10..tttt | X | Y | ....hhhh (4 bytes)
+//					10 = cycle# always 2
+//          tttt = type(11)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          hhhh = vertical Height(max 7)
+
+//slider: dd..tttt | X | Y | llllwwww (4 bytes)
+//          dd = direction: UP(0) / DOWN(1) / RIGHT(2) / LEFT(3)
+//          tttt = type(12)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          llll = movement distance / lenght
+//          wwww = horizontal width
+
+//locker: ....tttt | X | Y | IIII0010 (4 bytes)
+//          tttt = type(13)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          IIII = locker ID (0 - 15)
+//          0010 = vertical width is always 2
+
+	// the entity list ends with 0xFF
+	while (*pMapData != 0xFF)
+	{
+		// first byte is the object Type (lower nibble) + additional flags (higher nibble)
+		cObjType = pMapData[0] & 0x0F;
+		
+		// check if player or enemy
+		if (cObjType == ET_PLAYER) // Player entity must exist only 1 per level, at the first screen map
+		{
+			//just set sThePlayer once per level
+			if (sThePlayer.type == ET_UNUSED)
+			{
+				sThePlayer.x = pMapData[1];
+				sThePlayer.y = pMapData[2] + 8 * 3;
+				sThePlayer.dir = pMapData[0] >> 6;
+				sThePlayer.status = PLYR_STATUS_STAND;
+				sThePlayer.hitflag = BOOL_FALSE;
+				sThePlayer.type = ET_PLAYER;
+				// we don't use 'sThePlayer.pat'. Use global variables instead (PLYR_PAT_XXX_IDX)
+				// we don't use 'sThePlayer.update'. Use update_player() directly
+				//sThePlayer.update = update_player;
+			}
+			pMapData += 3;
+			continue;
+		}
+		if (cObjType == ET_SAFEPLACE)
+		{
+			cPlySafePlaceX = pMapData[1];
+			cPlySafePlaceY = pMapData[2] + 8 * 3;
+			cPlySafePlaceDir = pMapData[0] >> 6;
+			pMapData += 3;
+			continue;
+		}
+
+		// entity is an animated tile - Generic configuration
+		pInsertAnimTile = pCurAnimTile;
+		cGlbFlag = 0;
+		iGlbPosition = ((pMapData[2] + 3) << 5) + pMapData[1]; // Y * 32 + X 
+		cGlbTile = cMap_Data[iGlbPosition - (3 * 32)]; // get the base tile from Map + Object History update
+
+		cGlbCyle = pMapData[0] >> 6;
+		cGlbStep = pMapData[3] >> 4;
+		cGlbWidth = pMapData[3] & 0b00001111;
+
+		// custom configuration per Object Type
+		if (cObjType == ET_GATE)
+		{
+			if (!cGlbTile) // if its a gate that is always opened (Object History), no need to animate
+			{
+				pMapData += 4;
+				continue;
+			}
+			pInsertAnimTile = pCurAnimSpecialTile;
+			cGlbFlag = cGlbCyle >> 1;
+			cGlbCyle = ANIM_CYCLE_GATE_OPEN;
+			cGlbTimer = cGlbStep * (60 / 2 / 7);  // convert sec -> number of frames;
+			cGlbStep = 0;
+			cGlbSpObjID++;
+		}
+		else if (cObjType == ET_WALL)
+		{
+			if (!cGlbTile) // if its a wall that was always destroyed (Object History), no need to animate
+			{
+				pMapData += 4;
+				continue;
+			}
+			pInsertAnimTile = pCurAnimSpecialTile;
+			cGlbCyle = ANIM_CYCLE_WALL_BREAK;
+			// TODO: Armazenar o nro de tiros já recebidos no histórico desse objeto e restaurar quando voltar nessa tela
+			// Precisa armazenar a qtde de tiros restantes em 1 novo atributo de Object History, atualizar sempre que 1 novo tiro é dado e recuperar o
+			// pInsertAnimTile->cTimeLeft a cada recarga de tela
+			cGlbTimer = cGlbStep;
+			// Adjust initial tile and step based on Object History in this screen
+			//cGlbFlag = (GAME_TILE_OFFSET + GAME_WALL_BRK_TL_OFFSET);
+			cGlbFlag = (TS_SCORE_SIZE + GAME_WALL_BRK_TL_OFFSET);
+			if (cGlbTile == cGlbFlag)
+				cGlbStep = 2;
+			else if (cGlbTile == (cGlbFlag + 1))
+				cGlbStep = 4;
+			else
+				cGlbStep = 0;
+			cGlbTile = cGlbFlag; // base tile for Wall is always (GAME_TILE_OFFSET + GAME_WALL_BRK_TL_OFFSET)
+			cGlbSpObjID++;
+		}
+		else if (cObjType == ET_BELT)
+		{
+			cGlbCyle += ANIM_CYCLE_BELT;  // 4 = anti - clockwise (0), 5 = clockwise (1)
+		}
+		else if (cObjType == ET_SLIDERFLOOR)
+		{
+			pInsertAnimTile = pCurAnimSpecialTile;
+			cGlbCyle += ANIM_CYCLE_SLIDER_UP;  // 50 = UP (0), 51 = DOWN (1), 52 = RIGHT (2), 53 = LEFT (3)
+			cGlbTimer = cGlbStep;
+			cGlbStep = LEFT_MOST_TILE;
+			cGlbSpObjID++;
+			insert_new_screen_object();
+		}
+		else if (cObjType == ET_INTERACTIVE)
+		{
+			pInsertAnimTile = pCurAnimSpecialTile;
+			//cGlbTimer = cGlbStep; // extra information (Locker ID / Mission #)
+
+			// Check for Action = INTERACTIVE_ACTION_LOCKER_OPEN or INTERACTIVE_ACTION_MISSION_CPLT, then store the (Locker ID / Mission #) as ObjID
+			if (cGlbCyle == INTERACTIVE_ACTION_LIGHT_ONOFF)
+			{
+				cGlbTimer = ++cGlbSpObjID;
+			}
+			else
+			{
+				cGlbTimer = cGlbStep; // extra information (Locker ID / Mission #)
+			}
+			cGlbStep = 0;
+			cGlbCyle = ANIM_CYCLE_INTERACTIVE;
+			// Adjust initial tile and step based on Object History in this screen	
+			//if (cGlbTile == (GAME_TILE_OFFSET + GAME_PWR_SWITCH_TL_OFFSET + 1))
+			if (cGlbTile == (TS_SCORE_SIZE + GAME_PWR_SWITCH_TL_OFFSET + 1))
+				// TODO: Check Power Button  ??? realmente precisa? o botão não volta de OFF para ON
+			  // | cGlbTile == (GAME_TILE_OFFSET + GAME_PWR_BUTTON_TL_OFFSET + 1)
+			{
+				cGlbTile--;  // need to animate the power switch interative object from the base tile
+				cGlbStep = 2; // starts at animation stage 2 (PowerSwitch is OFF)
+			}
+		}
+		else if (cObjType == ET_FORCEFIELD)
+		{
+			//cGlbCyle = ANIM_CYCLE_FORCEFIELD; // hardcoded in python parsing routine
+			cGlbStep = 0;
+		}
+		else if (cObjType == ET_PORTAL)
+		{
+			cGlbCyle = ANIM_CYCLE_PORTAL;
+			cGlbFlag = cGlbStep;
+			//if (cScreenShiftDir == SCR_SHIFT_PORTAL)
+			//	cGlbStep = cPlyPortalDestinyY - sThePlayer.y;  // adjust cPlyPortalDestinyY with Y offset if player is jumping
+			//else
+			//	cGlbStep = 0;
+			// store Player X and Y position as destination at this screen if Player is coming from a Portal		
+			//cPlyPortalDestinyY = ((pMapData[2] + 3) << 3) + 8 - cGlbStep;
+			cPlyPortalDestinyY = ((pMapData[2] + 3) << 3) + 8;
+			cGlbStep = 0;
+			cPlyPortalDestinyX = pMapData[1] << 3;
+			if (!(pMapData[0] & 0b10000000))
+				cPlyPortalDestinyX += 4;
+			else
+				cPlyPortalDestinyX -= 12;
+		}
+		else if (cObjType == ET_LOCKER)
+		{
+			if (cLockerOpened[cGlbStep] == true) // Locker was opened already - must clean the way
+			{
+				cMap_Data[iGlbPosition - (3 * 32)] = cMap_Data[iGlbPosition + 32 - (3 * 32)] = BLANK_TILE;
+				cMap_TileClass[iGlbPosition - (3 * 32)] = cMap_TileClass[iGlbPosition + 32 - (3 * 32)] = TILE_TYPE_BLANK;
+				pMapData += 4;
+				continue;
+			}
+			pInsertAnimTile = pCurAnimSpecialTile;
+			cGlbCyle = ANIM_CYCLE_LOCKER_OPEN;
+			cGlbFlag = cGlbStep;  // Locker ID (0000IIII)
+			cGlbStep = 0;
+		}
+		else if (cObjType == ET_EGG)
+		{
+			if (!cGlbTile) // if its an egg that was always destroyed (Object History), no need to animate
+			{
+				pMapData += 4;
+				continue;
+			}
+			pInsertAnimTile = pCurAnimSpecialTile;
+			cGlbCyle = ANIM_CYCLE_FACEHUG_EGG;
+			// Width is always 4
+			if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET)
+				cGlbStep = 0;
+			else // if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET + 2)
+				cGlbStep = 2;
+			cGlbSpObjID++;
+			insert_new_screen_object();
+		}
+
+		// create the necessary AnimTile(Dropper, Belt, Animate, Portal, ForceField) or AnimSpecialTile(Gate, Wall, Interactive, Slider, Locker, Egg) records.
+		do
+		{
+			pInsertAnimTile->iPosition = iGlbPosition;
+			pInsertAnimTile->cCycleMode = cGlbCyle;
+			pInsertAnimTile->cStep = cGlbStep;
+			pInsertAnimTile->cLastFrame = 0xAA; // not valid & non-blank
+			pInsertAnimTile->cTile = cGlbTile;
+			pInsertAnimTile->cSpTileStatus = ST_DISABLED;
+			switch (cObjType)
+			{
+				case ET_BELT:
+					// Store the Belt direction (cGlbCyle) in cMap_ObjIndex[] map
+					cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbCyle;  // Direction (000000dd)
+					// calculate the next belt tile attributes
+					iGlbPosition++;
+					if (!cGlbFlag) // first tile from mat
+					{
+						cGlbTile += 3;
+						cGlbFlag = 1;
+					}
+					else if (cGlbWidth == 2) cGlbTile += 3; // last tile from mat
+					break;
+
+				case ET_SLIDERFLOOR:
+					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer;
+					pInsertAnimTile->cSpObjID = cGlbSpObjID;
+					if (cGlbWidth == 2) // last tile from slider
+						cGlbStep = RIGHT_MOST_TILE;
+					else
+						cGlbStep = 0;
+					// calculate the next slider tile attributes
+					//cGlbTile = pCurMapData[++iGlbPosition - (3 * 32)]; // get the base tile from Map
+
+					cGlbTile = cMap_Data[++iGlbPosition - (3 * 32)]; // get the base tile from Map
+					break;
+
+				case ET_DROPPER:
+					// calculate the next dropper tile attributes
+					cGlbStep = (10 + cGlbStep - 2) % 10;
+					iGlbPosition += 32;
+					break;
+
+				case ET_GATE:
+					// calculate the next gate tile attributes
+					pInsertAnimTile->cTimer = cGlbTimer;
+					// Store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
+					////pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | ((pMapData[0] & 0b11110000) << 1)); // Key + ObjectID (kkkOOOOO)
+					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | (pMapData[0] & 0b01110000)); // Key + ObjectID (0kkkOOOO)
+					//pInsertAnimTile->cSpTileStatus = ST_DISABLED;
+					cGlbStep = 5;
+					cGlbTile++;
+					if (!cGlbFlag)
+						iGlbPosition += 32; // Vertical gate	
+					else
+						iGlbPosition++;					
+					break;
+
+				case ET_LOCKER:
+					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = 0;
+					////pInsertAnimTile->cSpObjID = 0b11010000 | cGlbFlag;  // special mask to avoid Locker ObjID conflict with Gates and Interactive ObjIDs
+					pInsertAnimTile->cSpObjID = 0b11000000 | cGlbFlag;  // special mask to avoid Locker ObjID conflict with Gates and Interactive ObjIDs (1100OOOO)
+					cGlbStep = 5;
+					cGlbTile++;
+					iGlbPosition += 32; // Vertical always
+					break;
+
+				case ET_WALL:
+					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer; // # of shots for break the wall
+					// Store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
+					//pInsertAnimTile->cSpTileStatus = ST_DISABLED;
+					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
+					//pCurMapData[iGlbPosition - (3 * 32)] = cGlbTile;
+					//cMap_Data[iGlbPosition - (3 * 32)] = cGlbTile;
+					cMap_TileClass[iGlbPosition - (3 * 32)] = TILE_TYPE_WALL;
+					iGlbPosition += 32; // Wall is always vertical
+					break;
+
+				case ET_INTERACTIVE:
+					// Store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
+					////pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | ((pMapData[0] >> 1) & 0b01100000));   // Action + ObjectID (0aaOOOOO)
+					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbTimer | ((pMapData[0] >> 2) & 0b00110000) | 0b10000000);   // Action + ObjectID (10aaOOOO)
+					//pInsertAnimTile->cTimer = cGlbTimer;  // Locker ID or Mission # (if Action = 1 or Action = 2)
+					//pInsertAnimTile->cSpTileStatus = ST_DISABLED;
+					break;
+
+				case ET_PORTAL:
+					// Store the screen destination (0000DDDD) in cMap_ObjIndex[] map
+					cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbFlag;  // Screen Destination (0000DDDD)
+					iGlbPosition += 32; // Vertical portal
+					cGlbStep++;
+					break;
+
+				case ET_FORCEFIELD:
+					iGlbPosition += 32; // Vertical always
+					break;
+			
+				case ET_EGG:
+					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
+					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = EGG_SHOTS_TO_DESTROY; // # of shots for destroy the egg
+					if (cGlbWidth == 3)
+					{
+						cGlbTile = TS_SCORE_SIZE + GAME_EGG_TL_OFFSET + 4; // first egg body tile
+						cGlbStep+=4;
+						iGlbPosition += 31; // change from last tile from Egg top to first tile from Egg body
+					}
+					else
+					{
+						cGlbTile++;
+						iGlbPosition++;
+					}
+					break;
+			}
+			// update the right xxAnimTile pointer
+			if (cObjType == ET_GATE || cObjType == ET_WALL || cObjType == ET_INTERACTIVE || cObjType == ET_SLIDERFLOOR || cObjType == ET_LOCKER || cObjType == ET_EGG)
+			{
+				cAnimSpecialTilesQty++;
+				pCurAnimSpecialTile++;
+			}
+			else
+			{
+				cAnimTilesQty++;
+				pCurAnimTile++;
+			}
+			pInsertAnimTile++;
+		} while (--cGlbWidth > 0);
+
+#ifdef DEBUG
+		if ((cAnimTilesQty > MAX_ANIM_TILES) || (cAnimSpecialTilesQty > MAX_ANIM_SPEC_TILES_FULL))
+		{
+			//PANIC MSG!!!
+			ubox_enable_screen();
+			display_text(5, 10, FONT1_TILE_OFFSET, "LOAD_ENTITIES() PANIC!");
+			while (true);
+		}
+#endif // DEBUG
+
+		pMapData += 4;
+	}
+} // void Load_Entities() 
+
+/* 
+* Loads the right game level data (Tileset, Missions, Sprite Colors, cMapX/cMapY/cScreenMap) based on cLevel
+*/
+void load_gamelevel_data()
+{
+__asm
+  ld hl, #_cGameStage
+	ld (hl), #GAME_GAMESTAGE
+	call _load_tileset
+
+	; cMapX = cMapY = cScreenMap = 0;
+	xor a
+	ld (#_cMapX), a
+	ld (#_cMapY), a
+	ld (#_cScreenMap), a
+	ld a, (#_cLevel)
+	dec a
+	jr nz, _try_Level2
+	; Level = 1, Missions = 3
+	ld a, #LEVEL_01_MISSIONS_QTTY
+	jr _reset_missions
+_try_Level2 :
+	dec a
+	jr nz, _try_Level3
+	; Level = 2, Missions = 2
+	ld a, #LEVEL_02_MISSIONS_QTTY
+	jr _reset_missions
+_try_Level3 :
+	; Level = 3, Missions = 4
+	ld a, #LEVEL_03_MISSIONS_QTTY
+
+_reset_missions :
+	ld (#_cMissionQty), a
+	ld (#_cRemainMission), a
+	ld b, a
+	ld hl, #_cMissionStatus
+_next_mission_reset :
+	ld (hl), #MISSION_INCOMPLETE
+	inc hl
+	djnz _next_mission_reset
+__endasm;
+}  // void load_gamelevel_data()
+
+/*
+* Reset the Object History array each time a Level starts
+*/
+void reset_obj_history()
+{
+__asm
+	ld hl, #_sObjTileHistory
+	ld(#_pFreeObjTileHistory), hl
+	ld bc, #MAX_OBJ_HISTORY_SIZE + #01
+	ld de, #04
+_reset_loop :
+	ld(hl), #0xFF
+	add hl, de
+	dec bc; does not affect Z flag
+	ld a, b
+	or c
+	jr nz, _reset_loop
+__endasm;
+}  // void reset_obj_history()
+
+/* Input:
+*   _cScreenMap => ObjTileHistory->cScreenMap
+*   _iGlbPosition => ObjTileHistory->iPosition
+*   A => ObjTileHistory->cTile
+*/
+void insert_new_obj_history()
+{
+__asm
+	; TODO: precisa refazer completamente quando converter Load_Entities() para ASM[_iGlbPosition não usaddo]
+	ld b, a ; B = cTile
+_insert_new_obj_history_ex :
+	ld hl, (#_pFreeObjTileHistory)
+	ld a, (#_cScreenMap)
+	ld (hl), a
+	inc hl
+	ld de, (#_iGlbPosition)
+	ld (hl), e
+	inc hl
+	ld (hl), d
+	inc hl
+	ld (hl), b
+	inc hl
+	ld(#_pFreeObjTileHistory), hl
+__endasm;
+}  // insert_new_obj_history()
+
+/* Input:
+*   _cScreenMap => ObjTileHistory->cScreenMap
+*   _iGlbPosition => ObjTileHistory->iPosition
+*   A => ObjTileHistory->cTile
+*/
+void update_existing_obj_history()
+{
+__asm
+	; find a record with same(_cScreenMap | _iGlbPosition)
+	ld b, a; B = cTile
+	ld a, (#_cScreenMap)
+	ld c, a; C = _cScreenMap
+	ld de, #04
+	ld hl, #_sObjTileHistory
+_find_new_record :
+	ld a, (hl)
+	cp #0xFF
+	jr z, _insert_new_obj_history_ex ; does not exist - need to create it
+	cp c
+	jr z, _check_iPos
+	add hl, de
+	jr _find_new_record
+_check_iPos :
+	push bc
+	ld bc, (#_iGlbPosition)
+	inc hl
+	ld e, (hl)
+	inc hl
+	ld d, (hl); DE = sObjTileHistory->iGlbPosition
+	inc hl
+	ex de, hl
+	xor a
+	sbc hl, bc
+	ex de, hl
+	pop bc
+	jr z, _upd_tile
+	inc hl
+	ld de, #04
+	jr _find_new_record
+_upd_tile :
+	; replace old Tile# with new one
+	ld a, b
+	ld(hl), a
+__endasm;
+}  // update_existing_obj_history()
+
+void disable_gate_history(uint16_t iPosition)
+{
+__asm
+	ld hl, #2
+	add hl, sp
+	ld e, (hl)
+	inc hl
+	ld d, (hl) ; DE = iPosition
+	ld hl, (#_iGlbPosition)
+	push hl
+	ld (#_iGlbPosition), de
+	xor a  ; blank Tile
+	call _insert_new_obj_history
+	pop hl
+	ld (#_iGlbPosition), hl
+__endasm;
+}  // void disable_gate_history(uint16_t iPosition)
+
+void update_wall_history(uint16_t iPosition, uint8_t cTile)
+{
+__asm
+	ld hl, #2
+	add hl, sp
+	ld e, (hl)
+	inc hl
+	ld d, (hl); DE = iPosition
+	inc hl
+	ld a, (hl); A = cTile
+	ld hl, (#_iGlbPosition)
+	push hl
+	ld(#_iGlbPosition), de
+	call _update_existing_obj_history
+	pop hl
+	ld(#_iGlbPosition), hl
+__endasm;
+}  // void update_wall_history(uint16_t iPosition, uint8_t cTile)
+
+/* Input:
+*   _cScreenMap
+*/
+void update_object_history()
+{
+__asm
+	ld a, (#_cScreenMap)
+	ld c, a; C = _cScreenMap
+	ld de, #04
+	ld hl, #_sObjTileHistory
+_lookup_record :
+	ld a, (hl)
+	cp #0xFF
+	ret z; lookup finished
+	cp c
+	jr z, _do_upd_object
+	add hl, de
+	jr _lookup_record
+_do_upd_object :
+	inc hl
+	ld e, (hl)
+	inc hl
+	ld d, (hl); DE = sObjTileHistory->iGlbPosition
+	inc hl
+	ld b, (hl) ; B = cTile
+	inc hl
+	push hl
+
+	ld hl, #_cMap_Data - (#03 * #32)
+	add hl, de
+	ld (hl), b
+
+	; update _cMap_TileClass
+	ld hl, #_cMap_TileClass - (#03 * #32)
+	add hl, de
+	ld a, b
+	call	_getTileClass
+	ld (hl), a
+
+	pop hl
+	ld de, #04
+	jr _lookup_record
+__endasm;
+} // void update_object_history()
+
+/*
+* Load the right game screen map data (Minimap position and Map) based on cLevel and cScreenMap
+*/
+void load_levelmap_data()
+{
+__asm
+	ld a, (#_cLevel)
+	dec a
+	jr nz, _try_lvl_2
+	ld	bc, #_maplvl1
+	jr _do_map_loading
+_try_lvl_2 :
+	dec a
+	jr nz, _try_lvl_3
+	ld	bc, #_maplvl2
+	jr _do_map_loading
+_try_lvl_3 :
+	;TODO: Level 3 diffential map processing
+	ld	bc, #_maplvl1;; #_maplvl3
+
+_do_map_loading :
+	ld	a, (#_cScreenMap)
+	ld	l, a
+	ld	h, #0x00
+	add	hl, hl
+	add	hl, bc
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)
+	push	bc
+	ld hl, #_cMap_Data	
+	push	hl
+	call	_zx0_uncompress
+	pop	hl
+	pop	bc
+	ld bc, #MAP_BYTES_SIZE
+	push ix
+	ld ix, #_cMap_TileClass
+_loop_map_data :
+	ld a, (hl)
+	or a
+	jr z, _setTile
+	call	_getTileClass_ex
+_setTile :
+	; update cMap_TileClass
+	ld 0 (ix), a
+	inc ix
+	inc hl
+	dec bc
+	ld a, b
+	or c
+	jr nz, _loop_map_data
+	pop ix
+  jp _update_object_history
+
+; Input:  A = Tile Number
+; Output: A = Tile Class
+;         E = Original Tile Number
+; Changes: A, D, E
+_getTileClass :
+	or a
+	ret z
+_getTileClass_ex :
+	ld e, a
+	cp #TS_SCORE_SIZE + #GAME_FATL_TL_OFFSET
+	jp nc, _setFatal
+	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
+	jp nc, _setEgg
+	cp #TS_SCORE_SIZE + #GAME_SOLD_TL_OFFSET
+	jp nc, _setSolid
+	cp #TS_SCORE_SIZE + #GAME_SP_GAT_TL_OFFSET
+	jp nc, _setGate
+	cp #TS_SCORE_SIZE + #GAME_SP_BLT_TL_OFFSET
+	jp nc, _setBelt
+	cp #TS_SCORE_SIZE + #GAME_SPECSD_TL_OFFSET
+	jp nc, _setSpecialSolid
+	cp #TS_SCORE_SIZE + #GAME_SPEC_TL_OFFSET
+	jr nc, _setSpecialTile
+	cp #TS_SCORE_SIZE + #0
+	jr nc, _setBlank
+	cp #SCORE_PORTAL_TL_OFFSET
+	jr nc, _setPortal
+	cp #SCORE_OBJ_TL_OFFSET
+	jr nc, _setObject
+	jr _setBlank
+_setFatal :
+	ld a, #TILE_TYPE_FATAL
+	ret
+_setEgg :
+	ld a, #TILE_TYPE_EGG
+	ret
+_setSolid :
+	ld a, #TILE_TYPE_SOLID
+	ret
+_setGate :
+	; its a gate, lets check for an Wall or Interactive tile
+	cp #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET
+	jr c, _tryWall
+	ld a, #TILE_TYPE_INTERACTIVE
+	ret
+_tryWall :
+	cp #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET
+	jr c, _gateOnly
+	ld a, #TILE_TYPE_WALL
+	ret
+_gateOnly :
+	ld a, #TILE_TYPE_SPECIAL_GATE
+	ret
+_setBelt :
+	ld a, #TILE_TYPE_SPECIAL_BELT
+	ret
+_setSpecialSolid :
+	ld a, #TILE_TYPE_SPECIAL_SOLID
+	ret
+_setSpecialTile :
+	ld a, #TILE_TYPE_SPECIAL
+	ret
+_setObject :
+	ld a, #TILE_TYPE_OBJECT
+	ret
+_setPortal :
+	ld a, #TILE_TYPE_PORTAL
+	ret
+_setBlank :
+	ld a, #TILE_TYPE_BLANK
+	ret
+__endasm;
+}  // void load_levelmap_data()
+
+/*
+* Update player X and Y position after a shift screen map (left, right, up, down or teletransport.
+* cScreenShiftDir = 0(right), 1(left), 2(up), 3(down) and 4(portal teletransport)
+*/
+void update_player_position()
+{
+__asm
+	ld a, (#_cScreenShiftDir)
+	cp #SCR_SHIFT_LEFT; 1
+	jr z, _upd_shiftLeft
+	cp #SCR_SHIFT_RIGHT; 0
+	jr z, _upd_shiftRight
+	cp #SCR_SHIFT_UP; 2
+	jr z, _upd_shiftUp
+	cp #SCR_SHIFT_DOWN; 3
+	jr z, _upd_shiftDown
+	; should be SCR_SHIFT_PORTAL
+	; cp #SCR_SHIFT_PORTAL; 4
+	; its a teletransport portal - stop jumping
+	ld a, #PLYR_STATUS_STAND
+	ld (#_sThePlayer + #03), a  ; &_sThePlayer.status
+	;; TODO: verificar se quando usa portal com FL aceso acontece o update
+	;;ld a, #BOOL_TRUE
+	;;ld (#_bGlbPlyChangedPosition), a
+	ld a, (#_cPlyPortalDestinyX)
+	ld (#_sThePlayer), a
+	ld a, (#_cPlyPortalDestinyY)
+	jr _upd_endShift_vert
+
+_upd_shiftLeft :
+	; update player X position
+	ld a, #01
+  jr _upd_endShift
+
+_upd_shiftRight :
+	; update player X position
+	ld a, #240 + #3
+	jr _upd_endShift
+
+_upd_shiftUp:
+	ld a, #23 * #8 - #4
+	jr _upd_endShift_vert
+
+_upd_shiftDown :
+	ld a, #3 * #8
+	jr _upd_endShift_vert
+
+_upd_endShift :
+	ld (#_sThePlayer), a
+	ret
+
+_upd_endShift_vert :
+  ld (#_sThePlayer + #1), a
+__endasm;
+}  // void update_player_position(}
+
+		/*
+* Shift screen map left, right, up, down (player reach end of the screen) or teletransport. Adjust Minimap cMapX/cMapY coordinates
+* cMap_Data = new map data to be displayed
+* cTemp_Map_Data = old map data to be replaced (currently left or right shifts only)
+* cScreenShiftDir = 0(right), 1(left), 2(up), 3(down) and 4(portal teletransport)
+*/
+void shift_screen_map()
+{
+__asm
+	ld a, (#_cScreenShiftDir)
+	cp #SCR_SHIFT_LEFT ; 1
+	jr z, _shiftLeft
+	cp #SCR_SHIFT_RIGHT ; 0
+	jp z, _shiftRight
+	; TODO: up and down animation
+	cp #SCR_SHIFT_UP; 2
+	jr z, _shiftUp
+	cp #SCR_SHIFT_DOWN ; 3
+	jr z, _shiftDown
+
+	; should be SCR_SHIFT_PORTAL
+	; cp #SCR_SHIFT_PORTAL; 4
+	; update MiniMap sprite position
+	ld a, (#_cScreenMap); 0 - 15
+	ld b, #0
+_find_CMapY :
+	cp a, #5
+	jr c, _okCMapY
+	sub #5
+	inc b
+	jr _find_CMapY
+_okCMapY :
+	ld (#_cMapX), a
+	ld a, b
+	ld (#_cMapY), a
+	; mplayer_play_effect_p(SFX_PORTAL, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0009; 00 + SFX_PORTAL
+	call	_mplayer_play_effect_p_asm_direct
+	jp _draw_map
+
+_shiftUp :
+	; update MiniMap sprite position
+	ld hl, #_cMapY
+	dec(hl)
+	jp _draw_map
+
+_shiftDown :
+	; start a down shift
+	; update MiniMap sprite position
+	ld hl, #_cMapY
+	inc(hl)
+	jp _draw_map
+
+_shiftLeft :
+	; start a left shift
+	ld a, (#_cGlbGameSceneLight)
+	bit 0, a ; A = LIGHT_SCENE_ON_FL_ANY?
+	jp z, _shiftLeft_end
+	; external loop = 32 times (X)
+	ld c, #1
+_shfleft_newX :
+	call _setVRAM
+_shfleft_newY :
+	; internal loop = 21 times(Y)
+	push bc
+	call _rowStep1
+	push hl
+	ex de, hl
+	ld hl, #_cTemp_Map_Data	
+	call _rowStep2
+	ld hl, #_cMap_Data
+	pop de
+	call _rowStep3
+	pop bc
+	inc b
+	ld a, b
+	cp #21
+	jr nz, _shfleft_newY
+	inc c
+	ld a, c
+	halt
+	cp #32
+	jr nz, _shfleft_newX
+_shiftLeft_end :
+	;update MiniMap sprite position
+	ld hl, #_cMapX
+	inc(hl)
+	jp _draw_map
+
+_shiftRight :
+	; start a right shift
+	ld a, (#_cGlbGameSceneLight)
+	bit 0, a ; A = LIGHT_SCENE_ON_FL_ANY ?
+	jp z, _shiftRight_end
+	; external loop = 32 times(X)
+	ld c, #31
+_shfright_newX :
+	call _setVRAM
+_shfright_newY :
+	; internal loop = 21 times(Y)
+	push bc
+	call _rowStep1
+	push hl
+	ex de, hl
+	ld hl, #_cMap_Data
+	call _rowStep2
+	ld hl, #_cTemp_Map_Data
+	pop de
+	call _rowStep3
+	pop bc
+	inc b
+	ld a, b
+	cp #21
+	jr nz, _shfright_newY
+	halt
+	dec c
+	jr nz, _shfright_newX
+_shiftRight_end :
+	; update MiniMap sprite position
+	ld hl, #_cMapX
+	dec(hl)
+	jp _draw_map
+
+_setVRAM :
+	ld hl, #UBOX_MSX_NAMTBL_ADDR + #3 * #32 + #0
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+	ld b, #0
+	ret
+
+_rowStep1 :
+	ld l, b
+	ld h, #00
+	rlc l
+	rlc l
+	rlc l; L = L * 8
+	add hl, hl
+	add hl, hl; HL = HL * 32
+	ret
+
+_rowStep2 :
+	add hl, de
+	ld d, #00
+	ld e, c
+	add hl, de
+	ld a, #32
+	sub e
+	ld b, a
+	ld c, #0x98
+_lpOutiL1 :
+	outi; write 1 bytes from(HL) to VRAM and decrement B
+	jr nz, _lpOutiL1
+	ld b, e
+	ret
+
+_rowStep3 :
+	add hl, de
+_lpOutiL2 :
+	outi; write 1 bytes from(HL) to VRAM and decrement B
+	jr nz, _lpOutiL2
+	ret
+__endasm;
+}  // void shift_screen_map(}
+
+/*
+* Display all animated tiles that are on the queue for this frame
+*/
+void display_animated_tiles()
+{
+__asm
+  ; if LIGHT_SCENE_OFF_FL_OFF, no need to display animated tiles (no need to update VRAM)
+	ld de, #_sAnimTileList ; base animated list item
+  ld a, (#_cGlbGameSceneLight)
+  cp #LIGHT_SCENE_OFF_FL_OFF
+  jr z, _NoMoreTiles
+
+  ld de, (#_pAnimTileList); pointer to last animated list item
+	ld bc, #UBOX_MSX_NAMTBL_ADDR; VRAM NAME TABLE
+_NextTile :
+	ld hl, #_sAnimTileList; base animated list item
+	xor a								; clear carry flag
+	sbc hl, de					; check if equal
+	jr z, _NoMoreTiles	; if _pAnimTileList = _sAnimTileList, no more tile to display	
+	dec de
+	ld a, (de)					; first word = iPosition
+	ld h, a
+	dec de
+	ld a, (de)
+	ld l, a
+	add hl, bc
+	
+	dec de ; previous byte = cTile
+
+	; if LIGHT_SCENE_OFF_FL_ON, need to check if tile at VRAM addreess <> BLACK_TILE before updating
+	ld a, (#_cGlbGameSceneLight)
+	cp #LIGHT_SCENE_OFF_FL_ON
+	jr nz, _display_anim_tile
+	call #0x0050  ; SETRD - Enable VDP to read (HL)
+	in a, (#0x98)
+	cp #BLACK_TILE
+	jr z, _NextTile
+
+_display_anim_tile :
+	call #0x0053				; SETWRT - Sets the VRAM pointer (HL)
+	ld a, (de)					; A = Tile
+	out (#0x98), a			; write to VRAM
+	jr _NextTile
+_NoMoreTiles :
+  ld (#_pAnimTileList), de ; _pAnimTileList = _sAnimTileList
+__endasm;
+}  // void display_animated_tiles()
+
+/* 
+* Find the right special Gate/Wall/Locker (2 tiles) / Interactive (1 tile) / Egg (4 tiles) animated tile in the Tile list and activate it
+* This function is only being called for Interactive (ANIMATE_OBJ_INTER) if:
+*   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
+*   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
+*   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW (is_player_walking_ok())
+*   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_BUTTON_TL_OFFSET (is_player_walking_ok())
+*   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY (is_player_walking_ok())
+*   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_BUTTON_TL_OFFSET (is_player_walking_ok())
+*   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY (is_player_walking_ok())
+* Returns:	true  (1 - tile found and activated)
+*						false (0 - tile not found, tile found but could not be activated (no key, not enought shots) or already activated)
+*/
+bool special_object_animated_ok(uint8_t cEnableType, uint8_t cObjID)
+{
+__asm
+	ld l, #BOOL_FALSE
+	ld a, (#_cAnimSpecialTilesQty)
+	or a
+	ret z ; No special tiles to search for
+_StartSearch :
+	ld b, a ; B = _cAnimSpecialTilesQty
+	ld hl, #2
+	add hl, sp
+	ld d, (hl); D = cEnableType
+	inc hl
+	ld c, (hl); C = cObjID
+	ld hl, #_sAnimSpecialTiles + #09 ; HL = &sAnimSpecialTiles->cSpObjID
+_NextSearch :
+	ld a, (hl) ; A = sAnimSpecialTiles->cSpObjID
+	cp c
+	jp z, _TileFound; if _cObjID = sAnimSpecialTiles->cSpObjID => found!
+	ld a, d
+	ld de, #10
+	add hl, de ; next sAnimSpecialTiles record
+	ld d, a
+	djnz _NextSearch
+_exitFalse :
+	ld l, #BOOL_FALSE
+	ret ; tile/objectID not found 
+
+_TileFound :
+	; check if its a gate, a wall, an egg or an interactive
+	ld c, d ; C = cEnableType
+	push hl  ; HL = &sAnimSpecialTiles->cSpObjID
+	ld b, a ; B = cObjID
+	ld de, #07
+	xor a
+	sbc hl, de
+	ld a, (hl); sAnimSpecialTiles->cCycleMode
+	cp #ANIM_CYCLE_FACEHUG_EGG
+	jr nz, _chkforWall
+	; its an Egg - check if cEnableType = ANIMATE_OBJ_EGG
+	ld a, c
+	cp #ANIMATE_OBJ_EGG
+	jr nz, _exit_egg
+	; check for egg to be hit (1st shot) or destroyed (5th shot)
+	inc hl  ; HL = &sAnimSpecialTiles->cStep
+	ld c, (hl)
+	;;ld a, #EGG_SHOTS_TO_DESTROY
+	ld de, #04
+	add hl, de
+	dec (hl); sAnimSpecialTiles->cTimeLeft--
+	ld a, #ST_EGG_DESTROYED << #4 | #UPD_OBJECT_EGG
+	jr z, _anim_egg
+	xor a
+	or c
+	; check for first Egg tile - if cStep = 0 then its the first shot into this egg
+	jr nz, _exit_egg
+	;;ld a, #EGG_SHOTS_TO_DESTROY
+	ld a, #ST_EGG_OPENED << #4 | #UPD_OBJECT_EGG
+	jr _anim_egg
+
+_chkforWall :
+	cp #ANIM_CYCLE_WALL_BREAK
+	jr nz, _chkInteractive
+	; its a Wall - check if cEnableType = ANIMATE_OBJ_WALL
+	ld a, c
+	cp #ANIMATE_OBJ_WALL
+	jr nz, _exit_wall
+	; check for wall to be broken
+	ld de, #05
+	add hl, de
+	dec (hl) ; sAnimSpecialTiles->cTimeLeft--
+	jr z, _anim_wall
+_exit_egg :
+_exit_wall :
+_exit_interactive :
+_exit_locker :
+	pop hl
+	jr _exitFalse
+
+_anim_wall :
+  dec hl
+	ld a, (hl) ; A = sAnimSpecialTiles->cTimer
+	inc hl
+	ld (hl), a ; sAnimSpecialTiles->cTimeLeft = sAnimSpecialTiles->cTimer
+	; Add sAnimSpecialTiles->cTimer points to the score
+	call _add_score_points
+	pop hl
+	dec hl; HL = &_sAnimSpecialTiles->cSpTileStatus
+	jp _noKeyReq
+
+_anim_egg :
+	; B = ObjID, A = New_Status
+	call _update_screen_object_ex
+	ld a, #EGG_SHOTS_TO_DESTROY
+	call _add_score_points
+	pop hl
+	dec hl; HL = &_sAnimSpecialTiles->cSpTileStatus
+	push hl
+	call _noKeyReq
+	pop hl
+	ld de, #10 + #10
+	add hl, de ; next sAnimSpecialTiles record
+	jp _noKeyReq
+		
+_chkInteractive :
+	cp #ANIM_CYCLE_INTERACTIVE
+	jr nz, _chkLocker
+	; its an Interactive - check if cEnableType = ANIMATE_OBJ_INTER
+	ld a, c
+	cp #ANIMATE_OBJ_INTER
+	jr nz, _exit_interactive
+	pop hl
+	dec hl ; HL = &_sAnimSpecialTiles->cSpTileStatus
+	ld a, (hl)
+	dec a; if A == 1(ST_ENABLED) then its not necessary to enable twice
+	jp z, _exitFalse
+	ld (hl), #ST_ENABLED; sAnimSpecialTiles->cSpTileStatus = ST_ENABLED
+
+	; if Interactive object = GAME_PWR_LOCK_TL_OFFSET need to decrease access key usage
+	dec hl
+	dec hl
+	dec hl ; HL = &_sAnimSpecialTiles->cTile
+	; if (cGlbTile == GAME_TILE_OFFSET + GAME_PWR_LOCK_TL_OFFSET)
+	ld a, #TS_SCORE_SIZE + #GAME_PWR_LOCK_TL_OFFSET
+	cp (hl)
+	jr nz, _end_animate
+	ld hl, #_cRemainKey
+	dec (hl)
+	jr nz, _end_animate
+	ld hl, #_cPlyObjects
+	res 0, (hl); HAS_OBJECT_KEY
+	call _display_objects
+
+_end_animate :
+	ld hl, #_cGlbSpecialTilesActive
+	inc(hl); _cGlbSpecialTilesActive++
+	; Add SCORE_INTERACTV_POINTS points to the score
+	ld a, #SCORE_INTERACTV_POINTS
+	call _add_score_points
+	ld l, #BOOL_TRUE
+	ret
+
+_chkLocker :
+	cp #ANIM_CYCLE_LOCKER_OPEN
+	jr nz, _chkGate
+	; its a Locker - check if cEnableType = ANIMATE_OBJ_LOCKER
+	ld a, c
+	cp #ANIMATE_OBJ_LOCKER
+	jr nz, _exit_locker
+	pop hl
+	dec hl ; HL = &_sAnimSpecialTiles->cSpTileStatus
+	jp _noKeyReq
+
+_chkGate :
+	pop hl
+	; check if gate is ST_DISABLED to proceed. If gate is already ST_ENABLED, no need to process the colision
+	dec hl; HL = &_sAnimSpecialTiles->cSpTileStatus
+	ld a, (hl)
+	dec a; if A == 1(ST_ENABLED) then its not necessary to enable again
+	jp z, _exitFalse
+
+	; check if player has the right key required to open the gate.
+	ld a, b; B = cObjID
+	
+	; A = cObjID(0KKKxxxx)
+	rra
+	rra
+	rra
+	rra
+	and #0b00000111
+	jp z, _noKeyReq
+	ld b, a ; B = required key
+	ld c, #HAS_OBJECT_KEY
+
+_findkey :
+	dec b
+	jp z, _keybuilt
+	sla c
+	jr _findkey
+_keybuilt :
+	ld a, (#_cPlyObjects) ; A = player objects
+	and c ; C = required key mask
+	jp z, _exitFalse
+
+	; Key found. Decrease card remaining pts. Reset #_cPlyObjects bit and display objects if ZERO
+	ld a, c
+	cp #HAS_OBJECT_YELLOW_CARD
+	jr nz, _tst_green_card
+	ld a, (#_cRemainYellowCard)
+	dec a
+	ld (#_cRemainYellowCard), a
+	jr nz, _noKeyReq
+	ld a, (#_cPlyObjects); A = player objects
+	res 1, a
+	jr _reset_key
+
+_tst_green_card :
+	cp #HAS_OBJECT_GREEN_CARD
+	jr nz, _tst_red_card
+	ld a, (#_cRemainGreenCard)
+	dec a
+	ld (#_cRemainGreenCard), a
+	jr nz, _noKeyReq
+	ld a, (#_cPlyObjects); A = player objects
+	res 2, a
+	jr _reset_key
+
+_tst_red_card :
+	cp #HAS_OBJECT_RED_CARD
+	jr nz, _noKeyReq
+	ld a, (#_cRemainRedCard)
+	dec a
+	ld (#_cRemainRedCard), a
+	jr nz, _noKeyReq
+	ld a, (#_cPlyObjects); A = player objects
+	res 3, a
+
+_reset_key :
+	ld (#_cPlyObjects), a
+	push hl
+	call _display_objects
+	; mplayer_play_effect_p(SFX_TIMEOFF, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0008; 00 + SFX_TIMEOFF
+	call	_mplayer_play_effect_p_asm_direct
+	pop hl
+
+_noKeyReq :
+	ld (hl), #ST_ENABLED; sAnimSpecialTiles->cSpTileStatus = ST_ENABLED
+	ld de, #10
+	add hl, de ; next sAnimSpecialTiles record
+	ld (hl), #ST_ENABLED; sAnimSpecialTiles->cSpTileStatus = ST_ENABLED
+	ld hl, #_cGlbSpecialTilesActive
+	inc (hl) ; _cGlbSpecialTilesActive++
+	inc (hl) ; _cGlbSpecialTilesActive++
+	ld l, #BOOL_TRUE
+__endasm;
+}  // bool special_object_animated_ok()
+
+/*
+* Check for player colision with Fatal, Gate closing, Solid colision, Objects, Empty floor and Special floor (belt)
+* Returns:	true (1 - no colision with player)
+*						false (0 - colision(s) with player)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal *
+*														||||||L- Solid * (Fatal + Solid = Colision with solid when a slider pushed it left/right)
+*														|||||L-- Gate * (Fatal + Gate = Gate Closing)
+*														||||L--- Empty floor *
+*														|||L---- Special floor (belt) *
+*														||L----- Next map
+*														|L------ Object *
+*														L------- Interactive
+*							iGlbPosition = Tile object position into the screen (0 - 768) when 'Object' colision detected
+*							cGlbTile = Tile object index into current tileset when 'Object' colision detected
+*							cGlbObjData = Belt cycle direction (4 or 5) when 'Special Floor' detected
+*							cGlbObjData = number of empty floor tiles below the player (1 or 2) detected
+*/
+uint8_t cGlbPlyFlagCache;
+bool is_player_ok()
+{
+__asm
+	; execute every even cycle and repeat result from previous cycle if not executed
+	ld a, (#_iGameCycles)
+	bit 0, a
+	jp nz, _goChecking
+	ld a, (#_cGlbPlyFlagCache)
+	cp #CACHE_INVALID
+	jr z, _goChecking
+	ld (#_cGlbPlyFlag), a; _cGlbPlyFlag = _cGlbPlyFlagCache
+	jp _EndTests1
+
+_goChecking :
+	xor a
+	ld (#_cGlbPlyFlag), a ; reset _cGlbPlyFlag
+	ld a, (#_sThePlayer) ; A = _sThePlayer.x
+	; based on X body position, we need to test 1 or 2 tiles from the player to detect colision
+	call _chkBodyTileQtty_ex_2	; B = 1 or 2 horizontal tiles to test
+	ld c, #0 + #4
+	ld d, #0
+	call _calcTileXYAddrInt
+	push hl
+	call _check_fatal_or_gate_obj ; check 2 left tiles
+	pop hl
+  ; if bit 2 (GATE Flag) is set, adjust player position to the right
+	ld a, (#_cGlbPlyFlag)
+	bit 2, a 
+	jr z, _not_a_gate_step_1
+	ld e, #8 - #4
+	jr _adjust_player_X
+
+_not_a_gate_step_1 :
+	dec b
+	jr z, _no_more_horizontal
+	inc hl
+	call _check_fatal_or_gate_obj ; check 2 right tiles
+	; if bit 2 (GATE Flag) is set, adjust player position to the left
+	ld a, (#_cGlbPlyFlag)
+	bit 2, a
+	jr z, _no_more_horizontal
+	ld e, #256 - #4
+_adjust_player_X :
+	ld a, (#_sThePlayer)
+	add #4
+	and #0b11111000
+	add e
+	ld (#_sThePlayer), a
+	ld a, #CACHE_INVALID
+	ld (#_cGlbPlyFlagCache), a; invalidate _cGlbPlyFlagCache
+	ld (#_bGlbPlyChangedPosition), a
+	jp _EndConflicting1
+
+_no_more_horizontal :
+	; now lets test for empty floor & special floor(Belt)
+	; based on X foot position, we need to test 1 or 2 tiles below the player to detect empty floor
+	call _chkFootTileQtty; B = 1 or 2 horizontal tiles to test
+	ld c, #0 + #6
+	ld d, #16 ; 1 row below the player
+	call _calcTileXYAddrInt
+
+	ld a, (hl)
+	cp #TILE_TYPE_SPECIAL_BELT
+	jr nz, _not_a_belt
+_belt_detected :
+	; special floor detected (belt). Need to return cGlbObjData
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld a, (hl)
+	ld (_cGlbObjData), a; _cGlbObjData = _cMap_ObjIndex[iGlbPosition]
+	ld hl, #_cGlbPlyFlag
+	set 4, (hl) ; special floor(belt)
+	jp _EndConflicting
+_not_a_belt :
+  
+	cp #TILE_TYPE_BLANK
+	jr z, _first_empty_floor
+	cp #TILE_TYPE_FATAL
+	jr nz, _not_empty_floor
+_first_empty_floor :
+	; empty floor, first tile
+	dec b
+	jp z, _EmptyFloor	; unique tile is blank - no need to test a second tile
+	inc hl
+	ld a, (hl)
+	cp #TILE_TYPE_BLANK
+	jp z, _EmptyFloor	; both tiles are blank
+	cp #TILE_TYPE_FATAL
+	jp z, _EmptyFloor ; both tiles are blank
+_check_for_belt :
+	cp #TILE_TYPE_SPECIAL_BELT
+	jr z, _belt_detected
+	jp _EndTests
+
+_not_empty_floor :
+	dec b
+	jp z, _EndTests
+	inc hl
+	ld a, (hl)
+	jr _check_for_belt
+
+_check_fatal_or_gate_obj :
+	; start testing for solid, gate (only in case a gate closes at the player), fatal and object tiles
+	ld c, #2
+	ld a, (hl)
+	cp #TILE_TYPE_SPECIAL_GATE
+	jr nz, _not_a_gate
+	ld a, (#_cGlbPlyFlag)
+	set 0, a ; FATAL Flag
+	set 2, a; GATE Flag
+	jr _check_fgo_step_2
+_not_a_gate :
+	cp #TILE_TYPE_SOLID
+	jr nz, _not_a_solid
+  ; Solid colision detection.
+	; As we already have handled such colision when slider is up or down (_detect_player_colision), it means player was pushed right/left into a wall by a horizontal slider
+	; Player should die
+	ld a, (#_cGlbPlyFlag)
+	set 0, a ; FATAL Flag
+	set 1, a ; SOLID Flag
+	jr _check_fgo_step_2
+_not_a_solid :
+	cp #TILE_TYPE_FATAL
+	jr nz, _not_a_fatal
+	ld a, (#_cGlbPlyFlag)
+	; fatal was found!
+	set 0, a ; FATAL Flag
+	jr _check_fgo_step_2
+_not_a_fatal :
+	cp #TILE_TYPE_OBJECT
+	jr nz, _not_an_object
+	; object was found! Need to return iGlbPosition and cGlbTile
+	push hl
+	push hl
+	ld de, #_cMap_TileClass - (#03 * #32)
+	xor a
+	sbc hl, de
+	ld (#_iGlbPosition), hl
+	pop hl
+	ld de, #MAP_BYTES_SIZE * #2
+	add hl, de
+	ld a, (hl); A = cMap_Data[HL]
+	ld(#_cGlbTile), a
+	pop hl
+	ld a, (#_cGlbPlyFlag)
+	set 6, a ; OBJECT Flag
+_check_fgo_step_2 :
+	ld (#_cGlbPlyFlag), a
+_not_an_object :
+	dec c
+	ret z
+	ld de, #32
+	add hl, de
+	ld a, (hl)
+	jr _not_a_gate
+
+
+	; Input: C = +- X Offset from Player X position
+	;        D = +- Y Offset from Player Y position
+	;        Player Y position MUST be multiple of 8
+	; Output: HL = &cMap_TileClass[X,Y]
+	; Changes: A, D, E, H, L
+_calcTileXYAddrInt :
+	ld a, (#_sThePlayer + #1)
+	add a, d
+	ld l, a
+	ld h, #0; HL = _sThePlayer.y
+	add hl, hl
+	add hl, hl
+	ld de, #32 * #3
+	xor a
+	sbc hl, de ; HL = (((_sThePlayer.y / 8) - 3) * 32)
+_calcTileXAddr :
+	ld a, (#_sThePlayer)
+_calcTileXAddrEx :
+	add a, c ; A = _sThePlayer.x +- Offset
+	and #0b11111000
+	rrca; rotate right
+	rrca
+	rrca
+	ld e, a
+	ld d, #0
+	add hl, de
+	ld de, #_cMap_TileClass
+	add hl, de
+	ret
+
+	; Input: C = +-X Offset from Player X position
+	;        D = +-Y Offset from Player Y position
+	;        Player Y position DONT NEED to be multiple of 8
+	; Output: HL = &cMap_TileClass[X, Y]
+	; Changes: A, D, E, H, L
+_calcTileXYAddr :
+	ld a, (#_sThePlayer + #1)
+	add a, d
+	and #0b11111000
+	rrca; rotate right
+	rrca
+	rrca; A = (Y) / 8
+	add a, #256 - #3; A = ((Y) / 8) - 3
+	ld l, a
+	ld h, #00
+	rlc l
+	rlc l
+	rlc l; L = L * 8
+	add hl, hl
+	add hl, hl; HL = ((((Y) / 8) - 3) * 32)
+	jr _calcTileXAddr
+
+	; Input: A = Generic Y position
+	;        C = Generic X position
+	;        Y position DONT NEED to be multiple of 8
+	; Output: HL = &cMap_TileClass[X, Y]
+	; Changes: A, D, E, H, L
+_calcTileXYAddrGeneric :
+	and #0b11111000
+	rrca; rotate right
+	rrca
+	rrca; A = (Y) / 8
+	add a, #256 - #3; A = ((Y) / 8) - 3
+	ld l, a
+	ld h, #00
+	rlc l
+	rlc l
+	rlc l; L = L * 8
+	add hl, hl
+	add hl, hl; HL = ((((Y) / 8) - 3) * 32)
+	xor a
+	jr _calcTileXAddrEx
+
+_EndTests :
+	ld a, (#_cGlbPlyFlag)
+	ld (#_cGlbPlyFlagCache), a ; _cGlbPlyFlagCache = _cGlbPlyFlag
+_EndTests1 :
+	or a
+	jp nz, _EndConflicting1
+	ld l, #BOOL_TRUE; everything ok
+	ret
+
+_EmptyFloor :
+	ld a, b
+	inc a
+	ld(_cGlbObjData), a; _cGlbObjData = 1 or 2 empty tiles
+	ld hl, #_cGlbPlyFlag
+	set 3, (hl)
+
+_EndConflicting :
+	ld a, (hl)
+	ld (#_cGlbPlyFlagCache), a; _cGlbPlyFlagCache = _cGlbPlyFlag
+_EndConflicting1 :
+	ld l, #BOOL_FALSE; conflict detected
+__endasm;
+}  // bool is_player_ok()
+
+/*
+* When climbing, check if the player keeps climbing or has stopped climbing (has reached the top)
+* Returns:	true (1 - player continue climbing)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal
+*														||||||L- Solid
+*														|||||L-- Gate
+*														||||L--- Empty floor
+*														|||L---- Special floor (belt)
+*														||L----- Next map *
+*														|L------ Object
+*														L------- Interactive
+*					    cGlbObjData = shift direction + screen destination when Next Map detected
+*						false (0 - player is not climbing (was not before or player reach the top))
+*							sThePlayer.status = PLYR_STATUS_STAND (if player stopped climbing)
+*/
+bool is_player_climb_up()
+{
+__asm
+	ld a, (#_sThePlayer + #03); A = _sThePlayer.status
+	ld l, #BOOL_FALSE
+	cp #PLYR_STATUS_CLIMB
+	ret nz; not climbing
+
+	xor a
+	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	inc a
+	ld (#_bGlbPlyMoved), a ; player has moved UP
+
+	ld a, (#_sThePlayer + #01) ; A = _sThePlayer.y
+	dec a
+	ld (#_sThePlayer + #01), a
+
+	; check for next map when climbing
+	ld l, #BOOL_TRUE; everything ok
+	cp #4 * #8
+	jr nc, _not_NextM_3
+	cp #3 * #8
+	ret nc
+	; Next map detected
+	ld a, (#_cScreenMap)
+	sub #5
+	or #SCR_SHIFT_UP << #5
+	jp _do_nextm_up
+_not_NextM_3 :
+	; not Next map - check if player has reached the top floor
+	ld c, #7
+	ld d, #12
+	call _calcTileXYAddr
+	ld a, (hl)
+	ld l, #BOOL_TRUE; everything ok
+	bit #6, a ; test if bit 6 (SPECIAL TILE BIT) is set
+	ret nz
+
+	; blank tile found. adjust Y position, set avoid_jump counter and stop climbing
+	ld hl, #_sThePlayer + #01; HL = &_sThePlayer.y
+	ld a, (hl)
+	sub #3
+	ld (hl), a ; _sThePlayer.y -= 3
+
+	xor a
+	ld (#_bGlbPlyJumpOK), a  ; bGlbPlyJumpOK = false
+	ld (#_bGlbPlyMoved), a   ; player has not moved
+	inc a
+	ld (#_bGlbPlyChangedPosition), a ; but player has changed position
+	jr _cdSolid
+__endasm;
+}  // bool is_player_climb_up()
+
+/*
+* When descending, check if the player continues descending or has stopped descending (reached the ground)
+* Returns:	true (1 - player continue climbing)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal
+*														||||||L- Solid
+*														|||||L-- Gate
+*														||||L--- Empty floor
+*														|||L---- Special floor (belt)
+*														||L----- Next map *
+*														|L------ Object
+*														L------- Interactive
+*					    cGlbObjData = shift direction + screen destination when Next Map detected
+*						false (0 - player is not climbing (was not before or player reach the floor))
+*							sThePlayer.status = PLYR_STATUS_STAND (if player stopped climbing)
+*/
+bool is_player_climb_down()
+{
+__asm
+	ld a, (#_sThePlayer + #03); A = _sThePlayer.status
+	ld l, #BOOL_FALSE
+	cp #PLYR_STATUS_CLIMB
+	ret nz; not climbing
+
+	xor a
+	ld (#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	inc a
+	ld (#_bGlbPlyMoved), a; player has moved DOWN
+
+	ld a, (#_sThePlayer + #01); A = _sThePlayer.y
+	inc a
+	ld (#_sThePlayer + #01), a
+		
+	; check for next map when climbing
+	ld l, #BOOL_TRUE; everything ok
+	cp #22 * #8
+	jr c, _not_NextM_2
+	cp #24 * #8 - #2
+	ret c
+	; Next map detected
+	jp _do_nextm_down
+_not_NextM_2 :
+	; not Next map - check if player has reached the floor
+	ld c, #7
+	ld d, #16
+	call _calcTileXYAddr
+	ld a, (hl)
+	ld l, #BOOL_TRUE; everything ok
+	bit #7, a; test if bit 7 (SOLID BIT) is set
+	ret z
+	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
+	ret nz
+
+_flSolid_ex :
+	xor a
+	ld (#_bGlbPlyMoved), a; player has not moved
+_flSolid :
+	; when the player stop falling, its Y position should be divisible by 8. However there are some rare exceptions (bugs) that can be fixed here (forcing Y to be divisible by 8)
+	ld a, (#_sThePlayer + #1); A = _sThePlayer.y
+	and #0b11111000
+	ld (#_sThePlayer + #1), a
+	; TODO: SFX here? (reach floor)
+_cdSolid :
+	; solid tile found. Stop climbing
+	ld hl, #_sThePlayer + #03; HL = &_sThePlayer.status
+	ld (hl), #PLYR_STATUS_STAND
+	ld l, #BOOL_FALSE
+__endasm;
+}  // bool is_player_climb_down()
+
+/*
+* When command up pressed, check for player colision with Solid and Special tiles (stairs/cables)
+* Returns:	true (1 - no colision with player)
+*						false (0 - colision with player)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal
+*														||||||L- Solid *
+*														|||||L-- Gate
+*														||||L--- Empty floor
+*														|||L---- Special (Stairs) *
+*														||L----- Next map
+*														|L------ Object
+*														L------- TBD
+*							cGlbObjData = number of stair tiles above the player (1 or 2) detected
+*/
+bool is_player_cmd_up_ok()
+{
+__asm
+	xor a
+	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+
+	ld a, (#_sThePlayer); A = _sThePlayer.x
+	call _chkBodyTileQtty_ex_2 ; B = 1 or 2 horizontal tiles to test
+	ld c, #4
+	ld d, #256 - #8
+	call _calcTileXYAddrInt
+_chk_head_sld :
+	ld a, (hl)
+	; lets check the tile above player head for a solid one (exception for Special Solid Tiles)
+	bit #7, a; test if bit 7 (SOLID BIT) is set
+	; jr nz, _solid_up
+	jr z, _cont_chk_head
+	; Solid tile - check if also Special Solid
+	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
+	jr z, _solid_up; tile is not stairs
+_cont_chk_head :
+	inc hl
+	djnz _chk_head_sld
+
+	; not a solid tile above the head - check for a stair
+	ld d, #256 - #8
+_tstforStair :
+	call _chkFootTileQtty  ; B = 1 or 2 horizontal tiles to test
+	ld c, #6
+	call _calcTileXYAddrInt
+	ld a, (hl)
+	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
+	jr z, _duNotStairs; tile is not stairs
+	dec b
+	jr z, _stairDetected ; first tile is a stair AND just 1 tile - no need to test a second tile
+	inc hl
+	ld a, (hl)
+	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
+	jr z, _duNotStairs ; second tile is not stairs
+_stairDetected :
+	; stairs detected
+	ld a, b
+	inc a
+	ld(_cGlbObjData), a; _cGlbObjData = 1 or 2 empty tiles
+	ld hl, #_cGlbPlyFlag
+	set 4, (hl); special floor(stairs)
+	jp _dwEndConflicting
+
+_duNotStairs :
+	ld l, #BOOL_TRUE; no conflict detected - everything ok
+	ret
+
+_solid_up :
+	ld hl, #_cGlbPlyFlag
+	set 1, (hl) ; Solid
+	ld l, #BOOL_FALSE ; conflict detected
+__endasm;
+}  // bool is_player_cmd_up_ok()
+
+/*
+* When command down pressed, check for player colision with Special tiles (gates, stairs/cables)
+* Returns:	true (1 - no colision with player)
+*						false (0 - colision(s) with player)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal
+*														||||||L- Solid
+*														|||||L-- Gate *
+*														||||L--- Empty floor
+*														|||L---- Special floor (stairs, cables) *
+*														||L----- Next map
+*														|L------ Object
+*														L------- TBD
+*							cGlbSpObjID = ObjectID when Gate colision detected
+*							cGlbObjData = number of stair tiles below the player (1 or 2) detected
+*/
+bool is_player_cmd_down_ok()
+{
+__asm
+	xor a
+	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+
+	ld c, #7
+	ld d, #16
+	call _calcTileXYAddrInt
+	ld a, (hl)
+	; lets check the tile above player foot to check for a gate
+	cp #TILE_TYPE_SPECIAL_GATE
+	jr nz, _dwNotGate; tile is not a gate
+	; gate floor detected. Set _cGlbSpObjID
+	call _SetGateFound
+	jr _dwEndConflicting
+
+_dwNotGate :
+	; Test stairs below player
+	ld d, #16
+	jp _tstforStair
+
+
+; Check the horizontal # of tiles to test when detect player foot colision (empty, stair, gate, belt, solid)
+; if (X + 6) % 8 < 5 : Test 1 tile -OR- (X + 6) % 8 >= 5 : Test 2 tiles
+; Input: None
+; Output: B = 1 or 2 tyles to be verified
+; Changes: A, B
+_chkFootTileQtty :
+	ld b, #1
+	ld a, (#_sThePlayer)
+	add a, #6
+	and #0b00000111
+	cp #5
+	ret c ; just test 1 tile
+	inc b ; need to test 2 tiles
+	ret
+
+_dwEndConflicting :
+	ld l, #BOOL_FALSE; conflict detected
+__endasm;
+}  // bool is_player_cmd_down_ok()
+
+/*
+* When left/right walking, check for player colision with Solid, NextMap/Portal, Interactive and Gates. Also check for distance from Eggs at the same level
+* Returns:	true (1 - no colision with player)
+*						false (0 - colision(s) with player)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal
+*														||||||L- Solid *
+*														|||||L-- Gate *
+*														||||L--- Empty floor
+*														|||L---- Special floor (belt)
+*														||L----- Next map/Portal *
+*														|L------ Object
+*														L------- Interactive *
+*                                      only if (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW) or
+*                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_BUTTON_TL_OFFSET) or
+*                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY) or
+*                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_BUTTON_TL_OFFSET) or
+*                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY)
+*							cGlbSpObjID = ObjectID when Gate/Interactive colision detected
+*							cGlbObjData = shift direction + screen destination when Next Map detected
+*/
+bool is_player_walking_ok(uint8_t cDirection)
+{
+__asm
+	xor a
+	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+
+	; check for Eggs in this screen. If any, check for an egg in the same Y coordinate then calculate player distance for that egg
+	ld a, (#_cScreenEggsQtty)
+	ld b, a
+	or a
+	jr z, _no_egg_trigger_ex
+	; there are some eggs in this screen - check for same Player and Egg Y coordinate
+	push ix
+	ld hl, #_sObjScreen - #1
+	ld de, #5
+_find_next_egg_scr :
+	inc hl
+	ld a, (hl)
+	cp #0xFF ; not found
+	jr z, _no_egg_trigger
+	push hl
+	pop ix
+	add hl, de
+	ld a, (hl)
+	cp #ANIM_CYCLE_FACEHUG_EGG
+	jr nz, _find_next_egg_scr
+	; found an egg - check for egg status
+	ld a, 4 (ix)
+	cp #ST_EGG_RELEASED
+	jr z, _search_other_egg
+	; check Y position
+	ld a, (#_sThePlayer + #1)
+	cp 3 (ix)
+	jr nz, _search_other_egg
+	; player and Egg at the same Y coordinate - check the X distance
+	ld a, (#_sThePlayer)
+	sub 1 (ix)
+	;; jp m, _positive_X  ; M/P does not clearly working
+	jr nc, _positive_X
+	neg
+_positive_X :
+	ld c, a
+	cp #8 * #7
+	jr nc, _search_other_egg
+	; found an egg (closed or opened) - animate it
+	ld a, 4 (ix)
+	cp #ST_EGG_CLOSED
+	jr nz, _test_release_fh
+	;; ld 4 (ix), #ST_EGG_OPENED ; auto-updated at _update_screen_object_ex()
+	; animate from egg CLOSED -> OPENED
+	push bc
+	push hl
+	ld c, #ANIMATE_OBJ_EGG
+	ld b, 0 (ix) ; B = ObjID
+	call _activate_interactive_animation_ex
+	ld de, #05
+	pop hl
+	pop bc
+	jr _search_other_egg
+_test_release_fh :
+	; egg already opened
+	ld a, c
+	cp #8 * #4
+	jr nc, _search_other_egg
+	ld 4 (ix), #ST_EGG_RELEASED
+	;TODO: release FH
+
+_search_other_egg :
+	djnz _find_next_egg_scr
+
+_no_egg_trigger :
+	pop ix
+_no_egg_trigger_ex :
+	ld hl, #2
+	add hl, sp
+	ld a, (hl) ; A = _cDirection
+	ld (#_sThePlayer + #02), a ; _sThePlayer.dir = PLYR_SPRT_DIR_RIGHT / PLYR_SPRT_DIR_LEFT
+	cp #PLYR_SPRT_DIR_LEFT
+	ld a, (#_sThePlayer) ; A = _sThePlayer.x
+	jp z, _wlkLeft
+
+	; Walk right
+	ld c, #1 + #11; Add 1 to X to move right
+	; first check for next map colision
+	cp #256 - #4 - #8
+	jp c, _wlkCheckSolid
+	; need to return cGlbObjData
+	ld a, (#_cScreenMap)
+	inc a
+	or #SCR_SHIFT_LEFT << #5
+_wlkNextM :
+	ld (#_cGlbObjData), a; (sssDDDDD)
+	ld hl, #_cGlbPlyFlag
+	set 5, (hl)  ; COLISION_NEXTM
+	jp _wlkEndConflicting
+
+_wlkLeft :
+	ld c, #255 + #4; Subtract 1 from X to move left
+	; first check for next map colision
+	or a
+	jp nz, _wlkCheckSolid
+	; need to return cGlbObjData
+	ld a, (#_cScreenMap)
+	dec a
+	or #SCR_SHIFT_RIGHT << #5
+	jr _wlkNextM
+
+_wlkPortalFound :
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld a, (hl) ; screen destination (sss0DDDD)
+	or #SCR_SHIFT_PORTAL << #5
+	jr _wlkNextM
+
+	; Calculate the next up tile position for solid / gate / portal / interactive / wall / egg
+_wlkCheckSolid :
+	ld d, #0
+	call _calcTileXYAddrInt
+	ld b, #02; 2 columns to test
+_wlkNextTile :
+	ld a, (hl)
+	cp #TILE_TYPE_SOLID
+	jr z, _wlkSolidFound
+	cp #TILE_TYPE_WALL
+	jr z, _wlkSolidFound
+	cp #TILE_TYPE_EGG
+	jr z, _wlkSolidFound
+	cp #TILE_TYPE_SPECIAL_GATE
+	jr z, _wlkGateFound
+	cp #TILE_TYPE_INTERACTIVE
+	jr z, _wlkInteractiveFound
+	cp #TILE_TYPE_PORTAL
+	jr z, _wlkPortalFound
+	ld de, #32
+	add hl, de; look next tile
+	djnz _wlkNextTile
+
+	; no colision detected. Walking left / right OK
+	ld hl, #_sThePlayer
+	ld a, (#_sThePlayer + #02)
+	cp #PLYR_SPRT_DIR_LEFT
+	jp z, _wlkLeftOK
+	inc (hl); _sThePlayer.x++
+_wlkEnd :
+	ld hl, #_sThePlayer + #03
+	ld(hl), #PLYR_STATUS_WALKING; _sThePlayer.status = PLYR_STATUS_WALKING
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyMoved), a; player has moved LEFT/RIGHT
+	ld l, a ; #BOOL_TRUE everything ok
+	ret
+_wlkLeftOK :
+	dec (hl); _sThePlayer.x--
+	jr _wlkEnd
+
+_SetGateFound :
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	
+	ld a, (hl)
+	ld (#_cGlbSpObjID), a; _cGlbSpObjID = _cMap_ObjIndex[iGlbPosition]
+	ld hl, #_cGlbPlyFlag
+	set 2, (hl) ; COLISION_GATE
+	ret
+
+_wlkGateFound :
+	call _SetGateFound
+_wlkSolidFound :
+	ld hl, #_cGlbPlyFlag
+	set 1, (hl); COLISION_SOLID
+	jp _wlkEndConflicting
+
+_wlkInteractiveFound :
+	; only if Tiletype = TILE_TYPE_INTERACTIVE AND Action = INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile = GAME_PWR_SWITCH_TL_OFFSET + 1 AND PlayerObjects = HAS_OBJECT_SCREW
+	;         Tiletype = TILE_TYPE_INTERACTIVE AND Action = INTERACTIVE_ACTION_LOCKER_OPEN AND Tile = GAME_PWR_BUTTON_TL_OFFSET
+	;         Tiletype = TILE_TYPE_INTERACTIVE AND Action = INTERACTIVE_ACTION_LOCKER_OPEN AND Tile = GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects = HAS_OBJECT_KEY
+	;         Tiletype = TILE_TYPE_INTERACTIVE AND Action = INTERACTIVE_ACTION_MISSION_CPLT AND Tile = GAME_PWR_BUTTON_TL_OFFSET
+	;         Tiletype = TILE_TYPE_INTERACTIVE AND Action = INTERACTIVE_ACTION_MISSION_CPLT AND Tile = GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects = HAS_OBJECT_KEY
+
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld a, (hl) ; A = cObjID(10aaOOOO)
+	ld b, a  ; B = cObjID(10aaOOOO)
+  and #0b00110000  ; A = 00aa0000
+	jr z, _check_for_action_light
+	
+	ld c, #0
+	cp #INTERACTIVE_ACTION_LOCKER_OPEN << #4
+	jr z, _check_for_action_locker
+
+	cp #INTERACTIVE_ACTION_MISSION_CPLT << #4
+	jr nz, _wlkSolidFound  ; action not INTERACTIVE_ACTION_LIGHT_ONOFF, INTERACTIVE_ACTION_LOCKER_OPEN nor INTERACTIVE_ACTION_MISSION_CPLT
+
+	; action = INTERACTIVE_ACTION_MISSION_CPLT
+	inc c
+_check_for_action_locker :
+	; action = INTERACTIVE_ACTION_LOCKER_OPEN
+	ld a, #TS_SCORE_SIZE + #GAME_PWR_BUTTON_TL_OFFSET ; tile to be confirmed
+	call _check_for_interactive_tile
+	jr z, _found_interactive_tile
+	add a, #GAME_PWR_LOCK_TL_OFFSET - #GAME_PWR_BUTTON_TL_OFFSET  ; tile to be confirmed
+	cp (hl)
+	jr nz, _wlkSolidFound
+
+	; check for key object(HAS_OBJECT_KEY). If yes, enable tile animation
+	ld a, (#_cPlyObjects)
+	and #HAS_OBJECT_KEY
+	jr z, _wlkSolidFound  ; no #HAS_OBJECT_KEY
+
+_found_interactive_tile :
+	; check Action to execute corresponding code
+	ld a, c
+	or a
+	jr z, _execute_open_locker
+
+	; execute Mission Complete
+	push bc  ; save B = cObjID(10aaOOOO)
+	ld a, b; A = ObjID(10aaOOOO)
+	and #0b00001111; A = Mission #(0000OOOO)
+	ld hl, #_cMissionStatus
+	dec a
+	ld c, a
+	ld b, #0
+	add hl, bc
+	ld a, (hl)
+	cp #MISSION_COMPLETE
+	jp z, _mission_already_completed
+	ld (hl), #MISSION_COMPLETE
+	ld hl, #_cRemainMission
+	dec (hl)
+	; Add SCORE_MISSION_POINTS points to the score
+	ld a, #SCORE_MISSION_POINTS
+  call _add_score_points
+
+; TODO: Mission complete SFX
+	call _update_mission_status
+_mission_already_completed :
+	pop af  ; recover A = cObjID(10aaOOOO)
+	jr _commit_interactive_found_ex
+
+_add_score_points :
+	ld hl, #_cScoretoAdd
+	add a, (hl); cScoretoAdd += A
+	ld(hl), a
+	ret
+
+_execute_open_locker :
+	; set Locker state = opened
+	push bc  ; save B = cObjID(10aaOOOO)
+	ld a, b  ; A = ObjID(10aaOOOO)
+	and #0b00001111  ; A = Locker ID(0000OOOO)
+	ld hl, #_cLockerOpened
+	ld c, a
+	ld b, #0
+	add hl, bc
+	ld a, (hl)
+	cp #BOOL_TRUE
+	jp z, _locker_already_opened
+	ld(hl), #BOOL_TRUE
+	ld a, c
+
+	or #0b11000000  ; A = Locker ObjectID(1100OOOO)
+	ld b, a
+	ld c, #ANIMATE_OBJ_LOCKER
+	call _activate_interactive_animation_ex  ; try to enable Locker animation(only works if Locker IS in this current screen)
+_locker_already_opened :
+	pop af  ; recover A = cObjID(10aaOOOO)
+	jr _commit_interactive_found_ex
+
+_check_for_action_light :
+  ; action = INTERACTIVE_ACTION_LIGHT_ONOFF
+	ld a, #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET + #01 ; tile to be confirmed
+	call _check_for_interactive_tile
+	jp nz, _wlkSolidFound ; not #GAME_PWR_SWITCH_TL_OFFSET + 1
+
+	; check for screwdriver object(HAS_OBJECT_SCREW). If yes, enable tile animation
+	ld a, (#_cPlyObjects)
+	and #HAS_OBJECT_SCREW
+	jp z, _wlkSolidFound ; no #HAS_OBJECT_SCREW
+	ld hl, #_cRemainScrewdriver
+	dec (hl)
+	jr nz, _commit_interactive_found
+	ld hl, #_cPlyObjects
+	res 6, (hl) ; HAS_OBJECT_SCREW
+	push bc
+	call _display_objects
+	pop bc
+
+_commit_interactive_found :
+	ld a, b  ; A = cObjID(10aaOOOO)
+_commit_interactive_found_ex :
+	ld (#_cGlbSpObjID), a	; _cGlbSpObjID = _cMap_ObjIndex[iGlbPosition]
+	ld hl, #_cGlbPlyFlag
+	set 7, (hl); COLISION_INTER
+
+_wlkEndConflicting :
+	ld a, #PLYR_STATUS_STAND
+	ld(#_sThePlayer + #03), a ; _sThePlayer.status
+	ld l, #BOOL_FALSE ; conflict detected
+__endasm;
+} // bool is_player_walking_ok()
+
+/*
+* Faster move the player to the right or to the left because its in a belt.
+* cGlbObjData = 4(anti-clockwise/left) or 5(clockwise/right)
+*/
+void player_moving_at_belt()
+{
+__asm
+	ld a, (_cGlbObjData)
+	cp #04  ; 4 = anti-clockwise
+	jp z, _plyMvLeft
+	cp #05  ; 5 = clockwise
+	ret nz
+	; Move Right
+	ld c, #1 + #11; Add 1 to X to move right
+	jr _chkMove
+_plyMvLeft :
+	ld c, #255 + #4; Subtract 1 from X to move left
+_chkMove :
+	ld d, #0
+	call _calcTileXYAddrInt
+	ld a, (hl)
+	; Start testing for solid tiles
+	ld b, #02; 2 columns to test
+_mvNextTile :
+	cp #TILE_TYPE_SOLID
+	ret z ; Solid found
+_mvNotSolid :
+	ld de, #32
+	add hl, de; look next tile
+	djnz _mvNextTile
+	; no colision detected. Moving OK
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a; player has moved RIGHT/LEFT
+	ld hl, #_sThePlayer
+	ld a, (_cGlbObjData)
+	cp #04
+	jp z, _mvLeftOK
+	inc(hl); _sThePlayer.x++
+	ret
+_mvLeftOK :
+	dec (hl); _sThePlayer.x--
+__endasm;
+} // void player_moving_at_belt()
+
+/*
+* Check player falling status and update X,Y position
+* Returns:	true (1 - player is falling)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal
+*														||||||L- Solid
+*														|||||L-- Gate
+*														||||L--- Empty floor
+*														|||L---- Special floor (belt)
+*														||L----- Next map *
+*														|L------ Object
+*														L------- Interactive
+*					    cGlbObjData = shift direction + screen destination when Next Map detected
+*						false (0 - player is not falling)
+*							sThePlayer.status = PLYR_STATUS_STAND (if the player stops falling)
+*/
+bool is_player_falling()
+{
+__asm
+	ld a, (#_sThePlayer + #03) ; A = _sThePlayer.status
+	ld l, #BOOL_FALSE
+	cp #PLYR_STATUS_FALLING
+	ret nz ; not falling
+
+	xor a
+	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	ld hl, #_sThePlayer + #01; HL = &_sThePlayer.y
+	inc (hl)
+	ld a, (hl); A = _sThePlayer.y + 1
+
+	; check for next map when falling
+	ld l, #BOOL_TRUE  ; continue falling
+	cp #22 * #8
+	jr c, _not_NextM
+	cp #24 * #8 - #2
+	ret c
+	; Next map detected
+_do_nextm_down :
+	ld a, (#_cScreenMap)
+	add a, #5
+	or #SCR_SHIFT_DOWN << #5
+_do_nextm_up :
+	ld (_cGlbObjData), a	; (sssDDDDD)
+	ld hl, #_cGlbPlyFlag
+	set 5, (hl)
+	ld l, #BOOL_TRUE ; continue falling
+	ret
+
+_not_NextM :
+	; not Next map - check if player has reached the floor
+	; based on X foot position, we need to test 1 or 2 tiles below the player to detect empty floor
+	call _chkFootTileQtty  ; B = 1 or 2 horizontal tiles to test
+	ld c, #0 + #6
+	ld d, #16; 1 row below the player
+	call _calcTileXYAddr
+	ld a, (hl)
+	bit #7, a; test if bit 7 (SOLID BIT) is set
+	jp nz, _flSolid ; solid detected - stop falling
+	; empty floor, first tile
+	ex de, hl
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyMoved), a; player has moved DOWN
+	ld l, a  ; continue falling
+
+	dec b
+	ret z ; unique tile is blank - continue falling, no need to test a second tile
+	ex de, hl
+	inc hl
+	ld a, (hl)
+	bit #7, a; test if bit 7 (SOLID BIT) is set
+	jp nz, _flSolid_ex ; solid detected - stop falling and reset _bGlbPlyMoved
+	; empty floor second tile - continue falling
+	ex de, hl ; doing this is = ld l, #BOOL_TRUE - continue falling
+__endasm;
+}  // bool is_player_falling()
+
+/*
+* Check for player jump status, check for player colision Fatal or Next Map/Portal and then update X,Y
+* Returns:	true (1 - player is jumping)
+*							cGlbPlyFlag = 76543210
+*										        ||||||||
+*														|||||||L Fatal *
+*														||||||L- Solid
+*														|||||L-- Gate
+*														||||L--- Empty floor
+*														|||L---- Special floor (belt)
+*														||L----- Next map/Portal *
+*														|L------ Object
+*														L------- Interactive
+*					    cGlbObjData = shift direction + screen destination when Next Map/Portal detected
+*						false (0 - player is not jumping)
+*							sThePlayer.status = PLYR_STATUS_STAND (if player stop jumping)
+*/
+bool is_player_jumping()
+{
+__asm
+	ld a, (#_sThePlayer + #03); A = _sThePlayer.status
+	ld l, #BOOL_FALSE ; false - not jumping
+	cp #PLYR_STATUS_JUMPING
+	ret nz ; not jumping
+
+	xor a
+	ld (#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	; calculate the new expected X,Y position for the player
+	ld hl, #_cPlyNewY
+	ld a, (#_sThePlayer + #01) ; Y
+	ld (hl), a
+	ld a, (#_cGlbPlyJumpStage)
+	ld c, a
+	cp #PLYR_JUMP_STAGE_UP
+	jr z, _stage_up
+	inc (hl)
+	jr _calc_x
+_stage_up :
+	dec (hl)
+_calc_x :
+
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a; player trying to move DOWN/UP
+
+	ld d, (hl) ; D = _cPlyNewY
+	ld a, (#_cGlbPlyJumpDirection)
+	ld b, a
+	ld hl, #_cPlyNewX
+	ld a, (#_sThePlayer) ; X
+	ld (hl), a
+	ld	a, (#_cCtrlCmd)
+	bit 3, a; UBOX_MSX_CTL_RIGHT ?
+	jr nz, _dir_right
+	bit 2, a; UBOX_MSX_CTL_LEFT ?
+	jr nz, _dir_left
+	ld e, #PLYR_JUMP_DIR_NONE
+	jr _try_move
+_dir_right :
+	ld a, b
+	cp #PLYR_JUMP_DIR_LEFT
+	jr z, _try_move
+	ld a, (hl) ; A = _sThePlayer.x
+	; first check for next map colision
+	cp #256 - #4 - #8
+	jp z, _do_next_map_right
+	; not moving to next map
+	inc (hl)
+	
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a; player trying to move RIGHT
+
+	ld a, #PLYR_JUMP_DIR_RIGHT
+	ld e, a
+	ld (#_cGlbPlyJumpDirection), a
+	ld a, #PLYR_SPRT_DIR_RIGHT
+	ld (#_sThePlayer + #2), a	; _sThePlayer.dir = PLYR_SPRT_DIR_RIGHT
+	jr _try_move
+_dir_left :
+	ld a, b
+	cp #PLYR_JUMP_DIR_RIGHT
+	jr z, _try_move
+	; first check for next map colision
+	ld a, (hl); A = _sThePlayer.x
+	or a
+	jp z, _do_next_map_left
+	; not moving to next map
+	dec (hl)
+
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a; player trying to move LEFT
+
+	ld a, #PLYR_JUMP_DIR_LEFT
+	ld e, a
+	ld (#_cGlbPlyJumpDirection), a
+	ld a, #PLYR_SPRT_DIR_LEFT
+	ld (#_sThePlayer + #2), a; _sThePlayer.dir = PLYR_SPRT_DIR_LEFT
+_try_move :
+	ld a, e
+	ld (#_cGlbPlyJumpDirCmd), a
+	; Now we know the new expected X and Y (_cPlyNewX, _cPlyNewY). Check for a valid position and update _cPlyNewX, _cPlyNewY accordly
+	call _chkBodyTileQtty ; E = _cPlyNewX, B = 1 or 2 horizontal tiles to test
+	push de ; _cPlyNewY / _cPlyNewX
+	push bc ; # tiles to test / _cGlbPlyJumpStage
+	xor a
+	ld (#_cFatalFlag), a
+	ld (#_cPortalFlag), a
+	call _test_jump_position
+	pop bc
+	pop de
+	or a
+	jr nz, _jmp_moved_ok
+
+	; position is not valid. Rollback Y and test again  
+	ld a, (#_sThePlayer + #01)
+	ld d, a
+	push de
+	push bc
+	xor a
+	ld (#_cFatalFlag), a
+	ld (#_cPortalFlag), a
+	call _test_jump_position
+	pop bc
+	pop de
+	or a
+	jr nz, _jmp_moved_ok_step2
+
+	; position still not valid. Rollback X and test again
+	ld a, (#_cPlyNewY)
+	ld d, a
+	ld a, (#_sThePlayer)
+	call _chkBodyTileQtty_ex
+	push de
+	push bc
+	xor a
+	ld (#_cFatalFlag), a
+	ld (#_cPortalFlag), a
+	call _test_jump_position
+	pop bc
+	pop de
+	or a
+	jr nz, _jmp_moved_ok
+
+	; no positions are valid. Rollback X an Y and proceed
+	ld a, (#_sThePlayer + #01)
+	ld d, a
+
+_jmp_moved_ok_step2 :
+	; if jumping down, solid tile found in the ground. Stop jumping
+	ld a, c; A = _cGlbPlyJumpStage
+	cp #PLYR_JUMP_STAGE_UP
+	jr z, _jmp_moved_ok
+	call _set_moved_ok
+	ld hl, #_sThePlayer + #03; HL = &_sThePlayer.status
+	ld(hl), #PLYR_STATUS_STAND
+	ld l, #00; false - not jumping
+	ret
+
+_set_moved_ok :
+	; DE = valid(Y, X) position
+	ld hl, #_sThePlayer
+	ld (hl), e ; X
+	inc hl
+	ld (hl), d ; Y
+	ld hl, #_cGlbPlyFlag
+	ld a, (#_cFatalFlag)
+	or a
+	jr nz, _set_fatal_found
+	ld a, (#_cPortalFlag)
+	or a
+	ret z
+	set 5, (hl)  ; COLISION_NEXTM
+	ret
+_set_fatal_found :
+	; fatal found
+	set 0, (hl)  ; COLISION_FATAL
+	ret
+
+_jmp_moved_ok :
+	call _set_moved_ok
+	; update Jump Stage
+	ld a, c ; A = _cGlbPlyJumpStage
+	cp #PLYR_JUMP_STAGE_DOWN
+	jr nz, _dec_up_cycles
+	; jumping down - check if player moved down next map
+	ld a, d; A = updated _sThePlayer.y
+	; check for next map when falling
+	cp #22 * #8
+	ld l, #BOOL_TRUE; continue jumping
+	ret c
+	jp _do_nextm_down
+
+_dec_up_cycles :
+	ld hl, #_cGlbPlyJumpCycles
+	dec(hl)
+	jr z, _endUpStage
+	ld l, #01; continue jumping
+	ret
+_endUpStage :
+	ld hl, #_cGlbPlyJumpStage
+	ld(hl), #PLYR_JUMP_STAGE_DOWN
+	ld l, #BOOL_TRUE; continue jumping
+	ret
+
+_do_next_map_left :
+	ld a, (#_cScreenMap)
+	dec a
+	or #SCR_SHIFT_RIGHT << #5
+	jr _do_next_map
+_do_next_map_right :
+	ld a, (#_cScreenMap)
+	inc a
+	or #SCR_SHIFT_LEFT << #5
+_do_next_map :
+	; need to return cGlbObjData
+	ld(_cGlbObjData), a; (sssDDDDD)
+	ld hl, #_cGlbPlyFlag
+	set 5, (hl)  ; COLISION_NEXTM
+	ld l, #BOOL_TRUE; continue jumping
+	ret
+
+; Check the horizontal # of tiles to test when detect colision in the player body
+; if (Player.X + 4) % 8 = 0, then just need to test 1 single tile, otherwise must test 2 horizontal tiles
+;	Input: HL = &_cPlyNewX
+; Output: E = X, B = 1 or 2 tiles
+; Changes: A, B, E
+_chkBodyTileQtty :
+	ld a, (hl)
+;	Input: A = Player X position
+_chkBodyTileQtty_ex :
+	ld e, a; E = X
+_chkBodyTileQtty_ex_2 :
+	add a, #04; A = _cPlyNewX + 4
+	ld b, #01; 1 Tile to test
+	and #0b00000111
+	ret z
+	inc b; 2 Tiles to test
+	ret
+
+; Input: B = # of horizontal tiles to test
+;				 C = _cGlbPlyJumpStage (PLYR_JUMP_STAGE_UP / PLYR_JUMP_STAGE_DOWN)
+;				 D = tentative Y position
+;				 E = tentative X position
+; Output: A = BOOL_FALSE (0 - invalid position) / BOOL_TRUE (1 - valid position)
+; Changes: A, B, C, D, E, H, L
+_test_jump_position :
+	; Stage UP or DOWN?
+	ld a, c ; C = _cGlbPlyJumpStage
+	cp #PLYR_JUMP_STAGE_UP
+	ld a, d; A = _sThePlayer.y +- 1
+	jp z, _jump_up_validation
+	; Start Jump DOWN validation
+	add a, #15 ; bottom player pixel
+
+_jump_up_validation :
+	; Start Jump UP validation
+	push bc
+	ld c, e ; C = _sThePlayer.x + / -1
+	inc c
+	inc c
+	inc c
+	inc c
+	push de	; protect D from _calcTileXYAddrGeneric
+	call _calcTileXYAddrGeneric
+	pop de
+	push hl
+_test_solid_up :
+	ld a, (hl)
+	cp #TILE_TYPE_FATAL
+	jp z, _jmpFoundFatal_01
+	cp #TILE_TYPE_PORTAL
+	jp z, _jmpFoundPortal_01
+	; its not fatal nor portal, so test if Solid
+	bit 7, a ; SOLID BIT
+	jr nz, _up_invalid_01
+	; not solid, so check the next tile
+	jr _jmpNextSearch_01
+
+_jmpFoundPortal_01 :
+	; cGlbObjData = shift direction + screen destination
+	push hl
+	push de
+  ; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld a, (hl); screen destination(0000DDDD)
+	or #SCR_SHIFT_PORTAL << #5
+	ld (#_cPortalFlag), a
+	ld (#_cGlbObjData), a; (sss0DDDD)
+	pop de
+	pop hl
+	jr _jmpNextSearch_01
+
+_jmpFoundFatal_01 :
+	ld a, #BOOL_TRUE
+	ld (#_cFatalFlag), a
+_jmpNextSearch_01 :
+	inc hl; next tile
+	djnz _test_solid_up
+	; up or down tiles are valid. check for lateral tiles
+	pop hl
+	pop bc
+	ld a, #BOOL_TRUE
+	dec b
+	ret z ; just 1 horizontal tile, no lateral test necessary
+
+	ld a, (#_cGlbPlyJumpDirCmd)
+	ld b, a
+	cp #PLYR_JUMP_DIR_NONE
+	ld a, #BOOL_TRUE
+	ret z	; jumping vertically - no lateral test necessary
+	ld a, b
+	cp #PLYR_SPRT_DIR_LEFT
+	jr z, _test_lat_tiles
+	; test for right lateral tiles
+	inc hl
+_test_lat_tiles :
+	; test for lateral tiles
+	; if Y % 8 = 0, then just need to test just 1 additional tile, otherwise must test 2 additional vertical tiles
+	ld b, #01; 1 Tile to test
+	ld a, d
+	and #0b00000111
+	jr z, _start_vert_validate
+	inc b; 2 Tiles to test
+_start_vert_validate :
+	ld de, #32
+	ld a, c; C = _cGlbPlyJumpStage
+	cp #PLYR_JUMP_STAGE_UP
+	jr z, _dec_hl_row
+	xor a
+	sbc hl, de
+	jr _vert_validate
+_dec_hl_row :
+	add hl, de
+_vert_validate :
+	ld a, (hl)
+	cp #TILE_TYPE_FATAL
+	jp z, _jmpFoundFatal_02
+	cp #TILE_TYPE_PORTAL
+	jp z, _jmpFoundPortal_02
+	; its not fatal nor portal, so test if Solid
+	bit 7, a; SOLID BIT
+	jr nz, _up_invalid_02
+	; not solid, so test next tile
+	jr _jmpNextSearch_02
+
+_jmpFoundPortal_02 :
+	; cGlbObjData = shift direction + screen destination
+	push hl
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld a, (hl); screen destination(0000DDDD)
+	or #SCR_SHIFT_PORTAL << #5
+	ld (#_cPortalFlag), a
+	ld (#_cGlbObjData), a; (sss0DDDD)
+	pop hl
+	jr _jmpNextSearch_02
+
+_jmpFoundFatal_02 :
+	ld a, #BOOL_TRUE
+	ld (#_cFatalFlag), a
+_jmpNextSearch_02 :
+	djnz _start_vert_validate
+	ld a, #BOOL_TRUE
+	ret
+
+_up_invalid_01 :
+	pop hl
+	pop bc
+_up_invalid_02 :
+	xor a ; BOOL_FALSE
+__endasm;
+}  // bool is_player_jumping()
+
+/*
+* Get the ObjectID from 'cGlbTile' and remove it from the map at 'iGlbPosition' VRAM position
+*/
+void player_get_object()
+{
+__asm
+	; first need to discover which object is this
+	ld hl, #_cPlyObjects
+	ld d, #SCORE_OBJ_TL_OFFSET ; index for the first object tile in the tileset
+	ld a, (#_cGlbTile); object tile on the screen
+	sub d
+	jp z, _itsaBattery
+	dec a
+	jp z, _itsaAmno
+	dec a
+	jr z, _itsaKey
+	dec a
+	jr z, _itsYCard
+	dec a
+	jr z, _itsGCard
+	dec a
+	jr z, _itsRCard
+	dec a
+	jp z, _itsaTool
+	dec a
+	jp z, _itsaMap
+	dec a
+	jp z, _itsaScrew
+	dec a
+	jp z, _itsaKnife
+	dec a
+	jp z, _itsaFlashLight
+	dec a
+	jp z, _itsaGun
+	dec a
+	jp z, _itsPower
+	dec a
+	jp z, _itsaShield
+	dec a
+	jp z, _itsaLife
+	jp _clearTile_none ; unknown object
+
+_itsaKey :
+	set 0, (hl) ; HAS_OBJECT_KEY
+	ld hl, #_cRemainKey
+	jp _diplayObjs_ex
+
+_itsYCard :
+	set 1, (hl) ; HAS_OBJECT_YELLOW_CARD
+	call _upd_card_pts
+	ld a, (#_cRemainYellowCard)
+	add a, #YELLOW_CARD_PTS
+	add a, l
+	ld (#_cRemainYellowCard), a
+	jp _diplayObjs
+
+_itsGCard :
+	set 2, (hl) ; HAS_OBJECT_GREEN_CARD
+	call _upd_card_pts
+	ld a, (#_cRemainGreenCard)
+	add a, #GREEN_CARD_PTS
+	add a, l
+	ld (#_cRemainGreenCard), a
+	jp _diplayObjs
+
+_itsRCard :
+	set 3, (hl) ; HAS_OBJECT_RED_CARD
+	call _upd_card_pts
+	ld a, (#_cRemainRedCard)
+	add a, #RED_CARD_PTS
+	add a, l
+	ld (#_cRemainRedCard), a
+	jr _diplayObjs
+		
+_itsaTool :
+	set 4, (hl) ; HAS_OBJECT_TOOL
+	jr _diplayObjs
+
+_itsaMap :
+	set 5, (hl) ; HAS_OBJECT_MAP
+	call _display_minimap
+	jr _diplayObjs
+
+_itsaScrew :
+	set 6, (hl) ; HAS_OBJECT_SCREW
+	ld hl, #_cRemainScrewdriver
+	jr _diplayObjs_ex
+
+_itsaFlashLight :
+	ld hl, #_cPlyAddtObjects
+	set 1, (hl)
+_itsaBattery :
+	ld hl, #_cPlyRemainFlashlight
+	ld a, #FLASHLIGHT_BATTR_PTS
+	add a, (hl)
+	cp #MAX_AMNO_SHIELD
+	jr c, _batt_ok
+	ld a, #MAX_AMNO_SHIELD
+_batt_ok :
+	ld (hl), a
+	call _display_flashlight
+	jr _clearTile
+
+_itsaGun :
+	ld hl, #_cPlyAddtObjects
+	set 0, (hl)
+	; ubox_put_tile(13, 2, SCORE_GUN_TL_OFFSET);
+	ld a, #SCORE_GUN_TL_OFFSET
+	ld bc, #0x020d
+	call _put_tile_asm_direct
+	ld a, #GUN_AMNO_PTS
+	jr _itsaAmno_ex
+
+_itsaAmno :
+	ld a, #AMNO_AMNO_PTS
+_itsaAmno_ex :
+	ld hl, #_cPlyRemainAmno
+	add a, (hl)
+	cp #MAX_AMNO_SHIELD
+	jr c, _amno_ok
+	ld a, #MAX_AMNO_SHIELD
+_amno_ok :
+	ld(hl), a
+	call _display_gun_amno
+	jr _clearTile
+
+_itsPower :
+	ld	a, #HEALTH_PACK_PTS
+	push	af
+	inc	sp
+	call	_increase_power ; increase_power(HEALTH_PACK_PTS);
+	inc	sp
+	jr _clearTile
+
+_itsaShield :
+	ld hl, #_cPlyRemainShield
+	ld a, #SHIELD_PTS
+	add a, (hl)
+	ld (hl), a
+	cp #MAX_AMNO_SHIELD
+	jr c, _shield_ok
+	ld a, #MAX_AMNO_SHIELD
+_shield_ok :
+	call _display_shield
+	jr _clearTile
+
+_itsaLife :
+	ld a, (#_cLives)
+	cp #MAX_LIVES
+	jr nc, _clearTile
+	inc a
+	ld (#_cLives), a
+	call _display_lives
+	jr _clearTile
+
+_itsaKnife :
+	set 7, (hl) ; HAS_OBJECT_KNIFE
+	ld hl, #_cRemainKnife
+
+_diplayObjs_ex :
+	inc (hl)
+_diplayObjs :
+	call _display_objects
+
+_clearTile :
+	; mplayer_play_effect_p(SFX_GET_OBJECT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0002; 00 + SFX_GET_OBJECT
+	call	_mplayer_play_effect_p_asm_direct
+_clearTile_none :
+
+	; remove the Object Tile from the screen
+	; if LIGHT_SCENE_OFF_FL_OFF, no need to display animated tiles (no need to update VRAM)
+	ld a, (#_cGlbGameSceneLight)
+	cp #LIGHT_SCENE_OFF_FL_OFF
+	jr z, _after_clear
+
+	; if LIGHT_SCENE_OFF_FL_ON, need to check if tile at VRAM addreess <> BLACK_TILE before updating
+	ld hl, (#_iGlbPosition)
+	ld de, #UBOX_MSX_NAMTBL_ADDR
+	add hl, de; HL = VRAM_NAME_TBL + cY * 32 + cX
+	cp #LIGHT_SCENE_OFF_FL_ON
+	jr nz, _do_clear_obj	
+	call #0x0050; SETRD - Enable VDP to read(HL)
+	in a, (#0x98)
+	cp #BLACK_TILE
+	jr z, _after_clear
+
+_do_clear_obj :
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+	xor a
+	out (#0x98), a; write to VRAM
+
+_after_clear :
+	ld hl, (#_iGlbPosition)
+	ld de, #_cMap_Data - (#03 * #32)
+	add hl, de
+	ld (hl), a; cMap_Data[HL] = BLANK_TILE
+
+	; update cMap_TileClass[]
+	ld hl, (#_iGlbPosition)
+	ld de, #_cMap_TileClass - (#03 * #32)
+	add hl, de
+	ld (hl), a ; cMap_TileClass[HL] = TILE_TYPE_BLANK
+
+	; reset _cGlbPlyFlagCache object colision flag to avoid double execution
+	ld a, #CACHE_INVALID
+	ld (#_cGlbPlyFlagCache), a; invalidate _cGlbPlyFlagCache
+
+	xor a ; Tile = 0
+	call _insert_new_obj_history
+	ret
+
+_upd_card_pts :
+	call _randombyte
+	ld a, l
+	ld l, #1
+	cp #80
+	ret c
+	inc l
+	cp #160
+	ret c
+	inc l
+	cp #210
+	ret c
+	inc l
+	ret
+__endasm;
+}  // void player_get_object()
+
+/*
+* Check for player request to die and arise in a safe place. Set Power = 0 when user confirms
+* Returns:	true (1 - player wants to arise with a new life in this same level)
+*						false (0 - continue playing)
+*/
+bool arise_player()
+{
+__asm
+	ld	l, #0x07
+	call	_ubox_read_keys
+	ld	a, l
+	ld l, #BOOL_FALSE; continue playing
+	cp #UBOX_MSX_KEY_ESC
+	ret	nz
+
+	; pressed ESC key - enable Pause
+	; print "ARISE?"
+	; put_tile_block(16, 0, SCORE_POWER_TILE, 3, 1);
+	ld a, #SCORE_ARISE_TL_OFFSET
+	call _txt_prt
+
+_wait_for_YN :
+	ld	l, #0x05
+	call	_ubox_read_keys
+	ld	a, l
+	cp #UBOX_MSX_KEY_Y
+	jr z, _do_arise
+	ld	l, #0x04
+	call	_ubox_read_keys
+	ld	a, l
+	cp #UBOX_MSX_KEY_N
+	jp nz, _wait_for_YN
+	; Pressed 'N'
+	; erase "ARISE?"
+	call _txt_erase
+	ld l, #BOOL_FALSE; continue playing
+	ret
+
+_do_arise :
+	; erase "ARISE?"
+	call _txt_erase
+	xor a
+	ld (#_cPower), a
+	ld l, #BOOL_TRUE; arise requested
+__endasm;
+}  // bool arise_player()
+
+/*
+* Check for player remaining power and life. Decrease Life when Power = 0
+* Returns:	true (1 - player still have life/power)
+*						false (0 - player don't have more lives = gameover)
+*/
+//bool is_player_life_ok()
+bool continue_game_loop()
+{
+__asm
+	ld a, (#_cRemainMission)
+	or a
+	ld l, #BOOL_FALSE  ; All missions completed - level UP
+	ret z
+
+	ld l, #BOOL_TRUE  ; continue playing
+	ld a, (#_cPlyDeadTimer)
+	or a
+	jr z, _check_power
+	dec a
+	ret nz ; there are some cycles for Dead Player animation
+	ld (#_cPlyDeadTimer), a
+	jr _check_lives
+
+_check_power :
+	ld a, (#_cPower)
+	or a
+	ret nz
+	; _cPower = 0. Set PLYR_STATUS_DEAD and start dead animation timer
+	ld hl, #_cPlyDeadTimer
+	ld (hl), #DEAD_ANIM_TIMER
+	ld hl, #_sThePlayer + #03
+	ld (hl), #PLYR_STATUS_DEAD
+	;TODO: right SFX here (dead player)
+	; mplayer_play_effect_p(SFX_HURT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0005; 00 + SFX_HURT
+	call	_mplayer_play_effect_p_asm_direct
+	ret
+
+_check_lives :
+	ld a, (#_cLives)
+	dec a
+	ld (#_cLives), a
+	ld l, #BOOL_FALSE; no more lives - stop playing
+	ret z
+	
+	; there are still some remaining lives
+	ld a, #MAX_POWER
+	ld (#_cPower), a
+	call _display_power
+	call _display_lives
+	; TODO: set player status and position
+	ld hl, #_cGlbPlyFlagCache
+	ld(hl), #CACHE_INVALID
+	ld hl, #_sThePlayer
+	ld a, (#_cPlySafePlaceX)
+	ld(hl), a
+	inc hl
+	ld a, (#_cPlySafePlaceY)
+	ld(hl), a
+	inc hl
+	ld a, (#_cPlySafePlaceDir)
+	ld(hl), a; _sThePlayer.dir = _cPlySafePlaceDir
+	inc hl
+	ld(hl), #PLYR_STATUS_STAND; _sThePlayer.status = PLYR_STATUS_STAND
+	inc hl
+	inc hl
+	inc hl
+	ld(hl), #00; _sThePlayer.frame = 0
+	ld a, #BOOL_TRUE
+	ld (#_bGlbPlyChangedPosition), a
+	ld l, #BOOL_TRUE; continue playing
+__endasm;
+} // bool continue_game_loop()
+
+/*
+* Auxiliary routine to update player status and reset some internal flags
+*/
+void update_player_status(uint8_t cNewStatus)
+{
+__asm
+	ld hl, #2
+	add hl, sp
+	ld a, (hl) ; A = _cNewStatus
+	cp #PLYR_STATUS_FALLING
+	jr z, _sttFall
+	cp #PLYR_STATUS_CLIMB_DOWN
+	jr z, _sttClbDown
+	cp #PLYR_STATUS_CLIMB_UP
+	jr z, _sttClbUp
+	cp #PLYR_STATUS_JUMPING
+	jr z, _sttJump
+	jr _setStatus
+
+_sttJump :
+	ld hl, #_cGlbPlyJumpCycles
+	ld (hl), #PLYR_UP_JUMP_CYCLES
+	ld hl, #_cGlbPlyJumpStage
+	ld (hl), #PLYR_JUMP_STAGE_UP
+	ld hl, #_cGlbPlyJumpDirection
+	ld (hl), #PLYR_JUMP_DIR_NONE
+	jr _setStatus
+
+_sttClbDown :
+	ld a, (#_sThePlayer + #01)
+	add a, #04
+	jr _sttClimb
+_sttClbUp :
+	ld a, (#_sThePlayer + #01)
+	dec a
+	dec a
+_sttClimb :
+	ld(#_sThePlayer + #01), a
+	ld d, #PLYR_STATUS_CLIMB
+	jr _sttFall2
+
+_sttFall :
+	; adjust _sThePlayer.x to the right position when start falling
+	ld d,a
+_sttFall2 :
+	ld a, (#_cGlbObjData) ; _cGlbObjData = 1 or 2 empty tiles
+	dec a
+	jp nz, _setStatus2 ; 2 - no need to adjust
+	ld a, (#_sThePlayer)
+	ld b, a
+	add a, #6
+	and #0b00000111
+	ld c, a
+	ld a, b
+	inc a
+	inc a
+	sub c
+	ld (#_sThePlayer), a
+_setStatus2 :
+	ld a,d
+_setStatus :
+	ld hl, #_sThePlayer + #03
+	ld (hl),a ; _sThePlayer.status = _cNewStatus
+	ld hl, #_sThePlayer + #06
+	xor a
+	ld(hl), a ; _sThePlayer.frame = 0
+	inc hl
+	ld(hl), a ; _sThePlayer.delay = 0
+	ld a, #CACHE_INVALID
+	ld(#_cGlbPlyFlagCache), a ; invalidate _cGlbPlyFlagCache
+__endasm;
+} // void update_player_status()
+
+/*
+* Activate the player sprite based on player status
+*/
+void display_player()
+{
+__asm
+  ld a, (#_cPlyDeadTimer)
+	or a
+	jr z, _continue_display_player
+	; dead player animation
+	dec a
+	ld (#_cPlyDeadTimer), a
+	; TODO: set player pattern when dead
+	jp _updPlyrAttr
+
+_continue_display_player :
+	ld a,(#_sThePlayer + #03) ; A = _sThePlayer.status
+	cp #PLYR_STATUS_JUMPING
+	jp nz, _chkFall
+	ld a, (#_cGlbPlyJumpDirection)
+	cp #PLYR_JUMP_DIR_NONE
+	jp nz, _patJmpDir
+	ld hl, #_PLYR_PAT_FALL_IDX
+	ld a, (#_cGlbPlyJumpStage)
+	cp #PLYR_JUMP_STAGE_DOWN
+	jp nz, _jmpStDown
+	xor a
+	jp _updtAttr2
+_jmpStDown :	
+	ld a, #08	; PLYR_JUMP_STAGE_UP
+	jp _updtAttr2	
+_patJmpDir :
+	ld hl, #_PLYR_PAT_JUMP_IDX
+	ld a, (#_sThePlayer + #02); A = _sThePlayer.dir
+	jp _updtAttr
+	
+_chkFall :
+	cp #PLYR_STATUS_FALLING
+	jp nz, _chkClimb
+	ld hl, #_sThePlayer + #07; HL = &_sThePlayer.delay
+	ld a, (hl)
+	inc(hl)
+	cp #03;  sThePlayer.delay++ == 3 ?
+	jp nz, _patFall
+	ld(hl), #00; _sThePlayer.delay = 0
+	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
+	inc a
+	and #0b00000001
+	ld(#_sThePlayer + #06), a
+	jr _patFall2
+_patFall :
+	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
+_patFall2 :
+	ld hl, #_PLYR_PAT_FALL_IDX
+	jr _updtAttr
+
+_chkClimb :
+	cp #PLYR_STATUS_CLIMB
+	jp nz, _iamWalking
+	; check if player has moved
+	ld a, (#_bGlbPlyMoved)
+	or a
+	jp z, _patClimb; player has not moved
+	ld hl, #_sThePlayer + #07; HL = &_sThePlayer.delay
+	ld a, (hl)
+	inc(hl)
+	cp #03; sThePlayer.delay++ == 3 ?
+	jp nz, _patClimb
+	ld(hl), #00; _sThePlayer.delay = 0
+	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
+	inc a
+	and #0b00000001
+	ld(#_sThePlayer + #06), a
+	jr _patClimb2
+_patClimb :
+	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
+_patClimb2 :
+	ld hl, #_PLYR_PAT_CLIMB_IDX
+	jr _updtAttr
+
+_iamWalking : ; PLYR_STATUS_STAND or PLYR_STATUS_WALKING
+	; check if player has moved
+	ld a, (#_bGlbPlyMoved)
+	or a
+	jp z, _patWalk ; player has not moved
+	; update the walking animation
+	ld a, #BOOL_TRUE
+	ld (_bGlbPlyJumpOK), a ; _bGlbPlyJumpOK = true;
+	ld hl,#_sThePlayer + #07 ; HL = &_sThePlayer.delay
+	ld a, (hl)
+	inc(hl)
+	cp #03;  sThePlayer.delay++ == 3 ?
+	jp nz, _patWalk
+	ld hl, #_sThePlayer + #06 ; HL = &_sThePlayer.frame
+	inc (hl)
+	ld a, (hl)
+	cp #PLYR_WALK_CYCLE
+	jp z, _patWalk3
+	jr _patWalk2
+_patWalk3 :
+	ld (hl), #0; _sThePlayer.frame = 0
+_patWalk2 :
+	inc hl
+	ld(hl), #0; _sThePlayer.delay = 0
+_patWalk :
+	; find which pattern to show
+	ld a, (#_sThePlayer + #02); A = _sThePlayer.dir
+	ld b, a
+	add a, a
+	add a, b; A = _sThePlayer.dir * 3
+	ld hl, #_sThePlayer + #06; _sThePlayer.frame
+	ld c, (hl)
+	ld b, #0
+	ld hl, #_walk_frames
+	add hl, bc; HL = &_walk_frames[sThePlayer.frame]
+	add a, (hl); A = (walk_frames[sThePlayer.frame] + sThePlayer.dir * 3)
+	ld hl, #_PLYR_PAT_WALK_IDX; _sThePlayer.pat
+_updtAttr :
+	add a, a
+	add a, a
+	add a, a; A = (walk_frames[sThePlayer.frame] + sThePlayer.dir * 3) * 8
+_updtAttr2 :
+	add a, (hl)	; A = sThePlayer.pat + (walk_frames[sThePlayer.frame] + sThePlayer.dir * 3) * 8;
+	ld (#_sGlbSpAttr + #02), a; _sGlbSpAttr.pattern
+
+_updPlyrAttr :
+	ld de, #_sThePlayer + #01
+	ld hl, #_sGlbSpAttr
+	push hl ; used at _spman_alloc_fixed_sprite() calls
+	ld a, (de)
+	dec a; y on the screen starts in 255
+	ld (hl), a	; _sGlbSpAttr.y
+	inc hl
+	dec de
+	ld a, (de)
+	ld (hl), a ; _sGlbSpAttr.x
+	; _sGlbSpAttr.pattern already set
+	
+	ld a, (#_cPlyDeadTimer)
+	or a
+	jr z, _chk_hit_timer
+	ld a, #PLYR_SPRITE_L1_COLOR_DEAD
+	jr _player_was_hit
+
+_chk_hit_timer :
+	ld a, (#_cPlyHitTimer)
+	or a
+	jr z, _chk_for_hit
+	; player was hit - change player colors
+	dec a
+	ld (#_cPlyHitTimer), a
+	jr nz, _set_hit_color
+	; reset hitflag
+	xor a
+	ld (#_sThePlayer + #4), a; player.hitflag = FALSE
+_set_hit_color :
+	ld a, #PLYR_SPRITE_L1_COLOR_HIT
+	jr _player_was_hit
+
+_chk_for_hit :
+  ld a, (#_sThePlayer + #4)  ; A = player.hitflag
+	cp #BOOL_TRUE
+	jr nz, _player_not_hit
+	ld a, #HIT_ANIM_TIMER
+	ld (#_cPlyHitTimer), a
+	; decrease_power
+	ld a, (#_cGlbPlyHitCount)
+	ld b, a
+	ld a, (#_cPower)
+	sub b
+	jr nc, _updt_power
+	xor a
+_updt_power :
+	ld (#_cPower), a
+	call _display_power
+	; mplayer_play_effect_p(SFX_HURT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0005; 00 + SFX_HURT
+	call	_mplayer_play_effect_p_asm_direct
+	ld a, #PLYR_SPRITE_L1_COLOR_HIT
+	jr _player_was_hit
+
+_player_not_hit :
+	; change player color if SceneLight = OFF and FlashLight = OFF
+	ld a, (#_cGlbGameSceneLight)
+	cp #LIGHT_SCENE_OFF_FL_OFF
+	ld a, #PLYR_SPRITE_L1_COLOR_NORMAL
+	jr nz, _do_player_display
+	ld a, #PLYR_SPRITE_L1_COLOR_DARK
+_player_was_hit :
+_do_player_display :
+	ld (#_cGlbPlyColor), a
+	and #0b00001111
+	ld (#_sGlbSpAttr + #03), a	; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR low nibble
+	; allocate the player sprites; fixed so they never flicker
+	call	_spman_alloc_fixed_sprite
+	; second one is 4 patterns away(16x16 sprites)
+	ld a, (#_sGlbSpAttr + #02)
+	add a, #04
+	ld (#_sGlbSpAttr + #02), a	; _sGlbSpAttr.pattern+=4
+	ld a, (#_cGlbPlyColor)
+	rra
+	rra
+	rra
+	rra
+	and #0b0001111
+	ld(#_sGlbSpAttr + #03), a  ; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR high nibble
+	call	_spman_alloc_fixed_sprite
+	pop	af
+__endasm;
+} // display_player()
+
+/*
+* Update player position and player status
+* Returns:	true (1 - continue playing in the same map)
+*						false (0 - need to change map)
+*/
+bool update_player()
+{
+	bGlbPlyMoved = false;
+	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessãrio,ja filtrado no run_game()
+
+	//display_number(15, 0, 3, cGlbPlyFlag);
+
+	if (!is_player_falling())
+	{
+		if (is_player_jumping())
+		{
+			if (cGlbPlyFlag & COLISION_FATAL)
+			{
+				//if (!cPlyRemainShield) player_hit(HIT_PTS_SMALL);
+				player_hit(HIT_PTS_SMALL);
+			}
+			else if (cGlbPlyFlag & COLISION_NEXTM)  // Next map or Portal
+			{
+        // cGlbObjData contains shift direction + screen destination (sssDDDDD)
+				return false;
+			}
+		}
+		else
+		{
+			if (sThePlayer.status != PLYR_STATUS_CLIMB)
+			{
+				if (!is_player_ok())  // is there any colision with our player?
+				{
+					if (cGlbPlyFlag & COLISION_EMPTY)
+					{
+						//cGlbObjData = 1(single empty tile) or 2(2 empty tiles) - adjust Player X position when start to fall (center player at the blank tiles)
+						update_player_status(PLYR_STATUS_FALLING);
+					}
+					else
+					{
+						if (cGlbPlyFlag & COLISION_OBJCT)
+						{
+							//mplayer_play_effect_p(SFX_GET_OBJECT, SFX_CHAN_NO, 0);
+							player_get_object();
+							cScoretoAdd += SCORE_OBJECT_POINTS;
+						}
+						if (cGlbPlyFlag & COLISION_GATE)
+						{
+							player_hit(HIT_PTS_HIGH);
+							return true;
+						}
+						if (cGlbPlyFlag & COLISION_SOLID)
+						{
+							update_player_status(PLYR_STATUS_DEAD);
+							player_hit(HIT_PTS_DEATH);
+							return true;
+						}
+						if (cGlbPlyFlag & COLISION_FATAL)
+						{
+							//if (!cPlyRemainShield) player_hit(HIT_PTS_SMALL);
+							player_hit(HIT_PTS_SMALL);
+						}
+						if (cGlbPlyFlag & COLISION_FLOOR)
+						{
+							//cGlbObjData = 4(anti-clockwise/left) or 5(clockwise/right)
+							player_moving_at_belt();
+						}
+					}
+				}
+			}
+			if (sThePlayer.status != PLYR_STATUS_FALLING)
+			{
+				if (cCtrlCmd & UBOX_MSX_CTL_DOWN)
+				{
+					// if player is already climbing, continue until reach the floor
+					if (sThePlayer.status == PLYR_STATUS_CLIMB)
+					{
+						if (is_player_climb_down())
+						{
+							if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
+							{
+								// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
+								return false;
+							}
+						}
+					}
+					else
+					{
+						if (!is_player_cmd_down_ok())  // is there any colision trying to go down?
+						{
+							// check for a gate below the player
+							if (cGlbPlyFlag & COLISION_GATE)
+							{
+								if (special_object_animated_ok(ANIMATE_OBJ_GATE, cGlbSpObjID)) // try to open the gate
+								{
+									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
+								}
+								//else
+								//{
+									//TODO: sound effect
+								//}
+							}
+							else if (cGlbPlyFlag & COLISION_FLOOR) // check for a stair below the player
+							{
+								//cGlbObjData = 1(single stair tile) or 2(2 stair tiles) - adjust Player X position when start to climb (center player at the stair tiles)
+								update_player_status(PLYR_STATUS_CLIMB_DOWN);
+							}
+						}
+					}
+				}
+				else if (cCtrlCmd & UBOX_MSX_CTL_UP)
+				{
+					// if player is already climbing, continue until reach the flood
+					if (sThePlayer.status == PLYR_STATUS_CLIMB)
+					{
+						if (is_player_climb_up())
+						{
+							if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
+							{
+								// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
+								return false;
+							}
+						}
+					}
+					else
+					{
+						if (!is_player_cmd_up_ok())  // is there any colision trying to go up?
+						{
+							// check for a stairs above the player
+							if (cGlbPlyFlag & COLISION_FLOOR)
+							{
+								//cGlbObjData = 1(single stair tile) or 2(2 stair tiles) - adjust Player X position when start to climb (center player at the stair tiles)
+								update_player_status(PLYR_STATUS_CLIMB_UP);
+							}
+							//else // there is a solid block above player head
+							//{
+								//TODO: sound effect
+							//}
+						}
+						else
+						{
+							if (bGlbPlyJumpOK)
+							{
+								// start a jump
+								update_player_status(PLYR_STATUS_JUMPING);
+							}
+						}
+					}
+				}
+				if (sThePlayer.status != PLYR_STATUS_CLIMB && sThePlayer.status != PLYR_STATUS_JUMPING)
+				{
+					if (cCtrlCmd & (UBOX_MSX_CTL_RIGHT | UBOX_MSX_CTL_LEFT))
+					{
+						cGlbWalkDir = (cCtrlCmd & UBOX_MSX_CTL_RIGHT) ? PLYR_SPRT_DIR_RIGHT : PLYR_SPRT_DIR_LEFT;
+						if (!is_player_walking_ok(cGlbWalkDir))  // is there any colision right/left walking?
+						{
+							if (cGlbPlyFlag & COLISION_GATE)
+							{
+								if (special_object_animated_ok(ANIMATE_OBJ_GATE, cGlbSpObjID)) // try to open the gate
+								{
+									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
+								}
+								//else
+								//{
+									//TODO: sound effect
+								//}
+							}
+							else if (cGlbPlyFlag & COLISION_NEXTM)  // Next Map or Portal
+							{
+								// cGlbObjData contains shift direction + screen destination (sssDDDDD)
+								return false;
+							}
+							if (cGlbPlyFlag & COLISION_INTER)
+							{
+								if (special_object_animated_ok(ANIMATE_OBJ_INTER, cGlbSpObjID)) // change Interactive object
+								{
+									// only if player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW or
+									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_BUTTON_TL_OFFSET or
+									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY or
+									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_BUTTON_TL_OFFSET or
+									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY
+									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
+								}
+								//else
+								//{
+									//TODO: sound effect
+								//}
+							}
+						}
+					}
+					if (!bGlbPlyMoved)
+					{
+						update_player_status(PLYR_STATUS_STAND);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
+		{
+			// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
+			return false;
+		}
+	}
+	return true;
+}  // bool update_player()
+
+/*
+* Update map, shot and shield sprites
+*/
+void update_and_display_objects()
+{
+__asm
+	ld hl, #_sGlbSpAttr
+	push hl; used at _spman_alloc_fixed_sprite() call
+
+	;check if MiniMap is enabled
+	ld a, (#_bGlbMMEnabled)
+	or a
+	jp z, _chkforShield
+
+	ld a, (#_cMiniMapY)
+	dec a; y on the screen starts in 255
+	ld(hl), a; _sGlbSpAttr.y
+	inc hl
+	ld a, (#_cMiniMapX)
+	ld(hl), a; _sGlbSpAttr.x
+	inc hl
+	ld a, (#_cMiniMapPattern)
+	ld(hl), a; _sGlbSpAttr.pattern
+	inc hl
+	; change color each 8 frames
+	ld de, (#_iGameCycles)
+	ld a, #0b00000111
+	and e
+	ld a, (#_cLastMMColor)
+	jp nz, _useCacheColor
+	; update frame
+	ld a, (#_cMiniMapFrame)
+	cp #SPRT_MAP_COLOR_CYCLE
+	jp nz, _updMapFrame
+	xor a
+_updMapFrame :
+	inc a
+	ld (#_cMiniMapFrame), a
+	dec a
+_useMapFrame :
+	call _update_Frame_Color
+	ld(#_cLastMMColor), a
+_useCacheColor :
+	ld(hl), a; _sGlbSpAttr.attr
+	; allocate the MiniMap sprites; not fixed so they can flicker
+	call	_spman_alloc_sprite
+
+_chkforShield :
+	;check if Shield is enabled
+	ld a, (#_cPlyRemainShield)
+	or a
+	jr z, _chkforFlashLight
+	ld b, a
+	; Control delay for Shield decrement
+	ld a, (#_cShieldUpdateTimer)
+	inc a
+	ld (#_cShieldUpdateTimer), a
+	cp #ONE_SECOND_TIMER
+	jr nz, _no_decrement
+	xor a
+	ld (#_cShieldUpdateTimer), a
+	ld a, b
+	dec a
+	ld (#_cPlyRemainShield), a
+	call _display_shield
+_no_decrement :
+	ld hl, #_sGlbSpAttr
+	ld a, (#_sThePlayer + #01)
+	dec a; y on the screen starts in 255
+	ld(hl), a; _sGlbSpAttr.y
+	inc hl
+	ld a, (#_sThePlayer)
+	ld(hl), a; _sGlbSpAttr.x
+	inc hl
+	ld a, (#_cShieldFrame)
+	xor #1
+	ld (#_cShieldFrame), a
+	ld b, a
+	rlc b
+	rlc b
+	ld a, (#_cShieldPattern)
+	add a, b
+	ld(hl), a; _sGlbSpAttr.pattern
+	inc hl
+	; if B=0 then cShieldFrame=0, else cShieldFrame=1
+	ld a, b
+	or b
+	jr z, _color_2
+	ld a, #SHIELD_SPRITE_COLOR_1
+	jr _set_attr
+_color_2 :
+	ld a, #SHIELD_SPRITE_COLOR_2
+_set_attr :
+	ld(hl), a; _sGlbSpAttr.attr
+	; allocate the Shield sprites;  not fixed so they can flicker
+	call	_spman_alloc_sprite
+
+_chkforFlashLight :
+	; check if Flashlight is enabled
+	ld a, (#_cGlbGameSceneLight)
+	bit 1, a
+	jp z, _chkforShot
+	ld a, (#_cPlyRemainFlashlight)
+	or a
+	jr z, _chkforShot
+	ld b, a
+	; Control delay for Flashlight decrement
+	ld a, (#_cFlashLUpdateTimer)
+	inc a
+	ld(#_cFlashLUpdateTimer), a
+	cp #ONE_SECOND_TIMER
+	jr nz, _chkforShot
+	xor a
+	ld (#_cFlashLUpdateTimer), a
+	ld a, b
+	dec a
+	ld (#_cPlyRemainFlashlight), a
+	jr z, _timeout_FL
+	jr _timeout_FL_ex
+_timeout_FL :
+	call _disable_FL_ex
+_timeout_FL_ex :
+	call _display_flashlight
+
+_chkforShot :
+	;check if Shot is enabled
+	ld a, (#_cShotCount)
+	dec a
+	jp nz, _check_explosion
+	; shot is active - check for solid colision, enemy colision and end of screen
+	ld a, (#_cShotDir) ; PLYR_SPRT_DIR_RIGHT(0) / PLYR_SPRT_DIR_LEFT(1)
+	cp #PLYR_SPRT_DIR_LEFT
+	ld a, (#_cShotX)
+	jr nz, _do_right_shot
+	; LEFT shot here
+	cp #5 ; if X < 5 disable the shot
+	jr c, _kill_shot
+	sub #4 ; Shot moves 4 horizontal pixels
+	ld c, a ; C = X - 4
+	ld b, a; B = X - 4
+	ld a, (#_cShotY)
+	add a, #7
+	call _calcTileXYAddrGeneric
+	jr _detect_colision
+
+_check_explosion :
+	ld a, (#_cExplosionFrame)
+	or a
+	jr nz, _anim_explosion
+	ld (#_cShotTrigTimer), a ; explosion ended - ok to fire again
+	jp _end_updt_obj
+
+_kill_shot :
+	xor a
+	ld (#_cShotCount), a
+	; Start Explosion
+	ld (#_cExplosionFrame), a ; reset cExplosionFrame
+	ld a, (#_cShotX)
+	ld (#_cExplosionX),a
+	ld a, (#_cShotY)
+	dec a ; y on the screen starts in 255
+	ld (#_cExplosionY), a
+	; mplayer_play_effect_p(SFX_EXPLODE, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0007; 00 + SFX_EXPLODE
+	call	_mplayer_play_effect_p_asm_direct
+
+_anim_explosion:
+	ld hl, #_sGlbSpAttr
+	ld a, (#_cExplosionY)
+	ld(hl), a; _sGlbSpAttr.y
+	inc hl
+	ld a, (#_cExplosionX)
+	ld(hl), a; _sGlbSpAttr.x
+	inc hl
+	ld a, (#_cShotExplosionPattern)
+	ld(hl), a; _sGlbSpAttr.pattern
+	inc hl
+	; Change explosion colors
+	ld a, (#_cExplosionFrame)
+	call _update_Frame_Color
+	ld(hl), a; _sGlbSpAttr.attr
+	ld a, c
+	inc a
+	and #0b00000011; Range 0 - 3 (SPRT_MAP_COLOR_CYCLE)
+	ld(#_cExplosionFrame), a
+	; allocate the Explosion sprites; not fixed so they can flicker
+	call	_spman_alloc_sprite
+	jp _end_updt_obj
+
+_update_Frame_Color :
+	ex de, hl
+	ld hl, #_color_frames
+	ld b, #0
+	ld c, a
+	add hl, bc
+	ld a, (hl)
+	ex de, hl
+	ret
+
+_do_right_shot :
+	; RIGHT shot here
+	; A = _cShotX
+	cp #256 - #4 - #16; if X >= (252 - 16) disable shot
+	jr nc, _kill_shot
+	add a, #4 ; Shot moves 4 horizontal pixels
+	ld b, a ; B = X + 4
+	add #15
+	ld c, a ; C = X + 4 + 15
+	ld a, (#_cShotY)
+	add a, #7
+	call _calcTileXYAddrGeneric
+_detect_colision :
+	ld a, b
+	ld (#_cShotX), a
+	ld a, (hl)
+	bit 7, a ; SOLID BIT
+	jp z, _no_colision
+	cp #TILE_TYPE_WALL
+	jp z, _break_wall
+	
+	cp #TILE_TYPE_EGG
+	jp z, _shot_egg
+
+	cp #TILE_TYPE_INTERACTIVE ; check if shot colide with interactive object
+	jp nz, _kill_shot  ; its SOLID but not WALL or INTERACTIVE - then kill the shot
+
+	; Its an Interactive. Need to find corresponding ObjID
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+
+	push hl
+	ld a, #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET; tile to be confirmed
+	call _check_for_interactive_tile
+	pop hl
+	jp nz, _kill_shot
+
+	ld a, (hl); A = ObjID(10aaOOOO)
+  ld c, a
+	and #0b00110000  ; A = 00aa0000
+	;cp #INTERACTIVE_ACTION_LIGHT_ONOFF << #4
+	jr z, _is_action_light
+
+	cp #INTERACTIVE_ACTION_LOCKER_OPEN << #4
+	jr z, _is_action_locker
+
+	cp #INTERACTIVE_ACTION_MISSION_CPLT << #4
+	jp nz, _kill_shot
+	; tile = GAME_PWR_SWITCH_TL_OFFSET and action is INTERACTIVE_ACTION_MISSION_CPLT
+
+	call _activate_interactive_animation
+
+	; execute Mission Complete
+	ld a, b; A = ObjID(10aaOOOO)
+	and #0b00001111  ; A = Mission #(0000OOOO)
+	ld hl, #_cMissionStatus
+	dec a
+	ld c, a
+	ld b, #0
+	add hl, bc
+	ld a, (hl)
+	cp #MISSION_COMPLETE
+	jp z, _kill_shot
+	ld (hl), #MISSION_COMPLETE
+	ld hl, #_cRemainMission
+	dec(hl)
+
+	; TODO: Mission complete SFX
+	call _update_mission_status
+	; Add SCORE_MISSION_POINTS points to the score
+	ld a, #SCORE_MISSION_POINTS
+	call _add_score_points
+	jp _kill_shot
+
+_is_action_locker :
+	; tile = GAME_PWR_SWITCH_TL_OFFSET and action is INTERACTIVE_ACTION_LOCKER_OPEN.
+	call _activate_interactive_animation
+
+	; need to use Locker ID to check if this locker is already opened or not
+	ld a, b  ; A = B = ObjID(10aaOOOO)
+	and #0b00001111  ; A = Locker ID (0000OOOO)
+
+	; set Locker state = opened
+	ld hl, #_cLockerOpened
+	ld c, a
+	ld b, #0
+	add hl, bc
+	ld a, (hl)
+	cp #BOOL_TRUE
+	jp z, _kill_shot
+	ld (hl), #BOOL_TRUE
+	ld a, c
+	or #0b11000000  ; A = Locker ObjectID (1100OOOO)
+	ld b, a
+	ld c, #ANIMATE_OBJ_LOCKER
+	call _activate_interactive_animation_ex  ; try to enable Locker animation(only works if Locker IS in this current screen)
+  jp _kill_shot
+
+_is_action_light :
+	; tile = GAME_PWR_SWITCH_TL_OFFSET and action is INTERACTIVE_ACTION_LIGHT_ONOFF.
+	call _activate_interactive_animation
+	jp _kill_shot
+
+_check_for_interactive_tile :
+	; Move HL from _cMap_ObjIndex[] to _cMap_Data[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	cp (hl)
+	ret
+
+_activate_interactive_animation :
+	ld b, c; C = ObjID(10aaOOOO)
+	ld c, #ANIMATE_OBJ_INTER
+_activate_interactive_animation_ex :
+	push bc
+	call	_special_object_animated_ok ; enable animation
+	pop bc
+	ret
+
+_shot_egg :
+	; Yes, its an Egg. Need to find corresponding ObjID
+	; +decrease the egg resistance until its destroyed
+	ld c, #ANIMATE_OBJ_EGG
+	jr _shot_egg_ex
+
+_break_wall :
+	; Yes, its a wall. Need to find corresponding ObjID
+	; + decrease the wall resistance until it breaks
+	ld c, #ANIMATE_OBJ_WALL
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+_shot_egg_ex :
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld b, (hl) ; B = ObjID
+  call _activate_interactive_animation_ex
+	jp _kill_shot
+
+_no_colision :
+	ld hl, #_sGlbSpAttr
+	ld a, (#_cShotY)
+	dec a ; Y on the screen starts in 255
+	ld(hl), a; _sGlbSpAttr.y
+	inc hl
+	ld a, b
+	ld(hl), a; _sGlbSpAttr.x
+	inc hl
+	ld a, (#_cShotDir); PLYR_SPRT_DIR_RIGHT(0) / PLYR_SPRT_DIR_LEFT(1)
+	rlca
+	rlca ; cShotDir * 4
+	ld c, a
+	ld a, (#_cShotPattern)
+	add a, c
+	ld (hl), a; _sGlbSpAttr.pattern
+	inc hl
+	; change shot colors
+	ld a, (#_cShotFrame)
+	call _update_Frame_Color
+	ld (hl), a; _sGlbSpAttr.attr
+	ld a, c
+	inc a
+	and #0b00000011 ; Range 0-3 (SPRT_MAP_COLOR_CYCLE)
+	ld (#_cShotFrame), a
+	; allocate the Shot sprites; fixed so they never flicker
+	; sGlbSpAttr address is already pushed into the stack
+	call _spman_alloc_fixed_sprite
+
+_end_updt_obj :
+	pop hl
+__endasm;
+} // void update_and_display_objects()
+
+/*
+* Check for 'P' keypress to enable/disable Pause
+*/
+void check_for_pause()
+{
+__asm
+  ld	l, #0x04
+	call	_ubox_read_keys
+	ld	a, l
+	cp #UBOX_MSX_KEY_P
+	ret nz
+
+	; pressed P key - enable Pause
+	; print "PAUSE"
+	; put_tile_block(16, 0, SCORE_POWER_TILE, 3, 1);
+	ld a, #SCORE_PAUSE_TL_OFFSET
+	call _txt_prt
+
+_wait_for_P :
+  ld	l, #0x04
+	call	_ubox_read_keys
+	ld	a, l
+	cp #UBOX_MSX_KEY_P
+	jp nz, _wait_for_P
+
+	; pressed P key - disable Pause
+	; erase "PAUSE"
+	; put_tile_block(16, 0, BLANK_TILE, 3, 1);
+_txt_erase :
+	xor a
+	ld bc, #0x0010
+	ld de, #0x0301
+	call	_fill_block_asm_direct
+	; mplayer_init(SONG, SONG_SILENCE / SONG_IN_GAME);
+	ld a, #SONG_IN_GAME
+
+_do_sfx :
+	; mplayer_init(SONG, SONG_SILENCE / SONG_IN_GAME);
+	ld	hl, #_SONG
+	call _mplayer_init_asm_direct
+	; mplayer_play_effect_p(SFX_SELECT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0001; 00 + SFX_SELECT
+	call	_mplayer_play_effect_p_asm_direct
+	; wait some cycles before restart reading keyboard
+	ld	l, #12
+	call _ubox_wait_for
+	ret
+
+_txt_prt :
+	ld bc, #0x0010
+	ld de, #0x0301
+	call	_put_tile_block_asm_direct
+	; mplayer_init(SONG, SONG_SILENCE / SONG_IN_GAME);
+	ld a, #SONG_SILENCE
+	call _do_sfx
+	ret
+__endasm;
+} // void check_for_pause()
+
+/*
+* Check if Fire triggered
+*/
+void check_for_fire()
+{
+__asm
+	; check for active shot in the screen (only 1 is supported)
+	ld a, (#_cShotCount)
+	dec a
+	ret z ; there is 1 active shot
+
+	; wait for _cShotTrigTimer=0 to fire again
+	ld a, (#_cShotTrigTimer)
+	or a
+	ret nz
+
+	; check if Fire was triggered - if (cCtrlCmd & UBOX_MSX_CTL_FIRE1)
+	ld	a, (#_cCtrlCmd)
+	bit	4, a
+	ret z; no fire triggered
+
+	; check for Player status - NO fire starts while climbing, falling or dead
+	ld a, (#_sThePlayer + #03); A = _sThePlayer.status
+	cp #PLYR_STATUS_CLIMB
+	ret z ; climbing
+	cp #PLYR_STATUS_FALLING
+	ret z ; falling
+	;cp #PLYR_STATUS_DEAD  ; not neccessary, already filtered at Run_Game()
+	;ret z ; dead
+
+	; check for Player status - NO fire if jumping WITH NO direction (up/down)
+	cp #PLYR_STATUS_JUMPING
+	jr nz, _test_shot
+	ld a, (#_cGlbPlyJumpDirection)
+	cp #PLYR_JUMP_DIR_NONE
+	ret z ; jumping up/down
+
+_test_shot :
+	ld a, (#_cPlyAddtObjects)
+	bit 0, a
+	ret z  ; player dont have the gun object
+	; check if Player have available Amno
+	ld a, (#_cPlyRemainAmno)
+	or a
+	ret z  ; no Amno available
+		
+	ld a, (#_sThePlayer + #2) ; _sThePlayer.dir = PLYR_SPRT_DIR_RIGHT(0) / PLYR_SPRT_DIR_LEFT(1)
+	ld (#_cShotDir), a
+	cp #PLYR_SPRT_DIR_LEFT
+	ld a, (#_sThePlayer); A = _sThePlayer.x
+	jr nz, _shot_right
+	; Shot to the LEFT
+	cp #4 ; if _sThePlayer.x < 4 then cShotX = 0
+	jr c, _zero_X
+	; check if firing though a wall (solid tile)	
+	ld c, a
+	call _detect_solid
+	ret nz ; do not fire shot
+	sub #4
+_set_X :
+	ld (#_cShotX), a
+	jr _do_shot
+
+_zero_X :
+	xor a
+	jr _set_X
+
+_shot_right :
+	; Shot to the RIGHT
+	; A = _sThePlayer.x
+	cp #240; if _sThePlayer.x >= 240 then cShotX = 255
+	jr nc, _max_X
+
+	; check if firing though a wall (solid tile)
+	add #16
+	ld c, a
+	call _detect_solid
+	ret nz ; do not fire shot
+	sub #12
+	jr _set_X
+
+_detect_solid :
+	ld b, a
+	ld a, (#_sThePlayer + #01); A = _sThePlayer.y
+	ld (#_cShotY), a
+	add a, #7
+	call _calcTileXYAddrGeneric
+	ld a, (hl)
+	bit 7, a ; SOLID BIT
+	ret nz ; do not fire shot
+	ld a, b
+	ret
+
+_max_X :
+	ld a, #255
+	jr _set_X
+
+_do_shot :
+	; decrement Amno, set Count, (X, Y and Dir already set) and Frame
+	ld a, (#_cPlyRemainAmno)
+	dec a
+	ld (#_cPlyRemainAmno), a
+	ld a, #01
+	ld (#_cShotCount), a
+	ld (#_cShotTrigTimer), a
+	xor a
+	ld (#_cShotFrame), a
+
+	; Update Score, SoundFX
+	call _display_gun_amno
+	; mplayer_play_effect_p(SFX_SHOOT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0006; 00 + SFX_SHOOT
+	call	_mplayer_play_effect_p_asm_direct
+__endasm;
+} // void check_for_fire()
+
+/*
+* Check for 'F' keypress to enable/disable Flashlight
+*/
+void check_for_flashlight()
+{
+__asm
+	ld hl, #_cGlbFLDelay
+	ld a, (hl)
+	or a
+	jp z, _checkFL
+	dec(hl)
+	ret
+
+_checkFL :
+	ld	l, #0x03
+	call	_ubox_read_keys
+	ld	a, l
+	cp #UBOX_MSX_KEY_F
+	ret nz
+
+	; pressed F key - check for enable/disable Flashlight
+	ld a, #KEY_PRESS_DELAY
+	ld (#_cGlbFLDelay), a
+	ld a, (#_cGlbGameSceneLight)
+	bit 1, a
+	jp nz, _disable_FL
+	ld b, a
+
+	; Before enabling, check for Flashlight object to use
+	ld a, (#_cPlyAddtObjects)
+	bit 1, a
+	ret z ; player dont have the flashlight object
+	ld a, (#_cPlyRemainFlashlight)
+	or a
+	ret z ; player dont have the flashlight battery
+
+	; all OK, enable Flashlight
+	ld a, b
+	set 1, a
+	ld (#_cGlbGameSceneLight), a
+	; print Flashlight Icon
+	; put_tile(18, 2, GAME_TILE_OFFSET + GAME_FLASHL_TL_OFFSET);
+	ld a, #SCORE_FLASHL_TL_OFFSET
+	ld bc, #0x0212
+	call	_put_tile_asm_direct
+	call _display_flashlight
+
+_set_FL_structure :
+	; set _sFlashLightStatusData structure data
+	push ix
+	ld ix, #_sFlashLightStatusData
+	ld 0 (ix), #BOOL_TRUE  ; sFlashLightStatusData.bFLightJustEnabled
+
+	call _Calc_Player_FL_Pos
+	call _Set_FL_XY_Offs
+	pop ix
+	ret
+
+_Set_FL_XY_Offs :
+	ld 1 (ix), l  ; sFlashLightStatusData.iCurrPlyPositionOffs [absolute offset from 0 - 768]
+	ld 2 (ix), h
+
+	ex de, hl ; DE = sFlashLightStatusData.iCurrPlyPositionOffs
+	ld bc, #0x0500; C = 0, B = 5 (loop counter)
+	or a; clear carry
+_div32_loop_2 :
+	rr d
+	rr e
+	rr c
+djnz _div32_loop_2
+	; E = TileAddr div 32      (tile Y)
+	; C = (TleAddr mod 32) * 8 (pixel X)
+	ld a, c
+	and #0b11111000
+	rrca
+	rrca
+	rrca  ; A = (TleAddr mod 32) (tile X)
+	ld 3 (ix), a  ; sFlashLightStatusData.cCurrPlyTileX
+	ld 4 (ix), e  ; sFlashLightStatusData.cCurrPlyTileY
+
+	; now check for the X offsets to display FlashLight
+	cp #2
+	jr nc, _check_offset_right
+	ld c, a
+	ld a, #2
+	sub c
+	ld 5 (ix), a  ; sFlashLightStatusData.cOffSetXLeft
+	ld 6 (ix), #0 ; sFlashLightStatusData.cOffSetXRight
+	jr _check_Y_offset
+
+_check_offset_right :
+	ld 5 (ix), #0 ; sFlashLightStatusData.cOffSetXLeft
+	ld 6 (ix), #0 ; sFlashLightStatusData.cOffSetXRight
+	cp #28 + #01
+	jr c, _check_Y_offset
+	sub #28
+	ld 6 (ix), a ; sFlashLightStatusData.cOffSetXRight
+
+_check_Y_offset :
+  ; now check for the Y offsets to display FlashLight
+	ld a, e
+	cp #5
+	jr nc, _check_offset_bottom
+	ld c, a
+	ld a, #5
+	sub c
+  ld 7 (ix), a  ; sFlashLightStatusData.cOffSetYTop
+	ld 8 (ix), #0 ; sFlashLightStatusData.cOffSetYBottom
+	ret
+
+_check_offset_bottom :
+	ld 7 (ix), #0 ; sFlashLightStatusData.cOffSetYTop
+	ld 8 (ix), #0 ; sFlashLightStatusData.cOffSetYBottom
+	cp #20 + #1
+	ret c
+	sub #20
+	ld 8 (ix), a ; sFlashLightStatusData.cOffSetYBottom
+  ret
+
+_Calc_Player_FL_Pos :
+	ld c, #7
+	ld d, c
+	call _calcTileXYAddr
+	ld de, #_cMap_TileClass - (#03 * #32)
+	xor a
+	sbc hl, de
+	ret
+
+_disable_FL_ex :
+	; mplayer_play_effect_p(SFX_TIMEOFF, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0008; 00 + SFX_TIMEOFF
+	call _mplayer_play_effect_p_asm_direct
+	ld a, (#_cGlbGameSceneLight)
+_disable_FL :
+	; disable Flashlight
+	res 1, a
+	ld (#_cGlbGameSceneLight), a	
+	bit 0, a
+	call z, _do_scenelights_off
+	; erase Flashlight Icon
+	; put_tile(18, 2, BLANK_TILE);
+	xor a
+	ld bc, #0x0212
+	call	_put_tile_asm_direct
+__endasm;
+}  // void check_for_flashlight()
+
+/*
+* Enable or disable game scene lights based on Power Switch
+*/
+void display_scene_light()
+{
+__asm
+	ld hl, #_cGlbFlashLightAction
+	ld a, (hl)	
+	cp #GAME_LIGHTS_ACTION_NONE
+	ret z
+	ld (hl), #GAME_LIGHTS_ACTION_NONE
+
+	cp #GAME_LIGHTS_ACTION_ON
+	jr nz, _try_light_off
+	; turn ON scene lights
+	ld a, (#_cGlbGameSceneLight)
+	set 0, a
+	jr _end_lights
+
+_try_light_off :
+	cp #GAME_LIGHTS_ACTION_OFF
+	ret nz
+  ; check if FlashLight is already ON - calculate FL data if YES
+	ld a, (#_cGlbGameSceneLight)
+	bit 1, a
+  call nz, _set_FL_structure 
+	ld a, (#_cGlbGameSceneLight)
+	res 0, a
+_end_lights :
+	ld (#_cGlbGameSceneLight), a
+	jp _draw_map
+__endasm;
+}  // void display_scene_light()
+
+/*
+* Enable or disable flashlight effect
+*/
+void display_flashlight_effect()
+{
+__asm
+  ld a, (#_cGlbGameSceneLight)
+	bit 0, a
+	ret nz ; SceneLight is ON
+	bit 1, a
+	ret z ; Flashlight is OFF
+	; Flashlight is ON and SceneLight is OFF
+	ld a, (#_sFlashLightStatusData)  ; sFlashLightStatusData.bFLightJustEnabled
+	or a
+	jr z, _update_FL_effect
+  ; FlashLight just enabled - need a full FL display
+	xor a
+	ld (#_sFlashLightStatusData), a  ; sFlashLightStatusData.bFLightJustEnabled = FALSE
+	; Flashlight effect...
+	push ix
+	ld ix, #_sFlashLightStatusData
+
+	; calculate flashlight VRAM Address, cMap_Data[] Address, Width and Height
+	call _Calc_FL_VRAM_W_H
+	; DE = VRAM address
+	; HL = _cMap_Data[] address
+	; BC = Height / Width
+
+	pop ix
+
+_print_fl_line :
+	push bc
+	push hl
+	push de
+	ld b, #0
+	call #0x005C  ; LDIRVM - Copia um bloco da RAM para a VRAM / BC = Comprimento, DE = Endereço VRAM, HL = Endereço RAM / Modifica : AF, BC, DE, HL, EI
+	ld bc, #32
+	pop de
+	ex de, hl
+	add hl, bc
+	ex de, hl
+	pop hl
+	add hl, bc
+	pop bc
+	djnz _print_fl_line
+	ret
+
+_Calc_FL_VRAM_W_H :
+	; calculate flashlight starting X and Y, then convert these coordinates into VRAM Address and _cMap_Data[] Address
+	ld a, 4 (ix)  ; sFlashLightStatusData.cCurrPlyTileY
+	add a, 7 (ix) ; sFlashLightStatusData.cOffSetYTop
+	sub #2
+	ld l, a ; start FL Y
+	ld h, #0
+	rlc l
+	rlc l
+	rlc l      ; l = Y * 8
+	add hl, hl
+	add hl, hl ; hl = Y * 32
+
+	ld a, 3 (ix)  ; sFlashLightStatusData.cCurrPlyTileX
+	add a, 5 (ix) ; sFlashLightStatusData.cOffSetXLeft
+	sub #2
+	ld  d, #0
+	ld e, a ; start FL X
+	add hl, de ; HL = start absolute offset for flashlight (start FL Y * 32 + start FL X)
+	
+	push hl
+	ld bc, #_cMap_Data - (#03 * #32)
+	add hl, bc  ; HL = _cMap_Data[] address
+	ex de, hl
+
+	pop hl
+	ld bc, #UBOX_MSX_NAMTBL_ADDR
+	add hl, bc
+	ex de, hl  ; DE = VRAM address / HL = _cMap_Data[] address
+
+	ld 9 (ix), e; sFlashLightStatusData.iVRAMAddrStartFL
+	ld 10 (ix), d
+
+	; calculate flashlight Width and Height
+	ld a, #6
+	sub 5 (ix)  ; sFlashLightStatusData.cOffSetXLeft
+	sub 6 (ix)  ; sFlashLightStatusData.cOffSetXRight
+	ld c, a ; Width
+	ld 11 (ix), a  ; sFlashLightStatusData.cWidthFL
+
+	ld a, #6
+	sub 7 (ix)  ; sFlashLightStatusData.cOffSetYTop
+	sub 8 (ix)  ; sFlashLightStatusData.cOffSetYBottom
+	ld b, a ; Height
+	ld 12 (ix), a  ; sFlashLightStatusData.cHeightFL
+	ret
+	
+_update_FL_effect :
+  ; FlashLight was enabled already - need a differential FL display
+	ld a, (#_bGlbPlyChangedPosition)
+	or a
+	ret z
+  ; player has changed position - check if FL update is needed
+
+	call _Calc_Player_FL_Pos
+	push hl
+	ld de, (#_sFlashLightStatusData + #1)  ; DE = sFlashLightStatusData.iCurrPlyPositionOffs
+	sbc hl, de
+	pop hl
+	ret z ; no FL update is needed
+ 
+ ; player has a new position at screen - calculate new coordinates and FL offsets
+	push ix
+	ld ix, #_sFlashLightStatusDataAux
+	ld 0 (ix), #BOOL_FALSE  ; sFlashLightStatusDataAux.bFLightJustEnabled
+
+	call _Set_FL_XY_Offs
+	; calculate new flashlight VRAM Address, cMap_Data[] Address, Width and Height
+	call _Calc_FL_VRAM_W_H
+	; DE = VRAM address
+	; HL = _cMap_Data[] address
+	; BC = Height / Width
+	push bc
+	push hl
+	push de
+
+	; Flashlight effect - erase current block and display the new one
+	ld ix, #_sFlashLightStatusData
+	ld a, #BLACK_TILE
+	ld l, 9 (ix); sFlashLightStatusData.iVRAMAddrStartFL
+	ld h, 10 (ix)
+	ld d, 11 (ix); sFlashLightStatusData.cWidthFL
+	ld e, 12 (ix); sFlashLightStatusData.cHeightFL
+	halt
+	call _fill_block_addr_asm_direct
+	pop de
+	pop hl
+	pop bc
+	call _print_fl_line
+
+	pop ix
+	ld de, #_sFlashLightStatusData
+	ld hl, #_sFlashLightStatusDataAux
+	ld bc, #13
+	ldir  ; ld (DE), (HL), then increments DE, HL, and decrements BC until BC = 0
+__endasm;
+}  // void display_flashlight_effect()
+
+/*
+* Update score amount and display it
+*/
+void update_and_display_score()
+{
+__asm
+	; only update score at odd frame (for better animation effect)
+	ld a, (#_iGameCycles)
+	bit 0, a
+	ret z
+	; check for Score points to display
+	ld a, (#_cScoretoAdd)
+	or a
+	ret z
+	ld hl, (#_iScore)
+	ld b, #0
+	cp #SCORE_ADD_ANIM
+	jr c, _addRemain
+	; Add SCORE_ADD_ANIM points to the score
+	ld c, #SCORE_ADD_ANIM
+	sub c
+	jr _updScore
+_addRemain :
+	; Add remaining score points
+	ld c, a
+	xor a
+_updScore:
+	add hl, bc
+	ld (#_cScoretoAdd), a
+	ld (#_iScore), hl
+	jp _display_score
+__endasm;
+}  // void update_and_display_score()
+
+/*
+* Update the status for all animated tiles (both standard and special tiles)
+* Fill "pAnimTileList" array with all animated tiles at this cycle
+*/
+void update_animated_tiles()
+{
+__asm
+	ld a, #BOOL_FALSE
+	ld (#_bGlbSpecialProcessing), a
+	push iy
+	ld iy, (#_pAnimTileList)
+	push ix
+	ld ix, #_sAnimTiles
+	ld a, (#_cAnimTilesQty)
+	or a
+	jp z, _do_special_tiles
+	ld b, a  ; B = _cAnimTilesQty
+
+_tile_loop :
+	ld a, (#_bGlbSpecialProcessing)
+	cp #BOOL_TRUE
+	jp nz, _not_special_tile
+	; Special tile processing
+	; First check for a Slider object
+	ld a, 2 (ix); A = _pCurAnimTile->cCycleMode
+	; if _cCycleMode = ANIM_CYCLE_SLIDER_*, custom routine
+	cp #ANIM_CYCLE_SLIDER_UP
+	jp c, _not_a_slider
+	; it a slider - just animate every 2 cycles (too fast if animate at every cycle)
+	ld d, a
+	ld a, (#_cAnimCycleParityFlag)
+	bit 0, a
+	jp z, _next_tile
+	ld a, 7 (ix); pCurAnimTile->cTimeLeft
+	or a
+	jr nz, _decrease_timer ; if pCurAnimTile->cTimeLeft<>0, decrease timer and animate
+	ld a, d
+	cp #ANIM_CYCLE_SLIDER_UP
+	jr nz, _not_slider_up
+	ld c, #ANIM_CYCLE_SLIDER_DOWN
+	jr _slider_proc
+_not_slider_up :
+	cp #ANIM_CYCLE_SLIDER_DOWN
+	jr nz, _not_slider_down
+	ld c, #ANIM_CYCLE_SLIDER_UP
+	jr _slider_proc
+_not_slider_down :
+	cp #ANIM_CYCLE_SLIDER_LEFT
+	jr nz, _not_slider_left
+	ld c, #ANIM_CYCLE_SLIDER_RIGHT
+	jr _slider_proc
+_not_slider_left :
+	ld c, #ANIM_CYCLE_SLIDER_LEFT
+
+_slider_proc :
+	; slider reverse state and restart timer
+	ld a, 6 (ix)
+	ld 7 (ix), a; pCurAnimTile->cTimeLeft = pCurAnimTile->cTimer
+	ld 2 (ix), c
+	jp _next_tile
+
+_decrease_timer :
+	dec 7 (ix)
+	; update the screen object once per unique slider
+	ld a, 3 (ix); A = pCurAnimTile->cStep
+	cp #RIGHT_MOST_TILE
+	ld a, d; D = _pCurAnimTile->cCycleMode
+	ld c, d
+	push bc  ; protects B(counter) and C(cycle mode) from _update_screen_object
+	call z, _update_screen_object
+	pop bc
+	ld a, c; C = _pCurAnimTile->cCycleMode
+
+	cp #ANIM_CYCLE_SLIDER_UP
+	jr nz, _not_slider_up_2
+	; insert blank tile at current position, them move tile up
+	ld c, #BLANK_TILE
+	call _do_insert_anim_queue
+	ld de, #32
+	xor a; A = 0, carry flag = 0
+	sbc hl, de
+_end_slider_proc :
+	ld 0 (ix), l
+	ld 1 (ix), h	; updated pCurAnimTile->iPosition (+1, -1, +32, -32)
+	ld c, 5 (ix)
+	call _do_insert_anim_queue
+	jp _next_tile
+
+_not_slider_up_2 :
+	cp #ANIM_CYCLE_SLIDER_DOWN
+	jr nz, _not_slider_down_2
+	ld c, #BLANK_TILE
+	call _do_insert_anim_queue
+	ld de, #32
+	add hl, de
+	jr _end_slider_proc
+
+_not_slider_down_2 :
+	cp #ANIM_CYCLE_SLIDER_LEFT
+	jr nz, _not_slider_left_2
+	ld a, 3 (ix) ; A = pCurAnimTile->cStep
+	cp #RIGHT_MOST_TILE
+	jr nz, _no_extra_blank_tile_L
+	ld c, #BLANK_TILE
+	call _do_insert_anim_queue
+	jr _move_tile_L
+_no_extra_blank_tile_L :
+	ld l, 0 (ix)
+	ld h, 1 (ix); HL = pCurAnimTile->iPosition
+_move_tile_L :
+	dec hl
+	jr _end_slider_proc
+
+_not_slider_left_2 :
+	ld a, 3 (ix); A = pCurAnimTile->cStep
+	cp #LEFT_MOST_TILE
+	jr nz, _no_extra_blank_tile_R
+	ld c, #BLANK_TILE
+	call _do_insert_anim_queue
+	jr _move_tile_R
+_no_extra_blank_tile_R :
+	ld l, 0 (ix)
+	ld h, 1 (ix); HL = pCurAnimTile->iPosition
+_move_tile_R :
+	inc hl
+	jr _end_slider_proc
+
+_not_a_slider :
+	; for special tiles, only use active ones
+	ld a, 8 (ix) ; pCurAnimTile->cSpTileStatus
+	cp #ST_DISABLED
+	jp z, _next_tile
+	cp #ST_TIMEWAIT
+	jr nz, _continue_tile_proc
+	dec 7 (ix)  ; --pCurAnimTile->cTimeLeft
+	jp nz, _next_tile	; do nothing - gate still have time to wait
+	ld 8 (ix), #ST_ENABLED
+
+_continue_tile_proc :
+_not_special_tile :
+	ld a, 2 (ix)	; A = _pCurAnimTile->cCycleMode
+	add a, a
+	ld c, a
+	add a, a
+	add a, a
+	add a, c ; A = _pCurAnimTile->cCycleMode * 10
+	add a, 3 (ix) ; A = _pCurAnimTile->cCycleMode * 10 + pCurAnimTile->cStep
+
+	ld hl, #_cCycleTable
+	ld d, #0
+	ld e, a
+	add hl, de
+	ld a, (hl) ; A = cCycleTable[pCurAnimTile->cCycleMode * 10 + pCurAnimTile->cStep];
+	cp 4 (ix)	; pCurAnimTile->cLastFrame
+	jp z, _upd_and_next_tile
+	ld 4 (ix), a  ; pCurAnimTile->cLastFrame = A
+	cp #0xFE  ; disable special animated tile
+	jp nz, _continue_animation
+	; if (cGlbCurFrame == 0xFE) {...} // disable special animated tile
+	ld a, 2 (ix)
+	cp #ANIM_CYCLE_WALL_BREAK
+	jr nz, _test_anim_gate
+	; wall break
+	ld c, 6 (ix)
+	ld 7 (ix), c
+_egg_animation :
+	inc 3 (ix)
+	jr _upd_obj_anim_history
+
+_test_anim_gate :
+	cp #ANIM_CYCLE_GATE_OPEN
+	jr nz, _test_anim_egg
+	ld c, a
+	ld a, 6 (ix)  ; pCurAnimTile->cTimer
+	or a
+	ld a, c
+	jr z, _anim_gate_open
+	; gate is opening and there is a timer set for closing
+	; disable animation and enable timer for this tile
+	ld 2 (ix), #ANIM_CYCLE_GATE_CLOSE
+	ld c, 6 (ix)
+	ld 7 (ix), c
+	ld 8 (ix), #ST_TIMEWAIT
+	ld a, 3 (ix)
+	sub #4
+	ld 3 (ix), a
+	jr _end_anim_0xFE_2
+
+_test_anim_egg :
+	cp #ANIM_CYCLE_FACEHUG_EGG
+	jr nz, _test_anim_interactive
+	jr _egg_animation
+	
+_test_anim_interactive :
+  cp #ANIM_CYCLE_LOCKER_OPEN
+	jr z, _end_anim_0xFE
+	cp #ANIM_CYCLE_INTERACTIVE
+	jr nz, _anim_gate_open
+	ld a, 3 (ix)
+	inc a
+	; if A = 2, then in this moment the action is ON->OFF
+	cp #2
+	jr nz, _try_step_4
+	
+	ld a, 9 (ix)  ; first check for Action type in cSpObjID (10aaOOOO)
+	and #0b00110000
+	cp #INTERACTIVE_ACTION_LIGHT_ONOFF
+	ld a, #2  ; keep animation at Step = 2
+	jr nz, _upd_step
+
+	ld (#_cGlbFlashLightAction), a
+	jr _upd_step
+_try_step_4 :
+	; if A = 4, then in this moment the action is OFF->ON
+	cp #4
+	jr nz, _upd_step
+
+	ld a, 9 (ix)  ; first check for Action type in cSpObjID(10aaOOOO)
+	and #0b00110000
+	cp #INTERACTIVE_ACTION_LIGHT_ONOFF
+	jr nz, _upd_step_ex
+
+	ld a, #GAME_LIGHTS_ACTION_ON
+	ld (#_cGlbFlashLightAction), a
+_upd_step_ex :
+	; reset animation step when >= Step 2
+	xor a
+_upd_step :
+	ld 3 (ix), a
+_upd_obj_anim_history :
+	; keep interactive/wall state at object history from now on
+	; update_wall_history(pCurAnimTile->iPosition, pCurMapData[pCurAnimTile->iPosition - (3 * 32)]);
+	ld e, 0 (ix)
+	ld d, 1 (ix); DE = pCurAnimTile->iPosition
+	ld hl, #_cMap_Data - (#03 * #32)
+	add hl, de
+	ld a, (hl)
+	push bc ; protect counter B from _update_wall_history
+	push	af
+	inc	sp
+	push	de
+	call	_update_wall_history
+	pop	af
+	inc	sp
+	pop bc
+	jr _end_anim_0xFE
+
+_anim_gate_open :
+	ld 2 (ix), #ANIM_CYCLE_GATE_OPEN
+	ld a, 3 (ix)  ; pCurAnimTile->cStep
+	sub #4
+	ld 3 (ix), a
+	;if (!pCurAnimTile->cTimer) disable_gate_history(pCurAnimTile->iPosition); 
+	ld a, 6 (ix)
+	or a
+	jr nz, _end_anim_0xFE
+	; keep gate open at object history from now on
+	ld	e, 0 (ix)
+	ld	d, 1 (ix)
+	push bc; protect counter B from _disable_gate_history
+	push de
+	call	_disable_gate_history
+	pop	af
+	pop bc
+
+_end_anim_0xFE :
+	; pCurAnimTile->cSpTileStatus = ST_DISABLED;
+	; cGlbSpecialTilesActive--;
+	ld 8 (ix), #ST_DISABLED
+	ld hl, #_cGlbSpecialTilesActive
+	dec(hl)
+_end_anim_0xFE_2 :
+	ld 4 (ix), #0xAA	; pCurAnimTile->cLastFrame = 0xAA
+	jp _next_tile
+
+_do_insert_anim_queue :
+	; Input: IX = pCurAnimTile
+	;				 IY = pAnimTileList
+	;				 C = tile to insert at pAnimTileList
+	; Output:
+	;				 IY = pAnimTileList++
+	;				 HL = pCurAnimTile->iPosition
+	; Changes: A, D, E, H, L
+	; include this tile to the animation queue
+	; pAnimTileList->cTile = pCurMapData[pCurAnimTile->iPosition - (3 * 32)] = cGlbTile
+	ld l, 0 (ix)
+	ld h, 1 (ix); HL = pCurAnimTile->iPosition
+	push hl
+	push hl
+
+	ld de, #_cMap_Data - (#03 * #32)
+	add hl, de
+
+	ld(hl), c
+	ld 0 (iy), c
+	; pAnimTileList->iPosition = pCurAnimTile->iPosition;
+	; pAnimTileList++;
+	pop hl
+	ld 1 (iy), l
+	ld 2 (iy), h
+	inc iy
+	inc iy
+	inc iy
+	ld(#_pAnimTileList), iy
+
+	; update cMap_TileClass[]
+	ld de, #_cMap_TileClass - (#03 * #32)
+	add hl, de
+	ld a, c
+	call	_getTileClass
+	ld(hl), a
+	pop hl
+	ret
+
+_continue_animation :
+	ld c, #BLANK_TILE
+	cp #0xFF  ; blank tile
+	jr z, _insert_anim_queue
+	add a, 5 (ix); A = pCurAnimTile->cTile + cGlbCurFrame
+	ld c, a
+
+_insert_anim_queue :
+	call _do_insert_anim_queue
+
+_upd_and_next_tile :
+	ld a, 3 (ix)
+	inc a
+	cp #10 ;cStep >= 10 ?
+	jp c, _end_mod_10
+	sub #10
+_end_mod_10 :
+	ld 3 (ix), a	; pCurAnimTile->cStep = (pCurAnimTile->cStep + 1) % 10;
+_next_tile :
+	ld de, #10 ; sizeof(struct AnimatedTile)
+	add ix, de  ;_pCurAnimTile++
+	dec b
+	jp nz, _tile_loop
+
+	ld a, (#_bGlbSpecialProcessing)
+	cp #BOOL_TRUE
+	jr z, _finish_tiles
+
+_do_special_tiles :
+	ld a, (#_cAnimSpecialTilesQty)
+	or a
+	jp z, _finish_tiles
+	ld b, a; B = _cAnimSpecialTilesQty
+	ld a, #BOOL_TRUE
+	ld(#_bGlbSpecialProcessing), a
+	ld ix, #_sAnimSpecialTiles
+	jp _tile_loop
+
+_finish_tiles :
+	ld a, (#_cAnimCycleParityFlag)
+	xor #1
+	ld (#_cAnimCycleParityFlag), a
+	pop ix
+	pop iy
+__endasm;
+}  // void update_animated_tiles()
+
+
+void draw_level_up_message()
+{
+__asm
+	; mplayer_init(SONG, SONG_SILENCE);
+	ld	hl, #_SONG
+	ld a, #SONG_SILENCE
+	call _mplayer_init_asm_direct
+
+	; Fill_Box(6, 6, 20, 9, BLANK_TILE);
+	xor a
+	ld bc, #0x0606
+	ld de, #0x1409
+	call _fill_block_asm_direct
+
+	ld a, #GAME_TEXT_LEVEL_COMPLETED_ID
+	call _search_text_block
+	ld bc, #0x0707
+	jp _display_msg_and_wait
+__endasm;
+}  // void draw_level_up_message()
+
+
+/*
+* Game engine loop
+*/
+void Run_Game()
+{
+	do  // loop for each Level
+	{
+		ubox_disable_screen();
+		// clear the screen
+		ubox_fill_screen(BLANK_TILE);
+		ubox_enable_screen();
+		cGameStage = LEVEL_GAMESTAGE;
+		cLevel = 2;
+		draw_game_level_info();
+
+		ubox_disable_screen();
+		load_gamelevel_data();
+		Load_Sprites();
+		reset_obj_history();
+
+		// global variable initialization - once per level
+		cLastPower = 0xFF;  // force update on the first display_power() call
+		bGlbMMEnabled = bChangeMap = false;
+		bGlbPlyJumpOK = true;
+		cGlbGameSceneLight = LIGHT_SCENE_ON_FL_ANY;
+		cGlbFlashLightAction = GAME_LIGHTS_ACTION_NONE;
+		cPlyObjects = cPlyAddtObjects = HAS_NO_OBJECT;  // Player starts with no objects
+		sThePlayer.type = ET_UNUSED;
+		cPlyRemainShield = INVULNERABILITY_SHIELD;
+
+		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
+		cRemainYellowCard = cRemainGreenCard = cRemainRedCard = 0;
+		cRemainKey = cRemainScrewdriver = cRemainKnife = 0;
+
+		cScoretoAdd = cPlyRemainAmno = 0;
+__asm
+		ld b, #MAX_LOCKERS_PER_LEVEL
+		ld hl, #_cLockerOpened
+01000$:  ;_rst_locker :
+		ld (hl), #BOOL_FALSE
+		inc hl
+		djnz 01000$  ;_rst_locker
+__endasm;
+
+		do  // loop at each screen map
+		{
+			// Load, uncompress map data and update object history
+			load_levelmap_data();
+			if (!bChangeMap)
+			{
+				// clear the screen
+				Load_Entities();
+				ubox_fill_screen(BLANK_TILE);
+				Draw_Score_Panel();
+				draw_map();
+				ubox_enable_screen();
+				mplayer_init(SONG, SONG_IN_GAME);
+			}
+			else
+			{
+				Load_Entities();
+				shift_screen_map();
+				update_player_position();
+
+				//update level/screen into score area
+				display_level();
+				bChangeMap = false;
+			}
+			cMiniMapX = SCORE_MINIMAP_X_POS * 8 + cMapX * 4 + 3;
+			cMiniMapY = SCORE_MINIMAP_Y_POS * 8 + cMapY * 3 + 7;
+
+			// reset tile list for the first cycle
+			pAnimTileList = sAnimTileList;
+			cAnimCycleParityFlag = cGlbPlyFlag = cGlbSpObjID = cShotCount = 0;
+			iGameCycles = 0;
+			cGlbPlyFlagCache = CACHE_INVALID;
+			do  // loop until death or change map
+			{			
+				if (sThePlayer.status != PLYR_STATUS_DEAD)
+				{
+					if (arise_player()) continue;  // // scan for 'ESC' key, then Y to confirm
+					check_for_pause();  // scan for 'P' key
+					check_for_flashlight();  // scan for 'F' key
+					//check_for_easteregg();
+				}
+			
+				//bGlbPlyChangedPosition = false;
+
+				// update the animated tiles each 7 cycles
+				if ((iGameCycles & 0b00000111) == 0x07) // 7 cycles
+				{
+					// process standard & special animated tiles
+					// in case of sliderfloor, also update the object coordinates into the screen, detect player colision and update player position if necessary
+					update_animated_tiles();
+				}
+
+				if (sThePlayer.status != PLYR_STATUS_DEAD)
+				{
+					// read the selected control
+					cCtrlCmd = ubox_read_ctl(cCtrl);
+
+					// check for user action to trigger fire
+					check_for_fire();  // scan for 'ESPACE' key
+
+					// update our player position and status
+					if (!update_player()) break; // need to stop game loop to change to other map
+				}
+
+				bGlbPlyChangedPosition |= bGlbPlyMoved;
+
+				// display updated player sprite
+				display_player();
+
+				// update the objects statuses (map, shot, shield) and display sprites
+				update_and_display_objects();
+
+				// display & animate Score
+				update_and_display_score();
+
+				// update all the entities(enemies):
+				//pCurEntities = sEntities;
+				//update_enemies();
+				
+				// display all sprites on screen
+				spman_update();
+
+				// display all updated animated tiles on the screen and reset pAnimTileList
+				display_animated_tiles();
+
+				// enable or disable game scene lights
+				display_scene_light();
+
+				// enable or disable Flashlight effect
+				display_flashlight_effect();
+				bGlbPlyChangedPosition = false;
+
+				iGameCycles++;
+
+				// ensure we wait to our desired update rate
+				ubox_wait();
+			} while (continue_game_loop());  // loop until death or change map
+
+			// hide all the sprites
+			spman_hide_all_sprites();
+
+			// 'continue_game_loop()=false' OR 'Changing Map'
+			if (cLives) // if cLives != 0 then: 'Next map/Portal processing' OR Level 'Completed processing'
+			{
+				if (!cRemainMission)
+				{
+					cLevel++;
+					iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
+				}
+				else
+				{
+					// Set right screen number and shift direction (up, down, right, left, portal) based on cGlbObjData
+					cScreenMap = cGlbObjData & 0b00011111;
+					cScreenShiftDir = cGlbObjData >> 5;
+					bChangeMap = true;
+					if (cScreenShiftDir == SCR_SHIFT_RIGHT || cScreenShiftDir == SCR_SHIFT_LEFT)
+					{
+__asm
+						ld de, #_cTemp_Map_Data
+						ld hl, #_cMap_Data
+						ld bc, #MAP_BYTES_SIZE
+						ldir  ; ld(DE), (HL), then increments DE, HL, and decrements BC until BC = 0
+__endasm;
+					}
+				}
+			}
+		} while (cLives && cRemainMission);  // loop at each screen map
+		// Level Up message
+		if (cLives) draw_level_up_message();
+	} while (cLives);  // loop for each Level
+}  // void Run_Game()
+
+
+/*
+* Game over screen
+*/
+void draw_game_over()
+{
+__asm
+  call _ubox_disable_screen
+	ld hl, #_cGameStage
+	ld (hl), #GAMEOVER_GAMESTAGE
+	call _load_tileset
+	ld	l, #0x00
+	call	_ubox_fill_screen
+	call _ubox_enable_screen
+	; mplayer_init(SONG, SONG_GAME_OVER);
+	ld	hl, #_SONG
+	ld a, #SONG_GAME_OVER
+	call _mplayer_init_asm_direct
+	ld a, #GAME_TEXT_GAME_OVER_ID
+	call _search_text_block
+	ld bc, #0x0701
+_display_msg_and_wait :
+	ld de, #0x0108
+	call _display_format_text_block
+	jp _wait_fire
+__endasm;
+}  // void draw_game_over()
+
+/*
+* main()
+*/
+void main(void)
+{
+	//  PAL: 50/2 = 25 FPS
+	// NTSC: 60/2 = 30 FPS
+	ubox_init_isr(2);
+	
+	// set screen 2
+	ubox_set_mode(2);
+	
+	// all black
+	ubox_set_colors(1, 1, 1);
+	
+	// reg 1: activate sprites, v-blank int on, 16x16 sprites
+	ubox_wvdp(1, 0b11100010); //0xe2
+
+	// init sprite and patterns
+	spman_init();
+
+	// init the music/fx player
+	mplayer_init(SONG, SONG_SILENCE);
+	mplayer_init_effects(EFFECTS);
+
+  // attach the play function to ISR
+	ubox_set_user_isr(mplayer_play);
+
+	cCtrl = UBOX_MSX_CTL_NONE;
+
+	zx0_uncompress(cGameText, gametext);
+
+	while (true) // continuous loop - do not return to BASIC/BIOS
+	{
+		bIntroAnim = true;
+		Draw_Intro();
+
+		// global variable initialization - for every game start
+		iScore = 0;
+		cLives = INITIAL_LIVES;
+		cPower = 100;  // starts with full power level
+		cLevel = 1;
+
+		// play the game until cLives=0
+		Run_Game();
+		draw_game_over();
+	}
+}  // void main()

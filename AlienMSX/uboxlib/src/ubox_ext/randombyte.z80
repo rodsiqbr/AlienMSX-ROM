@@ -1,0 +1,31 @@
+; -----------------------------------------------------------------------------
+; randombyte: generate a pseudo-random byte (no seed, uses R and Jiffy)
+; -----------------------------------------------------------------------------
+; Parameters:
+;   none
+; -----------------------------------------------------------------------------
+; Output:
+;   L: random byte
+; -----------------------------------------------------------------------------
+; Changes: A, HL
+; -----------------------------------------------------------------------------
+
+BIOS_JIFFY = 0xfc9e
+
+; C convention
+.globl _randombyte
+
+_randombyte:: 
+  ld	hl, (#BIOS_JIFFY)      ;BIOS_JIFFY LSB/MSB
+  ; carry bit is uncertain here
+  rr h
+  rr l
+  rr h
+  rr l
+  ld a, r
+  add a, l
+  ; carry bit is uncertain here
+  rr h
+  xor h
+  ld l, a
+  ret

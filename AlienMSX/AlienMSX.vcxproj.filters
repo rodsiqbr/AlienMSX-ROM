@@ -1,0 +1,281 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Make">
+      <UniqueIdentifier>{3ef91682-59b4-4500-8b1e-472a09b82231}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project Config">
+      <UniqueIdentifier>{dd93d829-192d-46c9-8f5b-f39bb2d68324}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="C Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files\MSX">
+      <UniqueIdentifier>{74a0b57a-c1be-4402-85d0-168788c6be08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\MSX\BIOS">
+      <UniqueIdentifier>{a28f4563-9c19-4eb8-8b3a-b326d570df42}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ASM Source Files">
+      <UniqueIdentifier>{52835113-377d-4d52-ba1a-d14fcb244687}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ASM Source Files\MSX">
+      <UniqueIdentifier>{5e121c30-2210-4202-8196-2d8ca96c05f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ASM Source Files\MSX\BIOS">
+      <UniqueIdentifier>{9a550870-19f7-4aa4-9d94-69e2ce1f9403}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ASM Source Files\MSX\ROM">
+      <UniqueIdentifier>{152b7ecc-9ada-4429-af0d-616f3f076e6a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{7c850db9-fbc3-4784-ae3e-b25b80334a2f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sound Files">
+      <UniqueIdentifier>{61b3adb8-3476-49e3-bdf7-f5d13b9eb0ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UBoxLib Files">
+      <UniqueIdentifier>{884f3473-7da4-4ae7-bf0f-0d9b30310405}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="targetconfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MSX\BIOS\msxbios.h">
+      <Filter>Header Files\MSX\BIOS</Filter>
+    </ClInclude>
+    <ClInclude Include="applicationsettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\font1ts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\font2ts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\font3ts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\game0ts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\gametext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\introts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\maplvl1.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\objects.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\player.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\scorets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="uboxlib\include\ap.h">
+      <Filter>UBoxLib Files</Filter>
+    </ClInclude>
+    <ClInclude Include="uboxlib\include\mplayer.h">
+      <Filter>UBoxLib Files</Filter>
+    </ClInclude>
+    <ClInclude Include="uboxlib\include\spman.h">
+      <Filter>UBoxLib Files</Filter>
+    </ClInclude>
+    <ClInclude Include="uboxlib\include\ubox.h">
+      <Filter>UBoxLib Files</Filter>
+    </ClInclude>
+    <ClInclude Include="uboxlib\include\ubox_ext.h">
+      <Filter>UBoxLib Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\game1ts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MSX\BIOS\msxbios.s">
+      <Filter>ASM Source Files\MSX\BIOS</Filter>
+    </None>
+    <None Include="targetconfig.s">
+      <Filter>ASM Source Files</Filter>
+    </None>
+    <None Include="Make\make.bat">
+      <Filter>Make</Filter>
+    </None>
+    <None Include="MSX\ROM\msxromcrt0.s">
+      <Filter>ASM Source Files\MSX\ROM</Filter>
+    </None>
+    <None Include="msxromapp.s">
+      <Filter>ASM Source Files</Filter>
+    </None>
+    <None Include="applicationsettings.s">
+      <Filter>ASM Source Files</Filter>
+    </None>
+    <None Include="Make\make.sh">
+      <Filter>Make</Filter>
+    </None>
+    <None Include="Make\symbol.py">
+      <Filter>Make</Filter>
+    </None>
+    <None Include="data\gametext.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\map_conf.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\MapLevel1v3.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\MapLevel2v1.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\mapgen.py">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\png2sprites.py">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\png2tiles.py">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\txtgen2.py">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="sounds\akm.rel">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\akm.z80">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\akm_ubox.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\Effects.aks">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\Effects_playerconfig.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\Songs.aks">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\Songs_playerconfig.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\akm_sdcc.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\Effects.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\PlayerAkm.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="sounds\Songs.asm">
+      <Filter>Sound Files</Filter>
+    </None>
+    <None Include="uboxlib\src\ubox_ext\dzx0_standard.z80">
+      <Filter>UBoxLib Files</Filter>
+    </None>
+    <None Include="uboxlib\src\ubox_ext\msxrandom.z80">
+      <Filter>UBoxLib Files</Filter>
+    </None>
+    <None Include="uboxlib\src\ubox_ext\put_tile_block.z80">
+      <Filter>UBoxLib Files</Filter>
+    </None>
+    <None Include="uboxlib\src\ubox_ext\randombyte.z80">
+      <Filter>UBoxLib Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Config\ApplicationSettings.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\ApplicationSources.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\IncludeDirectories.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\Libraries.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\LibrarySources.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\Symbols.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\TargetConfig_Debug.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\TargetConfig_Release.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="Config\BuildEvents.txt">
+      <Filter>Project Config</Filter>
+    </Text>
+    <Text Include="sounds\build.txt">
+      <Filter>Sound Files</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="alienmsx.c">
+      <Filter>C Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="data\Font1TS_16x4.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Font1TS_32x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Font2TS_32x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Font3TS_32x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game0TSv3_FULL_16x14.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game1TSv1_FULL_16x14.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\IntroTS_16x6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Objects_12x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Player_Ash_16x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Player_Full_16x4.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Player_Ripley_16x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\ScoreTSv3_16x4.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game0TSv3_16x6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game1TSv1_16x6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+</Project>

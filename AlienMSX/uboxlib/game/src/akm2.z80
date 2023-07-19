@@ -1,0 +1,15 @@
+;
+; to build the custom AKM player with song + effects
+;
+
+include "alientheme_playerconfig.asm"
+include "effects_playerconfig.asm"
+
+include "../../src/mplayer/akm/akm_ubox.asm"
+
+songDisarkGenerateExternalLabel:
+include "alientheme.asm"
+
+effectsDisarkGenerateExternalLabel:
+include "effects.asm"
+

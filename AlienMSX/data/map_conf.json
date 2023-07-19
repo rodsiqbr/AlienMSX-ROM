@@ -1,0 +1,74 @@
+{
+    "entities": [
+        {
+            "bytes": 0,
+            "name": "unused",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "player",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "egg",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "animate",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "belt",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "dropper",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "gate",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "portal",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "wall",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "interactive",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "safeplace",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "forcefield",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "slider",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "locker",
+            "w": 1
+        }
+    ]
+}

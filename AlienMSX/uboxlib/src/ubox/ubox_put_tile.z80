@@ -1,0 +1,47 @@
+.globl _ubox_put_tile
+.globl _put_tile_asm_direct
+
+WRTVRM = 0x004d
+
+_ubox_put_tile::
+	ld hl, #2
+	add hl, sp
+
+	ld c, (hl)
+	inc hl
+	ld b, (hl)
+	inc hl
+
+	ld a, (hl)
+
+
+; if calling direct from an ASM routine, no need to use the stack
+; A = Tile
+; C = X
+; B = Y
+_put_tile_asm_direct::
+
+	ld h, #0
+	ld l, b
+	rlc l
+	rlc l
+	rlc l; L = L * 8
+	add hl, hl
+	add hl, hl ;hl=y*32
+	ld b, #0
+	add hl, bc ;hl=y*32+x
+
+;	ld h, #0
+;	ld l, b
+;	add hl, hl
+;	add hl, hl
+;	add hl, hl
+;	add hl, hl
+;	add hl, hl
+;	ld b, #0
+;	add hl, bc
+
+	ld bc, #0x1800
+	add hl, bc  ;hl=VRAM_NAME_TBL+y*32+x
+
+	jp WRTVRM

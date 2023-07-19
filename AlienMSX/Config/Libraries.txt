@@ -1,0 +1,23 @@
+;----------------------------------------------------------
+;	Libraries.txt - by Danilo Angelo, 2020
+;
+;	List of all compiled libraries used by your application.
+;	These will be not be processed by any
+;	build/make actions, only linked in the final binary.
+;----------------------------------------------------------
+
+;----------------------------------------------------------
+;	Include here your project's LIB files
+;[MSX_LIB_PATH]\fusion-c\lib\fusion.lib
+uboxlib\lib\ubox.lib
+uboxlib\lib\spman.lib
+uboxlib\lib\mplayer.lib
+uboxlib\lib\ubox_ext.lib
+
+
+;----------------------------------------------------------
+;	Include here your project's REL files
+;[MSX_LIB_PATH]\fusion-c\include\printf.rel
+;c:\users\rodsi\Documents\MSX\DEV\libs\fusion-c\include\putchar_msxbasic.rel
+;c:\users\rodsi\Documents\MSX\DEV\libs\fusion-c\include\getchar_msxbasic.rel
+sounds\akm.rel

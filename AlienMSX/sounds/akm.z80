@@ -1,0 +1,14 @@
+;
+; to build the custom AKM player with song + effects
+;
+
+include "Songs_playerconfig.asm"
+include "Effects_playerconfig.asm"
+
+include "akm_ubox.asm"
+
+songDisarkGenerateExternalLabel:
+include "Songs.asm"
+
+effectsDisarkGenerateExternalLabel:
+include "Effects.asm"
