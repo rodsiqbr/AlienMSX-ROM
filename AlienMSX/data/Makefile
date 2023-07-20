@@ -33,6 +33,7 @@ $(OUTPUT)/player.h: player.png
 --        png2sprites.py --zx0 -i player_ripley Player_Ripley_16x2.png > plyr_rip.h
         png2sprites.py --zx0 -i player_obj Player_Full_16x4.png > player.h
 	png2sprites.py --zx0 -i object_sprite Objects_12x2.png > objects.h
+	png2sprites.py --zx0 -i enemy_sprite Enemies_12x2.png > enemies.h
 
 $(OUTPUT)/enemy.h: enemy.png
 	png2sprites.py -i enemy_sprite $< > $@

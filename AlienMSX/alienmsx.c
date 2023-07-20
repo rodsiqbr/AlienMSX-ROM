@@ -48,6 +48,8 @@
 #include "data/gametext.h"   // Intro text, Credits text, GameOver text ...
 #include "data/player.h"     // Ash + Ripley sprite data
 #include "data/objects.h"    // Objects sprite data
+#include "data/enemies.h"    // Enemies sprite data
+
 #include "data/maplvl1.h"    // Map Level 1
 #include "data/maplvl2.h"    // Map Level 2
 //#include "data/maplvl3.h"    // Map Level 3 (differential from Level 1)
@@ -68,8 +70,29 @@ typedef struct
 	uint8_t frame;         //    6 | entity sprite frame #
 	uint8_t delay;         //    7 | entity sprite frame delay counter
 	uint8_t type;          //    8 | entity type
-	void (*update)();      // 9-10 | not used, global update routine used instead
-} LiveEntity;
+//	void (*update)();      // 9-10 | not used, global update routine used instead
+	uint8_t grabflag;      //    9 | player is grabbed by a facehugger flag
+	uint8_t grabtimer;     //   10 | timer to trigger a hit if grabbed
+} PlyEntity;
+
+typedef struct
+{
+	uint8_t x;             //    0 | entity x position
+	uint8_t y;             //    1 | entity y position
+	uint8_t dir;           //    2 | entity direction
+	uint8_t status;        //    3 | entity status
+	uint8_t hitcounter;    //    4 | enemy hit counter
+	uint8_t pat;           //    5 | entity sprite pattern #
+	uint8_t frame;         //    6 | entity sprite frame #
+	uint8_t delay;         //    7 | entity sprite frame delay counter
+	uint8_t type;          //    8 | entity type
+	uint8_t grabflag;      //    9 | enemy grabbed a player flag
+	uint8_t screenId;      //   10 | enemy screen id
+	uint8_t objId;         //   11 | enemy object id
+	uint8_t minX;          //   12 | minimum X position at screen
+	uint8_t maxX;          //   13 | maximum X position at screen
+	uint8_t floorY;        //   14 | floor Y position
+} EnemyEntity;
 
 struct AnimatedTile
 {
@@ -230,16 +253,17 @@ enum EntityType
 {
 	ET_UNUSED = 0,
 	ET_PLAYER,          // entity - not a tile
-	ET_EGG,             // ** special animated tile
+	ET_SAFEPLACE,       // no animation - not a tile
+	ET_ENEMY,           // no animation - not a tile
 	ET_ANIMATE,         // simple animated tile
 	ET_BELT,            // simple animated tile
 	ET_DROPPER,         // simple animated tile
-	ET_GATE,            // ** special animated tile
 	ET_PORTAL,          // simple animated tile
+	ET_FORCEFIELD,      // simple animated tile
+	ET_EGG,             // ** special animated tile
+	ET_GATE,            // ** special animated tile
 	ET_WALL,            // ** special animated tile
 	ET_INTERACTIVE,     // ** special animated tile
-	ET_SAFEPLACE,       // no animation - not a tile
-	ET_FORCEFIELD,      // simple animated tile
 	ET_SLIDERFLOOR,     // ** special animated tile
 	ET_LOCKER           // ** special animated tile
 };
@@ -301,7 +325,8 @@ enum pattern_type
 #define MAX_POWER     100   // 100% = full power
 #define MAX_LEVEL     3     // # of levels
 
-#define MAX_ENEMIES 2
+#define MAX_ENEMIES     3
+#define AVERAGE_ENEMIES 2
 //void update_player(void);
 
 
@@ -570,9 +595,9 @@ uint8_t cGlbSpObjID; // used at Load_Entities() and Run_Game() + its subroutines
 uint8_t cGlbFLDelay;
 
 // our live entities - enemies and the player
-LiveEntity sEnemies[MAX_ENEMIES];
-LiveEntity* pCurEntities;
-LiveEntity sThePlayer;
+EnemyEntity sEnemies[AVERAGE_ENEMIES * MAPS];
+PlyEntity sThePlayer;
+//LiveEntity* pCurEntities;
 
 // Global variables for player control
 uint8_t cGlbPlyFlag; // special flag to describe player conflict with screen tiles
@@ -652,7 +677,7 @@ struct AnimatedTile sAnimSpecialTiles[MAX_ANIM_SPEC_TILES_FULL];
 
 struct AnimTileList sAnimTileList[MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL];
 
-#define MAX_OBJ_HISTORY_SIZE ((MAX_ANIM_SPEC_TILES + MAX_OBJECTS_PER_MAP) * WMAPS)
+#define MAX_OBJ_HISTORY_SIZE ((MAX_ANIM_SPEC_TILES + MAX_OBJECTS_PER_MAP) * MAPS)
 struct ObjTileHistory sObjTileHistory[MAX_OBJ_HISTORY_SIZE + 1];
 
 #define MAX_ANIMATED_OBJECTS (MAX_ENEMIES + MAX_OBJECTS_PER_MAP)
@@ -2152,6 +2177,7 @@ _obj_scr_found :
 	ld d, h
 	ld e, l; DE = struct ObjectScreen* (used at detect_player_colision())
 	inc hl
+	ld a, c; Update mode
 
 	cp #UPD_OBJECT_UP_8
 	jr nz, _test_8_down
@@ -2215,7 +2241,6 @@ _upd_vertical :
 	jp _detect_player_colision
 
 _test_egg_upd :
-	ld a, c; Update mode
 	and #UPD_OBJECT_EGG
 	cp #UPD_OBJECT_EGG
 	ret nz
@@ -2228,7 +2253,7 @@ _test_egg_upd :
 	inc hl
 	inc hl
 	inc hl
-	ld (hl),a ; set new status
+	ld (hl), a ; set new status
 	cp #ST_EGG_DESTROYED  ; if ST_EGG_DESTROYED, decrease # of eggs and invalidate this record
 	ret nz
   inc hl
@@ -2395,15 +2420,22 @@ void Load_Entities()
 //          x = x position (0 - 256)
 //          y = y position (0 - 192)
 
-//egg: ....tttt | X | Y | 00000100 (4 bytes)
+//safeplace: dd..tttt | x | y (3 bytes)
+//          dd = direction: look right(0) / look left(1)
 //          tttt = type(2)
+//          x = x position (0 - 256)
+//          y = y position (0 - 192)
+
+//enemy: ....tttt | X | Y | 0IIIwwww (4 bytes)
+//					tttt = type(3)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
-//          00000100 = width 4
+//          0III = Enemy ID ID(0 - 7) - should match an existing EggID
+//          wwww = horizontal width (wwww blocks of 16 pixels wide)
 
 //animate: cc..tttt | X | Y | ffff0001 (4 bytes)
 //          cc = cycle#
-//          tttt = type(3)
+//          tttt = type(4)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          ffff = frame#
@@ -2411,27 +2443,18 @@ void Load_Entities()
 
 //belt: dd..tttt | X | Y | ....wwww (4 bytes)
 //          dd = direction: anti - clockwise(0) / clockwise(1)
-//					tttt = type(4)
+//					tttt = type(5)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          wwww = horizontal width
 
 //dropper: 11..tttt | X | Y | ffffhhhh (4 bytes)
 //          11 = cycle# always 3
-//          tttt = type(5)
+//          tttt = type(6)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          ffff = frame#
 //          hhhh = vertical Height
-
-//gate: dKKKtttt | X | Y | TTTTwwww (4 bytes)
-//          d = direction: vertical(0) / horizontal(1)
-//          KKK = Key [0-5] (0 = none, 1 = key, 2 = yellow cart, 3 = green card, 4 = red card, 5 = tool)
-//          tttt = type(6)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          TTTT = time in seconds to close gate
-//          wwww = horizontal / vertical width
 
 //portal: d...tttt | X | Y | DDDD0011 (4 bytes)
 //          d = player position in the destination portal : left(0) / right(1)
@@ -2441,8 +2464,31 @@ void Load_Entities()
 //          DDDD = screen destination (0 - 15, same level)
 //					0011 = vertical width is always 3
 
-//wall: ....tttt | X | Y | HHHH0010 (4 bytes)
+//forcefield: 10..tttt | X | Y | ....hhhh (4 bytes)
+//					10 = cycle# always 2
 //          tttt = type(8)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          hhhh = vertical Height(max 7)
+
+//egg: ....tttt | X | Y | 0III0100 (4 bytes)
+//          tttt = type(9)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          0III = egg ID(0 - 7)
+//          0100 = width 4
+
+//gate: dKKKtttt | X | Y | TTTTwwww (4 bytes)
+//          d = direction: vertical(0) / horizontal(1)
+//          KKK = Key [0-5] (0 = none, 1 = key, 2 = yellow cart, 3 = green card, 4 = red card, 5 = tool)
+//          tttt = type(10)
+//          X = tile X(0 - 31)
+//          Y = tile Y(0 - 23)
+//          TTTT = time in seconds to close gate
+//          wwww = horizontal / vertical width
+
+//wall: ....tttt | X | Y | HHHH0010 (4 bytes)
+//          tttt = type(11)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          HHHH = hardness: # of shots to break the wall
@@ -2450,35 +2496,22 @@ void Load_Entities()
 
 //interactive: aa..tttt | X | Y | eeee0001 (4 bytes)
 //          aa = action [0-3] (0 = lights on/off, 1 = locker open, 2 = mission complete )
-//          tttt = type(9)
+//          tttt = type(12)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          eeee = locker ID / misssion #
 //					0001 =  width is always 1
 
-//safeplace: dd..tttt | x | y (3 bytes)
-//          dd = direction: look right(0) / look left(1)
-//          tttt = type(10)
-//          x = x position (0 - 256)
-//          y = y position (0 - 192)
-
-//forcefield: 10..tttt | X | Y | ....hhhh (4 bytes)
-//					10 = cycle# always 2
-//          tttt = type(11)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          hhhh = vertical Height(max 7)
-
 //slider: dd..tttt | X | Y | llllwwww (4 bytes)
 //          dd = direction: UP(0) / DOWN(1) / RIGHT(2) / LEFT(3)
-//          tttt = type(12)
+//          tttt = type(13)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          llll = movement distance / lenght
 //          wwww = horizontal width
 
 //locker: ....tttt | X | Y | IIII0010 (4 bytes)
-//          tttt = type(13)
+//          tttt = type(14)
 //          X = tile X(0 - 31)
 //          Y = tile Y(0 - 23)
 //          IIII = locker ID (0 - 15)
@@ -2500,7 +2533,7 @@ void Load_Entities()
 				sThePlayer.y = pMapData[2] + 8 * 3;
 				sThePlayer.dir = pMapData[0] >> 6;
 				sThePlayer.status = PLYR_STATUS_STAND;
-				sThePlayer.hitflag = BOOL_FALSE;
+				sThePlayer.hitflag = sThePlayer.grabflag = BOOL_FALSE;
 				sThePlayer.type = ET_PLAYER;
 				// we don't use 'sThePlayer.pat'. Use global variables instead (PLYR_PAT_XXX_IDX)
 				// we don't use 'sThePlayer.update'. Use update_player() directly
@@ -2515,6 +2548,12 @@ void Load_Entities()
 			cPlySafePlaceY = pMapData[2] + 8 * 3;
 			cPlySafePlaceDir = pMapData[0] >> 6;
 			pMapData += 3;
+			continue;
+		}
+		if (cObjType == ET_ENEMY)
+		{
+			//TODO: do something
+			pMapData += 4;
 			continue;
 		}
 
@@ -2600,8 +2639,6 @@ void Load_Entities()
 			// Adjust initial tile and step based on Object History in this screen	
 			//if (cGlbTile == (GAME_TILE_OFFSET + GAME_PWR_SWITCH_TL_OFFSET + 1))
 			if (cGlbTile == (TS_SCORE_SIZE + GAME_PWR_SWITCH_TL_OFFSET + 1))
-				// TODO: Check Power Button  ??? realmente precisa? o botão não volta de OFF para ON
-			  // | cGlbTile == (GAME_TILE_OFFSET + GAME_PWR_BUTTON_TL_OFFSET + 1)
 			{
 				cGlbTile--;  // need to animate the power switch interative object from the base tile
 				cGlbStep = 2; // starts at animation stage 2 (PowerSwitch is OFF)
@@ -2653,13 +2690,18 @@ void Load_Entities()
 			}
 			pInsertAnimTile = pCurAnimSpecialTile;
 			cGlbCyle = ANIM_CYCLE_FACEHUG_EGG;
+			cGlbFlag = cGlbStep;  // Egg ID (00000III)
 			// Width is always 4
 			if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET)
 				cGlbStep = 0;
 			else // if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET + 2)
 				cGlbStep = 2;
 			cGlbSpObjID++;
+			//GAMBIARRA - PARA CORRIGIR QUANDO MUDAR PARA ASM
+			cGlbSpObjID |= (cGlbFlag << 4);
 			insert_new_screen_object();
+			//GAMBIARRA - PARA CORRIGIR QUANDO MUDAR PARA ASM
+			cGlbSpObjID &= 0b00001111;
 		}
 
 		// create the necessary AnimTile(Dropper, Belt, Animate, Portal, ForceField) or AnimSpecialTile(Gate, Wall, Interactive, Slider, Locker, Egg) records.
@@ -2760,7 +2802,8 @@ void Load_Entities()
 					break;
 			
 				case ET_EGG:
-					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
+					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbFlag << 4) | cGlbSpObjID;  // EggID + ObjectID (0iiiOOOO)
+					//pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
 					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = EGG_SHOTS_TO_DESTROY; // # of shots for destroy the egg
 					if (cGlbWidth == 3)
 					{
@@ -2776,7 +2819,7 @@ void Load_Entities()
 					break;
 			}
 			// update the right xxAnimTile pointer
-			if (cObjType == ET_GATE || cObjType == ET_WALL || cObjType == ET_INTERACTIVE || cObjType == ET_SLIDERFLOOR || cObjType == ET_LOCKER || cObjType == ET_EGG)
+			if (cObjType >= ET_EGG)
 			{
 				cAnimSpecialTilesQty++;
 				pCurAnimSpecialTile++;

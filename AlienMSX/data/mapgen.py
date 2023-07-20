@@ -265,18 +265,19 @@ def main():
 
             t = et_names.index(name)
             # t=1: player
-            # t=2: egg
-            # t=3: animate
-            # t=4: belt
-            # t=5: dropper
-            # t=6: gate
+            # t=2: safeplace
+            # t=3: enemy
+            # t=4: animate
+            # t=5: belt
+            # t=6: dropper
             # t=7: portal
-            # t=8: wall
-            # t=9: interactive
-            # t=10: safeplace
-            # t=11: forcefield
-            # t=12: slider
-            # t=13: locker
+            # t=8: forcefield
+            # t=9: egg
+            # t=10: gate
+            # t=11: wall
+            # t=12: interactive
+            # t=13: slider
+            # t=14: locker
 
             special = None
 
@@ -289,17 +290,40 @@ def main():
                 param = int(get_property(obj, "direction", 0))
                 t |= (param << 6)
 
-# egg: ....tttt|X|Y|....0100 (4 bytes)
-#          tttt = type (2)
+# egg: ....tttt|X|Y|0III0100 (4 bytes)
+#          tttt = type (9)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
+#          0III = egg ID (0-7) 
 #          0100 = width (4)
             if name == "egg":
+                EggID = int(get_property(obj, "id", 0))
+                if EggID > 7:
+                    EggID = 7
+                # TODO: garantir que não tenha 2 Eggs com o mesmo ID na mesma tela
                 special = 0B00000100
-
+                special |= (EggID << 4)
+                
+# enemy: ....tttt|X|Y|0IIIwwww (4 bytes)
+#          tttt = type (3)
+#          X = tile X (0-31)
+#          Y = tile Y (0-23)
+#          0III = Enemy ID (0-7)
+#          wwww = width / 2 (wwww blocks of 16 pixels wide)
+            if name == "enemy":
+                EnemID = int(get_property(obj, "id", 0))
+                if EnemID > 7:
+                    EnemID = 7
+                # TODO: garantir que não tenha 2 Enemies com o mesmo ID na mesma tela
+                special = obj["width"] // 16
+                if special == 0:
+                    special = 1
+                special |= (EnemID << 4)
+                
+ 
 # animate: cc..tttt|X|Y|ffff0001 (4 bytes)
 #          cc = cycle#
-#          tttt = type (3)
+#          tttt = type (4)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          ffff = frame#
@@ -316,7 +340,7 @@ def main():
 
 # belt: dd..tttt|X|Y|....wwww (4 bytes)
 #          dd = direction: anti-clockwise (0) / clockwise (1)
-#          tttt = type (4)
+#          tttt = type (5)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          wwww = horizontal width
@@ -327,7 +351,7 @@ def main():
             
 # dropper: cc..tttt|X|Y|ffffhhhh (4 bytes)
 #          cc = cycle (3)
-#          tttt = type (5)
+#          tttt = type (6)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          ffff = frame#
@@ -342,7 +366,7 @@ def main():
 # gate: dKKKtttt|X|Y|TTTTwwww (4 bytes)
 #          d = direction: vertical (0) / horizontal (1)
 #          KKK = Key [0-6] (0=none, 1=key, 2=yellow cart, 3=green card, 4=red card, 5=tool, 6=??)
-#          tttt = type (6)
+#          tttt = type (10)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          TTTT = time in seconds to close gate
@@ -375,7 +399,7 @@ def main():
                 special |= (dest << 4)
 
 # wall: ....tttt|X|Y|HHHH0010 (4 bytes)
-#          tttt = type (8)
+#          tttt = type (11)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          HHHH = hardness: # of shots to break the wall
@@ -389,7 +413,7 @@ def main():
 
 # interactive: aa..tttt|X|Y|eeee0001 (4 bytes)
 #          aa = action (0=lights on/off, 1=locker open, 2=mission complete)
-#          tttt = type (9)
+#          tttt = type (12)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          eeee = extra data [Locker ID, Mission #]
@@ -409,7 +433,7 @@ def main():
 
 # safeplace: dd..tttt|x|y (3 bytes)
 #          dd = direction: look right (0) / look left (1)
-#          tttt = type (10)
+#          tttt = type (2)
 #          x = x position (0 - 256)
 #          y = y position (0 - 192)
             if name == "safeplace":
@@ -418,7 +442,7 @@ def main():
 
 # forcefield: 10..tttt|X|Y|....hhhh (4 bytes)
 #          10 = cycle# always 2
-#          tttt = type (11)
+#          tttt = type (8)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          hhhh = vertical Height (max 7)
@@ -430,7 +454,7 @@ def main():
 
 # slider: dd..tttt|X|Y|llllwwww (4 bytes)
 #          dd = direction: UP(0) / DOWN(1) / RIGHT(2) / LEFT(3)
-#          tttt = type (12)
+#          tttt = type (13)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          llll = movement distance/lenght
@@ -443,7 +467,7 @@ def main():
                 t |= (dir << 6)
 
 # locker: ....tttt|X|Y|IIII0010 (4 bytes)
-#          tttt = type (8)
+#          tttt = type (14)
 #          X = tile X (0-31)
 #          Y = tile Y (0-23)
 #          IIII = locker ID (0 - 15)

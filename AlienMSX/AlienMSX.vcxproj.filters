@@ -101,6 +101,9 @@
     <ClInclude Include="data\game1ts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\enemies.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">
@@ -275,6 +278,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="data\Game1TSv1_16x6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Enemies_12x2.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

@@ -12,7 +12,12 @@
         },
         {
             "bytes": 0,
-            "name": "egg",
+            "name": "safeplace",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "enemy",
             "w": 1
         },
         {
@@ -32,12 +37,22 @@
         },
         {
             "bytes": 0,
-            "name": "gate",
+            "name": "portal",
             "w": 1
         },
         {
             "bytes": 0,
-            "name": "portal",
+            "name": "forcefield",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "egg",
+            "w": 1
+        },
+        {
+            "bytes": 0,
+            "name": "gate",
             "w": 1
         },
         {
@@ -48,16 +63,6 @@
         {
             "bytes": 0,
             "name": "interactive",
-            "w": 1
-        },
-        {
-            "bytes": 0,
-            "name": "safeplace",
-            "w": 1
-        },
-        {
-            "bytes": 0,
-            "name": "forcefield",
             "w": 1
         },
         {

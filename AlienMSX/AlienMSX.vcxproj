@@ -57,6 +57,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="applicationsettings.h" />
+    <ClInclude Include="data\enemies.h" />
     <ClInclude Include="data\font1ts.h" />
     <ClInclude Include="data\font2ts.h" />
     <ClInclude Include="data\font3ts.h" />
@@ -125,6 +126,7 @@
     <ClCompile Include="alienmsx.c" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="data\Enemies_12x2.png" />
     <Image Include="data\Font1TS_16x4.png" />
     <Image Include="data\Font1TS_32x2.png" />
     <Image Include="data\Font2TS_32x2.png" />
