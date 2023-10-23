@@ -86,12 +86,11 @@ typedef struct
 	uint8_t frame;         //    6 | entity sprite frame #
 	uint8_t delay;         //    7 | entity sprite frame delay counter
 	uint8_t type;          //    8 | entity type
-	uint8_t grabflag;      //    9 | enemy grabbed a player flag
-	uint8_t screenId;      //   10 | enemy screen id
-	uint8_t objId;         //   11 | enemy object id
-	uint8_t minX;          //   12 | minimum X position at screen
-	uint8_t maxX;          //   13 | maximum X position at screen
-	uint8_t floorY;        //   14 | floor Y position
+	uint8_t screenId;      //    9 | enemy screen id
+	uint8_t objId;         //   10 | enemy object id
+	uint8_t min_x;         //   11 | minimum x position at screen
+	uint8_t max_x;         //   12 | maximum x position at screen
+	uint8_t floor_y;       //   13 | floor y position
 } EnemyEntity;
 
 struct AnimatedTile
@@ -127,7 +126,7 @@ struct ObjectScreen
 	uint8_t cX1;           // 2 | x1 bottom right (0 - 255)
 	uint8_t cY0;           // 3 | y0 top left (0 - 192)
 	uint8_t cY1;           // 4 | y1 bottom right (0 - 192)
-//uint8_t cObjStatus;    // 4 | if Object Class = ANIM_CYCLE_FACEHUG_EGG (ST_EGG_CLOSED, ST_EGG_OPENED, ST_EGG_RELEASED, ST_EGG_DESTROYED)
+//uint8_t cObjStatus;    // 4 | if Object Class = ANIM_CYCLE_FACEHUG_EGG then cObjStatus = (ST_EGG_CLOSED, ST_EGG_OPENED, ST_EGG_RELEASED, ST_EGG_DESTROYED)
 	uint8_t cObjClass;     // 5 | Object Class (ANIM_CYCLE_NULL, ANIM_CYCLE_SLIDER_UP, ANIM_CYCLE_SLIDER_DOWN, ANIM_CYCLE_SLIDER_RIGHT, ANIM_CYCLE_SLIDER_LEFT, ANIM_CYCLE_FACEHUG_EGG)
 };
 
@@ -152,7 +151,7 @@ struct FlashLightStatusData
 // ----------------------------------------------------------
 
 //TODO: create 1 single compressed data package with all data set
-// N = {0, 1, 2}: Tile offset to print at screen = basetile + N
+// N = N {0, 1, 2}: Tile offset to print at screen (base tile + N)
 // N = 0xFF			: Blank Tile to print at screen
 // N = 0xFE			: Stop animation (until animation restarts by an user action or a timer)
 const uint8_t cCycleTable[] = {
@@ -182,9 +181,9 @@ const uint8_t cCycleTable[] = {
 																26, 1, 1, 1, 1,							// N		
 																6, 0, 0, 2, 2,              // A		
                                 21, 0, 2, 2, 0,             // E
-																// several control frame animation
-																0, 1, 2, 3, 4, 3, 2, 1,                               // cCtrl_frames[INTRO_CTRL_CYCLE]
-																0, 1, 0, 2,                                           // walk_frames[PLYR_WALK_CYCLE]
+																// several control frame animation - not yet implemented
+//																0, 1, 2, 3, 4, 3, 2, 1,                               // cCtrl_frames[INTRO_CTRL_CYCLE]
+//																0, 1, 0, 2,                                           // walk_frames[PLYR_WALK_CYCLE]
 };
 /*
 #include "data/datapkg.h"
@@ -208,6 +207,7 @@ cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + 
 
 #define ANIM_CYCLE_NULL         0
 #define ANIM_CYCLE_FORCEFIELD   2
+#define ANIM_CYCLE_DROPPER      3
 #define ANIM_CYCLE_BELT         4
 #define ANIM_CYCLE_GATE_OPEN    6
 #define ANIM_CYCLE_GATE_CLOSE   7
@@ -247,26 +247,22 @@ cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + 
 #define UPD_OBJECT_RIGHT_8 ANIM_CYCLE_SLIDER_RIGHT
 #define UPD_OBJECT_LEFT_8  ANIM_CYCLE_SLIDER_LEFT
 
-// entity types in the same order
-// used in the map (see map_conf.json)
-enum EntityType
-{
-	ET_UNUSED = 0,
-	ET_PLAYER,          // entity - not a tile
-	ET_SAFEPLACE,       // no animation - not a tile
-	ET_ENEMY,           // no animation - not a tile
-	ET_ANIMATE,         // simple animated tile
-	ET_BELT,            // simple animated tile
-	ET_DROPPER,         // simple animated tile
-	ET_PORTAL,          // simple animated tile
-	ET_FORCEFIELD,      // simple animated tile
-	ET_EGG,             // ** special animated tile
-	ET_GATE,            // ** special animated tile
-	ET_WALL,            // ** special animated tile
-	ET_INTERACTIVE,     // ** special animated tile
-	ET_SLIDERFLOOR,     // ** special animated tile
-	ET_LOCKER           // ** special animated tile
-};
+// entity types in the same order used in the map (see map_conf.json)
+#define ET_UNUSED      0
+#define ET_PLAYER      1    // entity - not a tile
+#define ET_SAFEPLACE   2    // no animation - not a tile
+#define ET_ENEMY       3    // no animation - not a tile
+#define ET_ANIMATE     4    // simple animated tile
+#define ET_BELT        5    // simple animated tile
+#define ET_DROPPER     6    // simple animated tile
+#define ET_PORTAL      7    // simple animated tile
+#define ET_FORCEFIELD  8    // simple animated tile
+#define ET_EGG         9    // ** special animated tile
+#define ET_GATE        10   // ** special animated tile
+#define ET_WALL        11   // ** special animated tile
+#define ET_INTERACTIVE 12   // ** special animated tile
+#define ET_SLIDERFLOOR 13   // ** special animated tile
+#define ET_LOCKER      14   // ** special animated tile
 
 // types for our pattern groups used by spman
 enum pattern_type
@@ -371,6 +367,21 @@ const uint8_t walk_frames[PLYR_WALK_CYCLE] = { 0, 1, 0, 2 };  // walk animation 
 #define SPRT_MAP_COLOR_CYCLE   4
 const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 
+// several Enemy control status: sprite direction, status, jump stage, jump direction, color
+#define ENEMY_SPRT_DIR_RIGHT     PLYR_SPRT_DIR_RIGHT   // 0
+#define ENEMY_SPRT_DIR_LEFT      PLYR_SPRT_DIR_LEFT    // 1
+
+#define ENEMY_STATUS_INACTIVE    0x00
+#define ENEMY_STATUS_KILLED      0x00
+#define ENEMY_STATUS_AWAKING     0x10
+#define ENEMY_STATUS_WALKING     0x20
+#define ENEMY_STATUS_STAND       0x30
+#define ENEMY_STATUS_JUMPING     0x40
+#define ENEMY_STATUS_GRABBED     0x50
+#define ENEMY_STATUS_INVALID     0xFF
+
+
+
 
 #define COLISION_FATAL 0b00000001
 #define COLISION_SOLID 0b00000010
@@ -387,7 +398,7 @@ uint8_t FONT2_TILE_OFFSET;
 
 #define INTRO_CTRL_TILE_NR (TS_FONT1_SIZE + 65) // first Control tile starts at position 65 in the 'Intro' Tileset
 #define INTRO_BOX_TILE_NR  (TS_FONT1_SIZE + 94) // first Box Tile tile starts at position 94 in the 'Intro' Tileset
-#define INTRO_MENU_POS 16                           // Y position for Intro menu
+#define INTRO_MENU_POS 16                       // Y position for Intro menu
 
 #define INTRO_CTRL_CYCLE 8
 const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
@@ -575,7 +586,6 @@ struct sprite_attr sGlbSpAttr;        // sprite attribute - used by all entities
 
 // Global variables for runtime speed optimization
 uint16_t iGameCycles;
-uint16_t iGlbPosition; // values from 0 - 767
 uint8_t cAnimTilesQty;
 uint8_t cAnimSpecialTilesQty;
 uint8_t cGlbSpecialTilesActive;
@@ -584,14 +594,18 @@ uint8_t cPortalFlag;  // used at is_player_jumping()
 uint8_t cAnimCycleParityFlag;
 bool bGlbSpecialProcessing;
 bool bChangeMap, bGlbMMEnabled;
-uint8_t cGlbTimer;
-uint8_t cGlbWidth;
-uint8_t cGlbCyle;
-uint8_t cGlbStep;
-uint8_t cGlbFlag;
-uint8_t cGlbTile;    // used at Load_Entities() and Run_Game() + its subroutines
-uint8_t cGlbObjData; // used at Load_Entities() and Run_Game() + its subroutines
-uint8_t cGlbSpObjID; // used at Load_Entities() and Run_Game() + its subroutines
+//uint8_t cGlbTimer;
+//uint8_t cGlbWidth;
+//uint8_t cGlbCyle;
+//uint8_t cGlbStep;
+//uint8_t cGlbFlag;
+uint8_t cAuxEntityX;   // used at Load_Entities() + its subroutines
+uint8_t cAuxEntityY;   // used at Load_Entities() + its subroutines
+uint8_t cObjType;      // used at Load_Entities() + its subroutines
+uint8_t cGlbTile;      // used at Load_Entities() and Run_Game() + its subroutines
+uint8_t cGlbObjData;   // used at Load_Entities() and Run_Game() + its subroutines
+uint8_t cGlbSpObjID;   // used at Load_Entities() and Run_Game() + its subroutines
+uint16_t iGlbPosition; // used at Load_Entities() and Run_Game() + its subroutines - values from 0 - 767
 uint8_t cGlbFLDelay;
 
 // our live entities - enemies and the player
@@ -658,6 +672,8 @@ uint8_t cGlbGameSceneLight;
 uint8_t cFlashLUpdateTimer;
 
 uint8_t cScreenEggsQtty;
+uint8_t cEnemiesQtty;
+
 
 unsigned char cGlbBufNum[10];            // global buffer to support display_number(), display_objects(), display_power() and display_minimap() routines
 unsigned char cBuffer[2048];             // general purpose buffer to unpack Tilesets, Colors, Maps and Sprites
@@ -689,9 +705,13 @@ bool cLockerOpened[MAX_LOCKERS_PER_LEVEL];
 struct FlashLightStatusData sFlashLightStatusData;
 struct FlashLightStatusData sFlashLightStatusDataAux;
 
-struct AnimatedTile* pCurAnimTile;
-struct AnimatedTile* pCurAnimSpecialTile;
-struct AnimatedTile* pInsertAnimTile;
+struct AnimatedTile* pFreeAnimTile;
+struct AnimatedTile* pFreeAnimSpecialTile;
+
+
+//struct AnimatedTile* pCurAnimTile;
+//struct AnimatedTile* pCurAnimSpecialTile;
+//struct AnimatedTile* pInsertAnimTile;
 
 struct AnimTileList* pAnimTileList;
 
@@ -1860,11 +1880,11 @@ void reset_screen_objects()
 {
 __asm
 	ld hl, #_sObjScreen
-	ld(#_pFreeObjectScreen), hl
+	ld (#_pFreeObjectScreen), hl
 	ld b, #MAX_ANIMATED_OBJECTS + #01
 	ld de, #06
 _reset_loop_2 :
-	ld(hl), #0xFF
+	ld (hl), #0xFF
 	add hl, de
 	djnz _reset_loop_2
 	xor a
@@ -2083,71 +2103,149 @@ __endasm;
 
 /* Input:
 *   _cGlbSpObjID => ObjectScreen->cObjID
-*   _iGlbPosition => ObjectScreen->cX0, ObjectScreen->cY0
-*   _cGlbWidth => ObjectScreen->cX1, ObjectScreen->cY1
-*   _cGlbCyle => ObjectScreen->cObjClass
-*   _cGlbStep => ObjectScreen->cObjStatus for ANIM_CYCLE_FACEHUG_EGG only
+*   _cAuxEntityX, _cAuxEntityY => ObjectScreen->cX0, ObjectScreen->cY0
+*   _cGlbWidth(B) => ObjectScreen->cX1, ObjectScreen->cY1
+*   _cGlbCyle(H) => ObjectScreen->cObjClass
+*   _cGlbStep(D) => ObjectScreen->cObjStatus for ANIM_CYCLE_FACEHUG_EGG only
 */
 void insert_new_screen_object()
 {
 __asm
-	; TODO: precisa refazer completamente quando converter Load_Entities() para ASM e depois novamente quando suportar ENEMIES[_iGlbPosition não usaddo]
-	ld hl, (#_pFreeObjectScreen)
-	ld a, (#_cGlbSpObjID)
-	ld (hl), a; cObjID
+	; SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
+	; EGG attributes        : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
+	; A, IX and IY can be used/changed
+	; BC, DE, H cannot be used without push/pop first
 
-	ld de, (#_iGlbPosition)
-	ld bc, #0x0500  ; C=0, B=5(loop counter)
-	or a; clear carry
-_div32_loop :
-	rr d
-	rr e
-	rr c
-	djnz _div32_loop
-	; E = #_iGlbPosition div 32 (tile Y)
-	; C = (#_iGlbPosition mod 32) * 8 (pixel X)
-	ld a, e
-	and #0b00011111
+	ld a, (#_cGlbSpObjID)
+_insert_new_screen_object_ex :
+	ld iy, (#_pFreeObjectScreen)
+	ld 0 (iy), a ; cObjID
+
+	ld a, (#_cAuxEntityX)
+	;;and #0b00011111
 	rlca
 	rlca
 	rlca
-	ld b, a
-	; B = (#_iGlbPosition div 32) * 8 (pixel Y)
-	inc hl
-	ld(hl), c; cX0
-	ld a, (#_cGlbWidth)
-	and #0b00011111
+	ld 1 (iy), a ; cX0
+
+	ld l, a
+	ld a, b ; cGlbWidth
+	;;and #0b00011111
 	rlca
 	rlca
 	rlca
 	dec a
 	; A = (#_cGlbWidth * 8) - 1
-	add a, c
-	inc hl
-	ld(hl), a; cX1
-	ld a, b
-	inc hl
-	ld(hl), a; cY0
-	add a, #8 - #1
-	inc hl
-	ld (hl), a; cY1
-	ld d, h
-	ld e, l
-	ld a, (#_cGlbCyle)
-	inc hl
-	ld (hl), a; cObjClass
-	inc hl
-	ld (#_pFreeObjectScreen), hl
+	add a, l
+	ld 2 (iy), a ; cX1
 
+	ld a, (#_cAuxEntityY)
+	;;and #0b00011111
+	rlca
+	rlca
+	rlca
+	add a, #8 * #3
+	ld 3 (iy), a ; cY0
+
+	add a, #8 - #1
+	ld 4 (iy), a; cY1
+
+	ld 5 (iy), h ; cObjClass = cGlbCyle
+	
+	inc iy
+	inc iy
+	inc iy
+	inc iy
+	inc iy
+	inc iy
+	ld (#_pFreeObjectScreen), iy
+
+	ld a, h
 	cp #ANIM_CYCLE_FACEHUG_EGG
 	ret nz
-  ex de, hl
-	ld a, (#_cGlbStep)
-	ld (hl), a  ; ST_EGG_CLOSED(0), ST_EGG_OPENED(2)
-	ld hl, #_cScreenEggsQtty
-	inc (hl)
+  dec iy
+	dec iy
+	ld 0 (iy), d ; cObjStatus = cGlbStep [ST_EGG_CLOSED(0), ST_EGG_OPENED(2)]
+	ld iy, #_cScreenEggsQtty
+	inc 0 (iy)
 __endasm;
 }  // void insert_new_screen_object()
+
+/*
+// Input:
+//   _cGlbSpObjID => ObjectScreen->cObjID
+//  _iGlbPosition => ObjectScreen->cX0, ObjectScreen->cY0
+//   _cGlbWidth => ObjectScreen->cX1, ObjectScreen->cY1
+// _cGlbCyle => ObjectScreen->cObjClass
+//   _cGlbStep => ObjectScreen->cObjStatus for ANIM_CYCLE_FACEHUG_EGG only
+
+void insert_new_screen_object()
+{
+	__asm
+	; TODO: precisa refazer completamente quando converter Load_Entities() para ASM e depois novamente quando suportar ENEMIES[_iGlbPosition não usaddo]
+		; #_cAuxEntityX, #_cAuxEntityY
+		; SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
+		; EGG attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
+		; A, HL, IXand IY can be used / changed
+		; DE, BC need to push / pop
+
+		ld hl, (#_pFreeObjectScreen)
+		ld a, (#_cGlbSpObjID)
+		ld(hl), a; cObjID
+
+		ld de, (#_iGlbPosition)
+		ld bc, #0x0500; C = 0, B = 5(loop counter)
+		or a; clear carry
+		_div32_loop :
+	rr d
+		rr e
+		rr c
+		djnz _div32_loop
+		; E = #_iGlbPosition div 32 (tile Y)
+		; C = (#_iGlbPosition mod 32) * 8 (pixel X)
+		ld a, e
+		and #0b00011111
+		rlca
+		rlca
+		rlca
+		ld b, a
+		; B = (#_iGlbPosition div 32) * 8 (pixel Y)
+		inc hl
+		ld(hl), c; cX0
+		ld a, (#_cGlbWidth)
+		and #0b00011111
+		rlca
+		rlca
+		rlca
+		dec a
+		; A = (#_cGlbWidth * 8) - 1
+		add a, c
+		inc hl
+		ld(hl), a; cX1
+		ld a, b
+		inc hl
+		ld(hl), a; cY0
+		add a, #8 - #1
+		inc hl
+		ld(hl), a; cY1
+		ld d, h
+		ld e, l
+		ld a, (#_cGlbCyle)
+		inc hl
+		ld(hl), a; cObjClass
+		inc hl
+		ld(#_pFreeObjectScreen), hl
+
+		cp #ANIM_CYCLE_FACEHUG_EGG
+		ret nz
+		ex de, hl
+		ld a, (#_cGlbStep)
+		ld(hl), a; ST_EGG_CLOSED(0), ST_EGG_OPENED(2)
+		ld hl, #_cScreenEggsQtty
+		inc(hl)
+		__endasm;
+}  // void insert_new_screen_object()
+*/
 
 /* Input:
 *   IX = struct AnimatedTile * => (IX+9)=ObjectID
@@ -2390,9 +2488,930 @@ unsigned int iBuffOffset;
 
 } // void Load_Sprites()
 
+
+void reset_locker_and_enemies()
+{
+__asm
+	ld b, #MAX_LOCKERS_PER_LEVEL
+	ld hl, #_cLockerOpened
+_rst_locker:
+	ld (hl), #BOOL_FALSE
+	inc hl
+	djnz _rst_locker
+
+	ld hl, (#_cCreatedEnemyQtty)
+	ld hl, #0
+;;	ret
+;;
+;;	ld a, (#_cLevel)
+;;	cp #1 ; if cLevel=1, no need to reset enemies
+;;	ret z
+;;	ld b, #AVERAGE_ENEMIES * #MAPS
+;;	ld hl, #_sEnemies + #3; sEnemies.status
+;;	ld de, #13; sizeof(struct EnemyEntity)
+;;_rst_enemy:
+;;  ld (hl), #ENEMY_STATUS_INVALID
+;;	add hl, de
+;;	djnz _rst_enemy
+;;	ld hl, (#_cCreatedEnemyQtty)
+;;	ld hl, #0
+__endasm;
+}
+
 /*
 * Uncompress and load entities data from Map
 */
+void load_entities()
+{
+__asm
+	call _reset_screen_objects
+	push ix
+	push iy
+
+	;; cAnimTilesQty = cAnimSpecialTilesQty = cGlbSpecialTilesActive = cGlbSpObjID = 0;
+	xor a
+	ld (#_cAnimTilesQty), a
+	ld (#_cAnimSpecialTilesQty), a
+	ld (#_cGlbSpecialTilesActive), a
+	ld (#_cGlbSpObjID), a
+
+	; pFreeAnimTile = sAnimTiles;
+	; pFreeAnimSpecialTile = sAnimSpecialTiles;
+	ld hl, #_sAnimTiles
+	ld (#_pFreeAnimTile), hl
+	ld hl, #_sAnimSpecialTiles
+	ld (#_pFreeAnimSpecialTile), hl
+
+	; pMapData = cMap_Data + (MAP_H * MAP_W);
+	ld hl, #_cMap_Data + #MAP_H * #MAP_W
+_process_entity :
+	ld a, (hl)
+	; entity list ends with 0xFF
+	cp #0xFF
+	jp z, _end_entities
+	and a, #0b11110000
+
+	cp #ET_PLAYER << #4
+	jr nz, _try_et_safeplace
+	ld a, (#_sThePlayer + #8)  ; sThePlayer.type
+	cp #ET_UNUSED
+	jp nz, _get_next_entity_3
+	ld a, (hl)
+	and a, #0b00000001
+	ld (#_sThePlayer + #2), a  ; sThePlayer.dir
+	inc hl
+	ld a, (hl)  ; x
+	ld (#_sThePlayer), a  ; sThePlayer.x
+	inc hl
+	ld a, (hl)  ; y
+	add a, #8 * #3
+	ld (#_sThePlayer + #1), a  ; sThePlayer.y
+	ld a, #PLYR_STATUS_STAND
+	ld (#_sThePlayer + #3), a  ; sThePlayer.status
+	ld a, #BOOL_FALSE
+	ld (#_sThePlayer + #4), a  ; sThePlayer.hitflag
+	ld (#_sThePlayer + #9), a  ; sThePlayer.grabflag
+	ld a, #ET_PLAYER
+	ld (#_sThePlayer + #8), a  ; sThePlayer.type
+	; we dont use "sThePlayer.pat". Use global variables instead (PLYR_PAT_XXX_IDX)
+	; we dont use "sThePlayer.update". Use update_player() directly
+	inc hl
+	jr _process_entity
+
+_try_et_safeplace :
+	cp #ET_SAFEPLACE << #4
+	jr nz, _do_et_animated_tile
+	ld a, (hl)
+	and a, #0b00000001
+	ld (#_cPlySafePlaceDir), a
+	inc hl
+	ld a, (hl)  ; x
+	ld (#_cPlySafePlaceX), a
+	inc hl
+	ld a, (hl)  ; y
+	add a, #8 * #3
+	ld (#_cPlySafePlaceY), a
+	inc hl
+	jr _process_entity
+
+_do_et_animated_tile :
+	; backup Entity Type
+	ld (#_cObjType), a
+
+	; calculate X, Y and _iGlbPosition
+	ld a, (hl)
+	rl a
+	and a, #0b00011110
+	ld b, a
+	inc hl
+	ld a, (hl)
+	rlc a
+	and a, #0b00000001
+	or b  ; A = X
+	ld (#_cAuxEntityX), a
+
+	ld a, (hl)
+	rra
+	rra
+	and a, #0b00011111  ; A = Y
+	ld (#_cAuxEntityY), a
+
+	add a, #3
+	add a, a
+	add a, a
+	add a, a  ; A = (Y + 3) * 8
+
+	ld b, #0
+	ld c, a
+	ld iy, #0000
+	add iy, bc
+	add iy, iy
+	add iy, iy  ; IY = (Y + 3) * 32
+
+	ld a, (#_cAuxEntityX)
+  ld c, a
+  ld b, #0
+  add iy, bc  ; IY = (Y + 3) * 32 + X
+	; set iGlbPosition
+	ld (#_iGlbPosition), iy
+
+	; get the base tile from Map + Object History update
+	ld bc, #_cMap_Data - (#3 * #32)
+	add iy, bc
+	ld a, 0 (iy)
+	; set cGlbTile
+	ld (#_cGlbTile), a
+
+	; recover Entity Type
+	ld a, (#_cObjType)
+
+	; get the correct parameters for each entity type
+	cp #ET_ANIMATE << #4
+	jp z, _proc_param_animate
+	cp #ET_GATE << #4
+	jr z, _proc_param_gate
+	cp #ET_FORCEFIELD << #4
+	jp z, _proc_param_forcefield
+	cp #ET_SLIDERFLOOR << #4
+	jp z, _proc_param_sliderfloor
+	cp #ET_DROPPER << #4
+	jp z, _proc_param_dropper
+	cp #ET_WALL << #4
+	jp z, _proc_param_wall
+	cp #ET_INTERACTIVE << #4
+	jp z, _proc_param_interactive
+	cp #ET_PORTAL << #4
+	jp z, _proc_param_portal
+	cp #ET_LOCKER << #4
+	jp z, _proc_param_locker
+	cp #ET_BELT << #4
+	jp z, _proc_param_belt
+	cp #ET_EGG << #4
+	jp z, _proc_param_egg
+	cp #ET_ENEMY << #4
+	jp z, _proc_enemy
+	jp _get_next_entity_3
+
+_proc_param_gate :
+	; if the gate is already opened (+Object History), no need to animate
+	ld a, (#_cGlbTile)
+	or a
+	jp z, _get_next_entity_2
+	; set GATE attributes: cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L) and cGlbSpObjID
+	ld a, (hl)
+	and #0b00000001
+	ld b, a ; temp storage cGlbDir
+
+	inc hl
+	ld a, (hl)
+	; convert sec->number of frames : TTTT * (60 / 2 / 7) = TTTT * 4
+	rlca
+	rlca
+	and #0b00111100
+	ld c, a
+
+	ld a, (hl)
+	and #0b01110000
+	; cGlbFlag = Key(0b0KKK0000)
+	ld e, a
+	inc hl
+	push hl
+
+	ld h, #ANIM_CYCLE_GATE_OPEN
+	ld l, b ; cGlbDir
+
+	; cGlbWidth is always 2 for a Gate
+	ld b, #2
+	
+	; cGlbStep = 0;
+	ld d, #0
+
+	ld iy, #_cGlbSpObjID
+	inc 0 (iy)
+
+	ld ix, (#_pFreeAnimSpecialTile)
+	jp _insert_new_entity
+
+_proc_param_forcefield :
+	; set FORCEFIELD attributes : cGlbWidth(B), cGlbStep(D) and cGlbCyle(H)
+	inc hl
+	ld b, (hl)
+	inc hl
+	push hl
+	ld h, #ANIM_CYCLE_FORCEFIELD
+	ld d, #0
+	jp _insert_new_entity_0
+
+_proc_param_sliderfloor :
+	; set SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
+	ld a, (hl)
+	and #0b00000011
+	add a, #50  ; 50 = UP (0), 51 = DOWN (1), 52 = RIGHT (2), 53 = LEFT (3)
+	ld d, a ; temp storage cGlbCyle
+	
+	inc hl
+	ld a, (hl)
+	and #0b00001111
+	ld b, a
+
+	ld a, (hl)
+	rra
+	rra
+	rra
+	rra
+	and #0b00001111
+	ld c, a
+	inc hl
+	push hl
+
+	ld h, d ; temp storage cGlbCyle
+	ld d, #LEFT_MOST_TILE
+
+	ld iy, #_cGlbSpObjID
+	inc 0 (iy)
+
+	call _insert_new_screen_object
+
+	ld ix, (#_pFreeAnimSpecialTile)
+	jp _insert_new_entity
+
+_proc_param_wall :
+	; if the wall is already destroyed (+Object History), no need to animate
+	ld a, (#_cGlbTile)
+	or a
+	jp z, _get_next_entity_2
+	; set WALL attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
+	inc hl
+	ld a, (hl)
+	ld c, a
+	inc hl
+	push hl
+
+	; adjust initial tile and step based on Object History in this screen
+	; cGlbFlag = (TS_SCORE_SIZE + GAME_WALL_BRK_TL_OFFSET);
+	;ld e, #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET
+	ld a, (#_cGlbTile)
+	cp #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET
+	jr nz, _tst_wall_status_1
+	ld d, #2
+	jr _end_wall_status
+_tst_wall_status_1 :
+	cp #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET + #1
+	jr nz, _tst_wall_status_2
+	ld d, #4
+	jr _end_wall_status
+_tst_wall_status_2 :
+	ld d, #0
+
+_end_wall_status :
+	; cGlbTile = cGlbFlag; /* base tile for Wall is always(GAME_TILE_OFFSET + GAME_WALL_BRK_TL_OFFSET) */
+	ld e, #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET
+	ld a, e
+	ld (#_cGlbTile), a
+
+	; wall width is always 2
+	ld b, #2
+
+	; TODO: Armazenar o nro de tiros já recebidos no histórico desse objeto e restaurar quando voltar nessa tela
+	; Armazenar a qtde de tiros restantes em 1 novo atributo de Object History, atualizar sempre que 1 novo tiro é dado e recuperar o pInsertAnimTile->cTimeLeft a cada recarga de tela
+	ld h, #ANIM_CYCLE_WALL_BREAK
+
+	ld iy, #_cGlbSpObjID
+	inc 0 (iy)
+		
+	ld ix, (#_pFreeAnimSpecialTile)
+	jp _insert_new_entity
+
+_proc_param_interactive :
+	; set INTERACTIVE attributes : cGlbWidth(B), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L) and cGlbSpObjID
+	ld a, (hl)
+	and a, #0b00000011
+	inc hl
+	; check for Action = INTERACTIVE_ACTION_LOCKER_OPEN or INTERACTIVE_ACTION_MISSION_CPLT, then store the (Locker ID / Mission #) as ObjID
+	cp #INTERACTIVE_ACTION_LIGHT_ONOFF
+	jr nz, _intr_obj_lock_or_mission
+	; cGlbFlag = ++cGlbSpObjID;
+	ld iy, #_cGlbSpObjID
+	inc 0 (iy)
+	ld e, 0 (iy)
+	jr _end_intr_obj
+_intr_obj_lock_or_mission :
+	; cGlbFlag = cGlbStep; /* extra information(Locker ID / Mission #) */
+	ld e, (hl)
+
+_end_intr_obj :
+	inc hl
+	push hl
+	; cGlbStep = 0; cGlbCyle = ANIM_CYCLE_INTERACTIVE; cGlbWidth is always 1 for Interactive; cGlbDir = Action (0b000000aa)
+	ld d, #0
+	ld h, #ANIM_CYCLE_INTERACTIVE
+	ld b, #1
+	ld l, a
+
+	; adjust initial tile and step based on Object History in this screen
+	; if (cGlbTile == (TS_SCORE_SIZE + GAME_PWR_SWITCH_TL_OFFSET + 1)) { cGlbTile--;  /* animate the power switch interative from base tile */  cGlbStep = 2; /* starts at animation stage 2 (PowerSwitch is OFF) */ }
+	ld a, (#_cGlbTile)
+	cp #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET + #1
+	jr nz, _end_intr_obj_2
+	dec a
+	ld (#_cGlbTile), a
+	ld d, #2
+
+_end_intr_obj_2 :
+	ld ix, (#_pFreeAnimSpecialTile)
+	jp _insert_new_entity
+
+_proc_param_portal :
+	; set PORTAL attributes : cGlbWidth(B), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L)
+	ld a, (hl)
+	and #0b00000001
+	inc hl
+	; cGlbFlag
+	ld e, (hl)
+	inc hl
+	push hl
+	; cGlbDir
+	ld l, a
+
+	;cGlbCyle = ANIM_CYCLE_PORTAL;
+	ld h, #ANIM_CYCLE_PORTAL
+
+	;cGlbStep = 0;
+	ld d, #0
+
+	; cGlbWidth is always 3 for a Portal
+	ld b, #3
+
+	; store Player X and Y position as destination at this screen if Player is coming from a Portal
+	;cPlyPortalDestinyY = ((pMapData[2] + 3) << 3) + 8; 
+	ld a, (#_cAuxEntityY)
+	add a, #3
+	rlca
+	rlca
+	rlca
+	add a, #8
+	ld (#_cPlyPortalDestinyY), a
+
+	; cPlyPortalDestinyX = _cAuxEntityX << 3;
+	ld a, (#_cAuxEntityX)
+	rlca
+	rlca
+	rlca
+	ld c, a ; temp storage
+	; if (!(pMapData[0] & 0b10000000)) cPlyPortalDestinyX += 4 else cPlyPortalDestinyX -= 12;
+	xor a
+	or l
+	ld a, #4
+	jr z, _portal_dir_end
+	ld a, #256 - #12
+
+_portal_dir_end :
+	add a, c
+	ld (#_cPlyPortalDestinyX), a
+	jp _insert_new_entity_0
+
+_proc_param_locker :
+	inc hl
+	; cGlbFlag
+	ld e, (hl)
+	; cGlbStep
+	ld d, #0
+
+	; if (cLockerOpened[cGlbStep] == true)
+	ld iy, #_cLockerOpened
+	add iy, de
+	ld a, 0 (iy)
+	or a
+	jr z, _lock_not_opened
+	; cMap_Data[iGlbPosition - (3 * 32)] = cMap_Data[iGlbPosition + 32 - (3 * 32)] = BLANK_TILE;
+	; cMap_TileClass[iGlbPosition - (3 * 32)] = cMap_TileClass[iGlbPosition + 32 - (3 * 32)] = TILE_TYPE_BLANK;
+	
+	ld iy, #_cMap_Data - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), #BLANK_TILE
+	ld bc, #32
+	add iy, bc
+	ld 0 (iy), #BLANK_TILE
+
+	ld iy, #_cMap_TileClass - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), #TILE_TYPE_BLANK
+	ld bc, #32
+	add iy, bc
+	ld 0 (iy), #TILE_TYPE_BLANK
+
+	jp _get_next_entity_1
+
+_lock_not_opened :
+	; set LOCKER attributes : cGlbWidth(B), cGlbStep(D), cGlbFlag(E) and cGlbCyle(H)
+	inc hl
+	push hl
+	ld h, #ANIM_CYCLE_LOCKER_OPEN
+	; cGlbWidth is always 2 for a locker
+	ld b, #2
+	
+	ld ix, (#_pFreeAnimSpecialTile)
+	jp _insert_new_entity
+
+_proc_param_belt :
+	; set BELT attributes : cGlbWidth(B), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L)
+	ld a, (hl)
+	and #0b00000001
+	ld e, a ; cGlbDir temp storage
+
+	inc hl
+	; cGlbWidth
+	ld b, (hl)
+	inc hl
+	push hl
+
+	; cGlbDir
+	ld l, e
+	; cGlbCyle += ANIM_CYCLE_BELT;  /* 4 = anti - clockwise(0), 5 = clockwise(1) */
+	ld a, #ANIM_CYCLE_BELT
+	add a, l
+	ld h, a
+
+	; cGlbStep, cGlbFlag
+	ld de, #0
+	
+	jp _insert_new_entity_0
+
+_proc_param_egg :
+	; if the egg is already destroyed (+Object History), no need to animate
+	ld a, (#_cGlbTile)
+	or a
+	jp z, _get_next_entity_2
+	; set EGG attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
+	inc hl
+
+	; cGlbFlag = Egg ID (00000III)
+	ld e, (hl)
+	inc hl
+	push hl
+
+	; cGlbCyle = ANIM_CYCLE_FACEHUG_EGG;
+	ld h, #ANIM_CYCLE_FACEHUG_EGG
+
+	; cGlbWidth is always 4 for an egg
+	ld b, #4
+
+	; cGlbTimer(C) - # of shots for destroy the egg
+	ld c, #EGG_SHOTS_TO_DESTROY
+	
+	; if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET) cGlbStep = 0; else cGlbStep = 2;
+	ld d, #ST_EGG_CLOSED  ; 0
+	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
+	jr z, _cont_step_egg
+	ld d, #ST_EGG_OPENED  ; 2
+
+_cont_step_egg :
+	;cGlbSpObjID++;
+	ld iy, #_cGlbSpObjID
+	inc 0 (iy)
+
+	;cGlbSpObjID |= (cGlbFlag << 4);
+	ld a, e
+	rlca
+	rlca
+	rlca
+	rlca
+	or 0 (iy)
+	call _insert_new_screen_object_ex
+
+	ld ix, (#_pFreeAnimSpecialTile)
+	jr _insert_new_entity
+
+_proc_param_dropper :
+	; set DROPPER attributes : cGlbWidth(B), cGlbStep(D) and cGlbCyle(H)
+	inc hl
+	ld a, (hl)
+	and #0b00001111
+	; cGlbWidth
+	ld b, a
+
+	ld a, (hl)
+	rra
+	rra
+	rra
+	rra
+	and #0b00001111
+	; cGlbStep
+	ld d, a
+
+	inc hl
+	push hl
+	; cGlbCyle
+	ld h, #ANIM_CYCLE_DROPPER
+	jr _insert_new_entity_0
+
+_proc_enemy :
+	inc hl
+	ld a, (hl)
+	rra
+	rra
+	rra
+	rra
+	and #0b00000111
+	ld c, a  ; temp storage cGlbFlag (EnemyID)
+	; try to find an enemy with same EnemyID+ScreenID. If found, abort enemy processing
+	ld iy, #_sEnemies
+	ld a, (#_cCreatedEnemyQtty)
+	or a
+	jr z, _insert_new_enemy
+	ld b, a
+_try_find_enemy :
+	ld a, (#_cScreenMap)
+	cp 9 (iy) ; screenId
+	jr nz, _check_new_enemy
+	ld a, c 
+	cp 10 (iy) ; objId
+	jp z, _get_next_entity_1  ; enemy found - abort processing
+_check_new_enemy :
+	add iy, de
+	djnz _try_find_enemy
+
+_insert_new_enemy :
+	dec hl
+
+	jp _get_next_entity_XXXX
+
+_proc_param_animate :
+	; set ANIMATE attributes : cGlbWidth(B), cGlbStep(D) and cGlbCyle(H)
+	ld a, (hl)
+	and #0b00000011  ; temp storage cGlbCyle
+	inc hl
+	ld d, (hl)
+	inc hl
+	push hl
+	; cGlbCyle
+	ld h, a
+	; cGlbWidth is always 1 for Animate
+	ld b, #1
+
+_insert_new_entity_0 :
+	ld ix, (#_pFreeAnimTile)
+_insert_new_entity :
+	; cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L), cGlbSpObjID, cObjType, cGlbTile and iGlbPosition
+	; create the necessary AnimTile(Dropper, Belt, Animate, Portal, ForceField) or AnimSpecialTile(Gate, Wall, Interactive, Slider, Locker, Egg) records @ IX
+	;pInsertAnimTile->iPosition = iGlbPosition; pInsertAnimTile->cCycleMode = cGlbCyle; pInsertAnimTile->cStep = cGlbStep;
+	;pInsertAnimTile->cLastFrame = 0xAA; pInsertAnimTile->cTile = cGlbTile; pInsertAnimTile->cSpTileStatus = ST_DISABLED;
+	ld a, (#_iGlbPosition)
+	ld 0 (ix), a
+	ld a, (#_iGlbPosition + #1)
+	ld 1 (ix), a
+	ld 2 (ix), h
+	ld 3 (ix), d
+	ld 4 (ix), #0xAA  ; not valid & non-blank
+	ld a, (#_cGlbTile)
+	ld 5 (ix),a
+	ld 8 (ix), #ST_DISABLED
+
+	ld a, (#_cObjType)
+
+	; set parameters for each entity type
+	cp #ET_ANIMATE << #4
+	jp z, _upd_animtile_ptr
+	cp #ET_GATE << #4
+	jr z, _proc_et_gate
+	cp #ET_FORCEFIELD << #4
+	jp z, _proc_et_forcefield
+	cp #ET_SLIDERFLOOR << #4
+	jp z, _proc_et_sliderfloor
+	cp #ET_DROPPER << #4
+	jp z, _proc_et_dropper
+	cp #ET_WALL << #4
+	jp z, _proc_et_wall
+	cp #ET_INTERACTIVE << #4
+	jp z, _proc_et_interactive
+	cp #ET_PORTAL << #4
+	jp z, _proc_et_portal
+	cp #ET_LOCKER << #4
+	jp z, _proc_et_locker
+	cp #ET_BELT << #4
+	jp z, _proc_et_belt
+	cp #ET_EGG << #4
+	jp z, _proc_et_egg
+	; jp _abort_this_entity  ; should never happen
+
+_proc_et_gate :
+	; pInsertAnimTile->cTimer = cGlbTimer;
+	ld 6 (ix), c
+	; store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
+	; pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | (pMapData[0] & 0b01110000)); // Key + ObjectID (0kkkOOOO)
+	ld a, (#_cGlbSpObjID)
+	or e
+	ld 9 (ix), a
+
+	push bc
+	ld iy, #_cMap_ObjIndex - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), a
+
+	; cGlbStep = 5; cGlbTile++; 
+	ld d, #5
+	ld iy, #_cGlbTile
+	inc 0 (iy)
+
+	; if (!cGlbFlag) iGlbPosition += 32 else iGlbPosition++
+	ld a, l
+	or a
+	jr z, _gate_obj_vert
+	ld bc, #1  ; Horizontal gate
+	jr _gate_obj_create
+_gate_obj_vert :
+	ld bc, #32  ; Vertical gate
+_gate_obj_create :
+	ld iy, (#_iGlbPosition)
+	add iy, bc
+	ld (#_iGlbPosition), iy
+	jp _upd_animtile_ptr_ex
+
+_proc_et_forcefield :
+	push bc
+	jr _gate_obj_vert
+
+_proc_et_sliderfloor :
+	;pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer;
+	ld 6 (ix), c
+	ld 7 (ix), c
+
+	;pInsertAnimTile->cSpObjID = cGlbSpObjID;
+	ld a, (#_cGlbSpObjID)
+	ld 9 (ix), a
+
+	; if (cGlbWidth == 2) /*last tile from slider*/ cGlbStep = RIGHT_MOST_TILE else cGlbStep = 0
+	ld d, #RIGHT_MOST_TILE
+	ld a, b
+	cp #2
+	jr z, _not_lst_slider_tile
+	ld d, #0
+
+_not_lst_slider_tile :
+	; calculate the next slider tile attributes
+	; cGlbTile = cMap_Data[++iGlbPosition - (3 * 32)]; // get the base tile from Map
+	push bc
+	ld iy, #_cMap_Data - #03 * #32
+	ld bc, (#_iGlbPosition)
+	inc bc
+	ld (#_iGlbPosition), bc
+	add iy, bc
+	ld a, 0 (iy)
+	ld (#_cGlbTile), a
+	jp _upd_animtile_ptr_ex
+
+_proc_et_wall :
+	; pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer; /* # of shots for break the wall */
+	ld 6 (ix), c
+	ld 7 (ix), c
+
+	; store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
+	; pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
+	ld a, (#_cGlbSpObjID)
+	ld 9 (ix), a
+
+	push bc
+	ld iy, #_cMap_ObjIndex - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), a
+
+	; cMap_TileClass[iGlbPosition - (3 * 32)] = TILE_TYPE_WALL;
+	ld iy, #_cMap_TileClass - #03 * #32
+	add iy, bc
+	ld 0 (iy), #TILE_TYPE_WALL
+
+	; iGlbPosition += 32; /* Wall is always vertical */
+	jp _gate_obj_vert
+
+_proc_et_interactive :
+	; store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
+	; pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbTimer | ((pMapData[0] >> 2) & 0b00110000) | 0b10000000);   // Action + ObjectID (10aaOOOO)
+	ld a, l
+	rlca
+	rlca
+	rlca
+	rlca
+	;and a, #0b00110000
+	or e
+	or #0b10000000
+	ld 9 (ix), a
+
+	push bc
+	ld iy, #_cMap_ObjIndex - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), a
+	jp _upd_animtile_ptr_ex
+
+_proc_et_portal :
+	; store the screen destination (0000DDDD) in cMap_ObjIndex[] map
+	; cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbFlag;  // Screen Destination (0000DDDD)
+	push bc
+	ld iy, #_cMap_ObjIndex - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), e
+
+	; cGlbStep++;
+	inc d
+
+	; iGlbPosition += 32; /* Vertical portal */
+	jp _gate_obj_vert
+
+_proc_et_locker :
+	; pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = 0;
+	ld 6 (ix), #0
+	ld 7 (ix), #0
+
+	; pInsertAnimTile->cSpObjID = 0b11000000 | cGlbFlag;  /* special mask to avoid Locker ObjID conflict with Gates and Interactive ObjIDs(1100OOOO) *//
+	ld a, #0b11000000
+	or e
+	ld 9 (ix), a
+
+	;cGlbStep = 5;
+	ld d, #5
+
+	; cGlbTile++;
+	ld iy, #_cGlbTile
+	inc 0 (iy)
+
+	; iGlbPosition += 32; /* Vertical always */
+	push bc
+	jp _gate_obj_vert
+
+_proc_et_belt :
+	; calculate the next belt tile attributes
+	; if (!cGlbFlag) /* first tile from mat */ { cGlbTile += 3; cGlbFlag = 1; }
+	xor a
+	or e
+	jr nz, _not_first_mat_tile
+	; cGlbFlag = 1;
+	inc e
+	; cGlbTile += 3;
+	jr _cont_belt_et_0
+
+_not_first_mat_tile :
+	; else if (cGlbWidth == 2) cGlbTile += 3; // last tile from mat
+	ld a, #2
+	cp b
+	jr nz, _cont_belt_et
+_cont_belt_et_0 :
+	; cGlbTile += 3;
+	ld a, (#_cGlbTile)
+	add a, #3
+	ld (#_cGlbTile), a
+
+_cont_belt_et :
+	; store the Belt direction (cGlbCyle) in cMap_ObjIndex[] map
+	; cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbCyle;  /* Direction(000000dd) */
+	push bc
+	ld iy, #_cMap_ObjIndex - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), h
+
+	; iGlbPosition++;
+	ld bc, (#_iGlbPosition)
+	inc bc
+	ld (#_iGlbPosition), bc
+
+	jp _upd_animtile_ptr_ex
+
+_proc_et_dropper :
+	; calculate the next dropper tile attributes
+	; cGlbStep = (10 + cGlbStep - 2) % 10;
+	ld a, d
+	add a, #10 - #2
+	cp #10
+	jr c, _drop_end_mod_10
+	sub #10
+_drop_end_mod_10 :
+	ld d, a
+
+	; iGlbPosition += 32;
+	push bc
+	jp _gate_obj_vert
+
+_proc_et_egg :
+	; pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = EGG_SHOTS_TO_DESTROY; /* # of shots for destroy the egg */
+	ld 6 (ix), c
+	ld 7 (ix), c
+
+	; store the ObjectID both in AnimSpecialTile recordand cMap_ObjIndex[] map
+	; pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbFlag << 4) | cGlbSpObjID;  /* EggID + ObjectID(0iiiOOOO) */
+	ld a, e
+	rlca
+	rlca
+	rlca
+	rlca
+	;and a, #0b01110000
+	ld iy, #_cGlbSpObjID
+	or 0 (iy)
+	ld 9 (ix), a
+
+	ld l, b; temp storage cGlbWidht
+	push bc
+	ld iy, #_cMap_ObjIndex - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add iy, bc
+	ld 0 (iy), a
+
+	ld a, l  ; temp storage cGlbWidht
+	; if (cGlbWidth == 3) {cGlbStep += 4; iGlbPosition += 31;} else {cGlbTile++; iGlbPosition++;}
+	cp #3
+	jr nz, _egg_same_line
+	; cGlbTile = TS_SCORE_SIZE + GAME_EGG_TL_OFFSET + 4; cGlbStep += 4; iGlbPosition += 31;
+	ld a, #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET + #4  ; first egg body tile
+	inc d
+	inc d
+	inc d
+	inc d
+	ld bc, #31 ; change from last tile from Egg top to first tile from Egg body
+	jr _egg_obj_create
+_egg_same_line :
+	; cGlbTile++; iGlbPosition++;
+	ld a, (#_cGlbTile)
+	inc a
+	ld bc, #1	
+
+_egg_obj_create :
+	ld (#_cGlbTile), a
+	jp _gate_obj_create
+
+
+	; update the right xxAnimTile pointer
+_upd_animtile_ptr :
+	push bc
+_upd_animtile_ptr_ex : 
+	ld bc, #10 ; sizeof (struct AnimatedTile)
+	ld a, (#_cObjType)
+	cp #ET_EGG << #4
+	jr c, _anim_tile_obj	
+	ld iy, (#_pFreeAnimSpecialTile)
+	add iy, bc
+	ld (#_pFreeAnimSpecialTile), iy
+	ld iy, #_cAnimSpecialTilesQty
+	jr _anim_tile_obj_end
+_anim_tile_obj :
+	ld iy, (#_pFreeAnimTile)
+	add iy, bc
+	ld (#_pFreeAnimTile), iy
+	ld iy, #_cAnimTilesQty
+_anim_tile_obj_end :
+	inc 0 (iy)
+	add ix, bc
+
+	pop bc
+	dec b
+	jp nz, _insert_new_entity
+
+_abort_this_entity :
+	pop hl
+	jp _process_entity
+
+_get_next_entity_3 :
+	inc hl
+_get_next_entity_2 :
+	inc hl
+_get_next_entity_1 :
+	inc hl
+	jp _process_entity
+
+_end_entities :
+	pop iy
+	pop ix
+__endasm;
+}  // void load_entities()
+
+
+/*
+* Uncompress and load entities data from Map
+*/
+/*
 void Load_Entities()
 {
 	uint8_t* pMapData;
@@ -2560,7 +3579,7 @@ void Load_Entities()
 		// entity is an animated tile - Generic configuration
 		pInsertAnimTile = pCurAnimTile;
 		cGlbFlag = 0;
-		iGlbPosition = ((pMapData[2] + 3) << 5) + pMapData[1]; // Y * 32 + X 
+		iGlbPosition = ((pMapData[2] + 3) << 5) + pMapData[1]; // (Y + 3) * 32 + X 
 		cGlbTile = cMap_Data[iGlbPosition - (3 * 32)]; // get the base tile from Map + Object History update
 
 		cGlbCyle = pMapData[0] >> 6;
@@ -2669,7 +3688,7 @@ void Load_Entities()
 		}
 		else if (cObjType == ET_LOCKER)
 		{
-			if (cLockerOpened[cGlbStep] == true) // Locker was opened already - must clean the way
+			if (cLockerOpened[cGlbStep] == true) // Locker was opened already - must clear the way
 			{
 				cMap_Data[iGlbPosition - (3 * 32)] = cMap_Data[iGlbPosition + 32 - (3 * 32)] = BLANK_TILE;
 				cMap_TileClass[iGlbPosition - (3 * 32)] = cMap_TileClass[iGlbPosition + 32 - (3 * 32)] = TILE_TYPE_BLANK;
@@ -2845,6 +3864,7 @@ void Load_Entities()
 		pMapData += 4;
 	}
 } // void Load_Entities() 
+*/
 
 /* 
 * Loads the right game level data (Tileset, Missions, Sprite Colors, cMapX/cMapY/cScreenMap) based on cLevel
@@ -3802,7 +4822,7 @@ _belt_detected :
 	ld de, #MAP_BYTES_SIZE
 	add hl, de
 	ld a, (hl)
-	ld (_cGlbObjData), a; _cGlbObjData = _cMap_ObjIndex[iGlbPosition]
+	ld (#_cGlbObjData), a; _cGlbObjData = _cMap_ObjIndex[iGlbPosition]
 	ld hl, #_cGlbPlyFlag
 	set 4, (hl) ; special floor(belt)
 	jp _EndConflicting
@@ -4400,7 +5420,7 @@ _wlkPortalFound :
 	or #SCR_SHIFT_PORTAL << #5
 	jr _wlkNextM
 
-	; Calculate the next up tile position for solid / gate / portal / interactive / wall / egg
+	; Calculate the next up tile position for solid/belt / gate / portal / interactive / wall / egg
 _wlkCheckSolid :
 	ld d, #0
 	call _calcTileXYAddrInt
@@ -4408,6 +5428,8 @@ _wlkCheckSolid :
 _wlkNextTile :
 	ld a, (hl)
 	cp #TILE_TYPE_SOLID
+	jr z, _wlkSolidFound
+	cp #TILE_TYPE_SPECIAL_BELT
 	jr z, _wlkSolidFound
 	cp #TILE_TYPE_WALL
 	jr z, _wlkSolidFound
@@ -4596,10 +5618,10 @@ __endasm;
 void player_moving_at_belt()
 {
 __asm
-	ld a, (_cGlbObjData)
-	cp #04  ; 4 = anti-clockwise
+	ld a, (#_cGlbObjData)
+	cp #ANIM_CYCLE_BELT  ; 4 = anti-clockwise
 	jp z, _plyMvLeft
-	cp #05  ; 5 = clockwise
+	cp #ANIM_CYCLE_BELT + #1  ; 5 = clockwise
 	ret nz
 	; Move Right
 	ld c, #1 + #11; Add 1 to X to move right
@@ -4623,8 +5645,8 @@ _mvNotSolid :
 	ld a, #BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a; player has moved RIGHT/LEFT
 	ld hl, #_sThePlayer
-	ld a, (_cGlbObjData)
-	cp #04
+	ld a, (#_cGlbObjData)
+	cp #ANIM_CYCLE_BELT  ; 4 = anti - clockwise
 	jp z, _mvLeftOK
 	inc(hl); _sThePlayer.x++
 	ret
@@ -7236,6 +8258,7 @@ void Run_Game()
 		ubox_fill_screen(BLANK_TILE);
 		ubox_enable_screen();
 		cGameStage = LEVEL_GAMESTAGE;
+		// Level 2 TEST
 		cLevel = 2;
 		draw_game_level_info();
 
@@ -7243,6 +8266,7 @@ void Run_Game()
 		load_gamelevel_data();
 		Load_Sprites();
 		reset_obj_history();
+		reset_locker_and_enemies();
 
 		// global variable initialization - once per level
 		cLastPower = 0xFF;  // force update on the first display_power() call
@@ -7259,14 +8283,6 @@ void Run_Game()
 		cRemainKey = cRemainScrewdriver = cRemainKnife = 0;
 
 		cScoretoAdd = cPlyRemainAmno = 0;
-__asm
-		ld b, #MAX_LOCKERS_PER_LEVEL
-		ld hl, #_cLockerOpened
-01000$:  ;_rst_locker :
-		ld (hl), #BOOL_FALSE
-		inc hl
-		djnz 01000$  ;_rst_locker
-__endasm;
 
 		do  // loop at each screen map
 		{
@@ -7275,7 +8291,7 @@ __endasm;
 			if (!bChangeMap)
 			{
 				// clear the screen
-				Load_Entities();
+				load_entities();
 				ubox_fill_screen(BLANK_TILE);
 				Draw_Score_Panel();
 				draw_map();
@@ -7284,7 +8300,7 @@ __endasm;
 			}
 			else
 			{
-				Load_Entities();
+				load_entities();
 				shift_screen_map();
 				update_player_position();
 
@@ -7422,7 +8438,7 @@ __asm
 	call _search_text_block
 	ld bc, #0x0701
 _display_msg_and_wait :
-	ld de, #0x0108
+	ld de, #0x0008
 	call _display_format_text_block
 	jp _wait_fire
 __endasm;
