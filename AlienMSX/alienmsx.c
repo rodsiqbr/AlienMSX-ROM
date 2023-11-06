@@ -81,8 +81,8 @@ typedef struct
 	uint8_t y;             //    1 | entity y position
 	uint8_t dir;           //    2 | entity direction
 	uint8_t status;        //    3 | entity status
-	uint8_t hitcounter;    //    4 | enemy hit counter
-	uint8_t pat;           //    5 | entity sprite pattern #
+	uint8_t hitcounter;    //    4 | enemy hit counter - NOT USED
+	uint8_t pat;           //    5 | entity sprite pattern # - NOT USED
 	uint8_t frame;         //    6 | entity sprite frame #
 	uint8_t delay;         //    7 | entity sprite frame delay counter
 	uint8_t type;          //    8 | entity type
@@ -168,6 +168,7 @@ const uint8_t cCycleTable[] = {
 																0, 1, 2, 0, 1, 2, 0, 1, 2, 0xFF,                      // 10 = portal
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 11 = locker open
 																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 2, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
+//																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 6, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
 																// Intro logo animation blocks
 																16, 1, 1, 1, 1,							// I
 																5, 3, 2, 2, 2,							// A
@@ -204,6 +205,9 @@ cIntroData = cGlbDataPackage + DATA_TILE_CYCLE_SIZE;
 cCtrl_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE;
 cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + DATA_INTRO_CTRL_CYCLE_SIZE;
 */
+
+#define ANIM_CYCLE_STEP_BLANK   0xFF
+#define ANIM_CYCLE_STEP_STOP    0xFE
 
 #define ANIM_CYCLE_NULL         0
 #define ANIM_CYCLE_FORCEFIELD   2
@@ -251,7 +255,7 @@ cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + 
 #define ET_UNUSED      0
 #define ET_PLAYER      1    // entity - not a tile
 #define ET_SAFEPLACE   2    // no animation - not a tile
-#define ET_ENEMY       3    // no animation - not a tile
+#define ET_ENEMY       3    // entity - not a tile
 #define ET_ANIMATE     4    // simple animated tile
 #define ET_BELT        5    // simple animated tile
 #define ET_DROPPER     6    // simple animated tile
@@ -278,8 +282,8 @@ enum pattern_type
 	PAT_SHOT_FLIP,
 	PAT_EXPLOSION,
 	PAT_MINIMAP,
-	PAT_ENEMY,
-	PAT_ENEMY_FLIP,
+	PAT_ENEMY_BASE,
+	PAT_ENEMY_BASE_FLIP,
 };
 
 // sub-songs matching our Arkos song
@@ -321,8 +325,8 @@ enum pattern_type
 #define MAX_POWER     100   // 100% = full power
 #define MAX_LEVEL     3     // # of levels
 
-#define MAX_ENEMIES     3
-#define AVERAGE_ENEMIES 2
+#define MAX_ENEMIES_PER_SCREEN      3
+#define AVERAGE_ENEMIES_PER_SCREEN  2
 //void update_player(void);
 
 
@@ -361,8 +365,15 @@ uint8_t PLYR_PAT_FALL_IDX;
 uint8_t PLYR_PAT_CLIMB_IDX;
 uint8_t PLYR_PAT_JUMP_IDX;
 
+uint8_t ENEMY_PAT_BASE_IDX;
+uint8_t ENEMY_PAT_BASE_FLIP_IDX;
+
+
 #define PLYR_WALK_CYCLE        4
-const uint8_t walk_frames[PLYR_WALK_CYCLE] = { 0, 1, 0, 2 };  // walk animation frames
+#define PLYR_DEAD_CYCLE        5
+const uint8_t ply_walk_frames[PLYR_WALK_CYCLE] = { 0, 1, 0, 2 };    // walk animation frames
+const uint8_t ply_dead_pat_frames[PLYR_DEAD_CYCLE] =  {48, 64, 56, 72, 64 };  // dead player animation frames (pattern #)
+
 
 #define SPRT_MAP_COLOR_CYCLE   4
 const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
@@ -372,16 +383,23 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ENEMY_SPRT_DIR_LEFT      PLYR_SPRT_DIR_LEFT    // 1
 
 #define ENEMY_STATUS_INACTIVE    0x00
-#define ENEMY_STATUS_KILLED      0x00
+#define ENEMY_STATUS_KILLED      0x05
 #define ENEMY_STATUS_AWAKING     0x10
 #define ENEMY_STATUS_WALKING     0x20
-#define ENEMY_STATUS_STAND       0x30
-#define ENEMY_STATUS_JUMPING     0x40
-#define ENEMY_STATUS_GRABBED     0x50
-#define ENEMY_STATUS_INVALID     0xFF
+#define ENEMY_STATUS_JUMPING     0x30
+#define ENEMY_STATUS_GRABBED     0x40
+#define ENEMY_STATUS_HURT        0x50
 
+#define ENEMY_HIT_COUNT          2
 
+const uint8_t enemy_awake_frames[] = { 0, 2, 2, 2, 2, 1, 1, 0, 0xFC };  // frame 0, 2, 2, 2, 2, 1, 1, 0 then keep at 0
+const uint8_t enemy_walk_frames[]  = { 0, 1, 0xFD };        // frame 0, 1 then restart
+const uint8_t enemy_jump_frames[]  = { 2, 0xFC };           // frame 2 then keep at 2
+const uint8_t enemy_grab_frames[]  = { 3, 0xFC };           // frame 3 then keep at 3
+const uint8_t enemy_hurt_frames[]  = { 2, 2, 2, 4, 4, 4, 4, 4, 0xFC };        // frame 2, 4 then keep at 4
 
+#define SPRITE_ANIM_FRAME_RESTART 0xFD
+#define SPRITE_ANIM_FRAME_KEEP    0xFC
 
 #define COLISION_FATAL 0b00000001
 #define COLISION_SOLID 0b00000010
@@ -516,30 +534,38 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define MAX_AMNO_SHIELD        99
 #define ONE_SECOND_TIMER       26  // = 1 sec
 
-#define EGG_SHOTS_TO_DESTROY   7
-#define ST_EGG_CLOSED          0
-#define ST_EGG_OPENED          2
-#define ST_EGG_RELEASED        3
-#define ST_EGG_DESTROYED       4
+#define EGG_SHOTS_TO_DESTROY    7
+#define ST_EGG_CLOSED           0  // must be 0 for animation to work
+#define ST_EGG_OPENED           2
+#define ST_EGG_RELEASED         3
+#define ST_EGG_DESTROYED        4
 
+#define ANIM_STEP_EGG_CLOSED    0  // must be 0 for animation to work
+#define ANIM_STEP_EGG_OPENED    2  // must be 2 for animation to work
 
-#define HIT_PTS_SMALL          04
-#define HIT_PTS_MEDIUM         08
+#define PLY_DIST_EGG_OPEN       8  // minimum # tiles distance from Player to Egg to open it
+#define PLY_DIST_EGG_FH_RELEASE 6  // minimum # tiles distance from Player to an opened Egg to release Enemy (FaceHug)
+
+#define HIT_PTS_FACEHUG         2
+#define HIT_PTS_SMALL           4
+#define HIT_PTS_MEDIUM          8
 #define HIT_PTS_HIGH           12
 #define HIT_PTS_DEATH          MAX_POWER
 
-#define SCORE_OBJECT_POINTS    07  //   7 points to the score when getting an object
+#define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
 #define SCORE_INTERACTV_POINTS 20  //  20 points to the score when activating an interactive
 #define SCORE_MISSION_POINTS   50  //  50 points to the score when complete a mission
 #define SCORE_LEVELUP_POINTS  100  // 100 points to the score when level complete
 
-#define SCORE_ADD_ANIM         04  // score points to increase for each score animation cycle
-#define HIT_ANIM_TIMER         07
-#define DEAD_ANIM_TIMER        21
+#define SCORE_ADD_ANIM          4  // score points to increase for each score animation cycle
+#define HIT_ANIM_TIMER          7
+#define DEAD_ANIM_TIMER        25  // 5 cycles, each cycle = 5 distinct frame
 #define KEY_PRESS_DELAY        16  // delay in cycles before accept a new key press
 
+#define ENEMY_ANIM_DELAY       48
+#define PLAYER_ANIM_DELAY       3
 
-#define CACHE_INVALID      0xFF
+#define CACHE_INVALID           0xFF
 
 #define MAX_MISSIONS           4
 #define MISSION_NOT_SET        0
@@ -609,8 +635,9 @@ uint16_t iGlbPosition; // used at Load_Entities() and Run_Game() + its subroutin
 uint8_t cGlbFLDelay;
 
 // our live entities - enemies and the player
-EnemyEntity sEnemies[AVERAGE_ENEMIES * MAPS];
 PlyEntity sThePlayer;
+EnemyEntity sEnemies[AVERAGE_ENEMIES_PER_SCREEN * MAPS];  // all the loaded enemy entities in the map
+EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs the player, this is the enemy ptr
 //LiveEntity* pCurEntities;
 
 // Global variables for player control
@@ -672,7 +699,10 @@ uint8_t cGlbGameSceneLight;
 uint8_t cFlashLUpdateTimer;
 
 uint8_t cScreenEggsQtty;
-uint8_t cEnemiesQtty;
+uint8_t cCreatedEnemyQtty, cActiveEnemyQtty;
+bool bCheckPlayerColision;
+bool bCheckShotColision;
+bool bShotColisionWithEnemy;
 
 
 unsigned char cGlbBufNum[10];            // global buffer to support display_number(), display_objects(), display_power() and display_minimap() routines
@@ -684,7 +714,7 @@ unsigned char cPowerTile[8 * 3];         // copy buffer - Power tile from origin
 // can't use ROM directly because its compressed
 uint8_t cMap_TileClass[MAP_BYTES_SIZE];
 uint8_t cMap_ObjIndex[MAP_BYTES_SIZE];
-uint8_t cMap_Data[MAP_BYTES_SIZE + (MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL + MAX_ENEMIES + 1) * 4];
+uint8_t cMap_Data[MAP_BYTES_SIZE + (MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL + MAX_ENEMIES_PER_SCREEN + 1) * 4];
 uint8_t cTemp_Map_Data[MAP_BYTES_SIZE];
 
 
@@ -696,7 +726,7 @@ struct AnimTileList sAnimTileList[MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL];
 #define MAX_OBJ_HISTORY_SIZE ((MAX_ANIM_SPEC_TILES + MAX_OBJECTS_PER_MAP) * MAPS)
 struct ObjTileHistory sObjTileHistory[MAX_OBJ_HISTORY_SIZE + 1];
 
-#define MAX_ANIMATED_OBJECTS (MAX_ENEMIES + MAX_OBJECTS_PER_MAP)
+#define MAX_ANIMATED_OBJECTS (MAX_ENEMIES_PER_SCREEN + MAX_OBJECTS_PER_MAP)
 struct ObjectScreen sObjScreen[MAX_ANIMATED_OBJECTS + 1];
 
 #define MAX_LOCKERS_PER_LEVEL 16
@@ -1114,7 +1144,7 @@ __asm
 	ld b, #0xFF
 	cp b
 	jp nz, _calcPowerTile
-	; first time, diplay the power tiles
+	; first time, display the power tiles
 	ld a, #SCORE_POWER_TL_OFFSET
 	ld b, #5
 	ld hl, #_cGlbBufNum
@@ -1254,7 +1284,7 @@ __asm
 	ld a, (hl)
 _player_hit_asm_direct :
 	; if HIT_PTS_SMALL, check for Shield. If Shield active, no hit is set.
-	; if HIT_PTS_MEDIUM, HIT_PTS_HIGH or HIT_PTS_DEATH, hit happens regardless of the Shield.
+	; if HIT_PTS_FACEHUG, HIT_PTS_MEDIUM, HIT_PTS_HIGH or HIT_PTS_DEATH, hit happens regardless of the Shield.
 	cp #HIT_PTS_SMALL
 	jr nz, _hit_execute
 	ld h, a
@@ -1645,7 +1675,7 @@ _next_logo_line :
 	
 	pop de ; E = restore initial tile block
 	ld a, e
-	sub c ; A = # of diplayed tiles
+	sub c ; A = # of displayed tiles
 
 	push bc ; C = Last block tile used
 
@@ -2165,7 +2195,7 @@ _insert_new_screen_object_ex :
 	ret nz
   dec iy
 	dec iy
-	ld 0 (iy), d ; cObjStatus = cGlbStep [ST_EGG_CLOSED(0), ST_EGG_OPENED(2)]
+	ld 0 (iy), d ; cObjStatus = cGlbStep [ST_EGG_CLOSED(0), ST_EGG_OPENED(2), ST_EGG_RELEASED(3)]
 	ld iy, #_cScreenEggsQtty
 	inc 0 (iy)
 __endasm;
@@ -2485,10 +2515,25 @@ unsigned int iBuffOffset;
 	cMiniMapPattern = spman_alloc_pat(PAT_MINIMAP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
 
 	//uncompress "enemy_sprite"
-
+	zx0_uncompress(cBuffer, enemy_sprite);
+	// Enemy 5 frames x 1 sprite per frame = 5 sprites (16 x 16 each sprite)
+	ENEMY_PAT_BASE_IDX = spman_alloc_pat(PAT_ENEMY_BASE, cBuffer, 5, 0);
+	ENEMY_PAT_BASE_FLIP_IDX = spman_alloc_pat(PAT_ENEMY_BASE_FLIP, cBuffer, 5, 1);
+	// Awaking: 1 frames x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
+	//ENEMY_PAT_AWAKE_IDX = spman_alloc_pat(PAT_ENEMY_AWAKE, cBuffer + (2 * 1 * 4 * 8), 1, 0);
+	//spman_alloc_pat(PAT_ENEMY_AWAKE_FLIP, cBuffer + (2 * 1 * 4 * 8), 1, 1);
+	// Grabed: 1 frames x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
+	//ENEMY_PAT_GRAB_IDX = spman_alloc_pat(PAT_ENEMY_GRAB, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+	//spman_alloc_pat(PAT_ENEMY_GRAB_FLIP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 1);
+	// Killed: 1 frames x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
+	//ENEMY_PAT_KILL_IDX = spman_alloc_pat(PAT_ENEMY_KILL, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+	//spman_alloc_pat(PAT_ENEMY_KILL_FLIP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 1);
 } // void Load_Sprites()
 
 
+/*
+* Reset some entities each new level
+*/
 void reset_locker_and_enemies()
 {
 __asm
@@ -2499,22 +2544,9 @@ _rst_locker:
 	inc hl
 	djnz _rst_locker
 
-	ld hl, (#_cCreatedEnemyQtty)
-	ld hl, #0
-;;	ret
-;;
-;;	ld a, (#_cLevel)
-;;	cp #1 ; if cLevel=1, no need to reset enemies
-;;	ret z
-;;	ld b, #AVERAGE_ENEMIES * #MAPS
-;;	ld hl, #_sEnemies + #3; sEnemies.status
-;;	ld de, #13; sizeof(struct EnemyEntity)
-;;_rst_enemy:
-;;  ld (hl), #ENEMY_STATUS_INVALID
-;;	add hl, de
-;;	djnz _rst_enemy
-;;	ld hl, (#_cCreatedEnemyQtty)
-;;	ld hl, #0
+	xor a
+	ld (#_cCreatedEnemyQtty), a
+	ld (#_cActiveEnemyQtty), a
 __endasm;
 }
 
@@ -2528,7 +2560,7 @@ __asm
 	push ix
 	push iy
 
-	;; cAnimTilesQty = cAnimSpecialTilesQty = cGlbSpecialTilesActive = cGlbSpObjID = 0;
+	; cAnimTilesQty = cAnimSpecialTilesQty = cGlbSpecialTilesActive = cGlbSpObjID = 0;
 	xor a
 	ld (#_cAnimTilesQty), a
 	ld (#_cAnimSpecialTilesQty), a
@@ -2966,11 +2998,46 @@ _proc_param_egg :
 	jp z, _get_next_entity_2
 	; set EGG attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
 	inc hl
-
-	; cGlbFlag = Egg ID (00000III)
-	ld e, (hl)
+	ld c, (hl)  ; EggId
 	inc hl
 	push hl
+
+	; if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET) cGlbStep = 0; else cGlbStep = 2;
+  ld d, #ST_EGG_CLOSED  ; 0
+	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
+	jr z, _cont_step_egg
+
+	; try to find an enemy with same EggId + ScreenID. If found, check its status
+	ld iy, #_sEnemies
+	ld a, (#_cCreatedEnemyQtty)
+	or a
+	jr z, _no_active_corresp_enemy
+	ld de, #14 ; sizeof(struct EnemyEntity)
+	ld b, a
+_try_find_active_enemy :
+  ld a, (#_cScreenMap)
+	cp 9 (iy) ; screenId
+	jr nz, _check_new_active_enemy
+	ld a, c
+	cp 10 (iy) ; objId
+	jp z, _check_enemy_status  ; corresponding enemy found - abort processing and check its status
+_check_new_active_enemy :
+	add iy, de
+	djnz _try_find_active_enemy
+
+_no_active_corresp_enemy :
+  ld d, #ST_EGG_OPENED  ; 2
+	jr _cont_step_egg
+
+_check_enemy_status :
+	ld a, 3 (iy)
+	cp #ENEMY_STATUS_INACTIVE
+	jr z, _no_active_corresp_enemy
+	ld d, #ST_EGG_RELEASED  ; 3
+
+_cont_step_egg:
+	; cGlbFlag = Egg ID (00000III)
+	ld e, c
 
 	; cGlbCyle = ANIM_CYCLE_FACEHUG_EGG;
 	ld h, #ANIM_CYCLE_FACEHUG_EGG
@@ -2981,13 +3048,6 @@ _proc_param_egg :
 	; cGlbTimer(C) - # of shots for destroy the egg
 	ld c, #EGG_SHOTS_TO_DESTROY
 	
-	; if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET) cGlbStep = 0; else cGlbStep = 2;
-	ld d, #ST_EGG_CLOSED  ; 0
-	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
-	jr z, _cont_step_egg
-	ld d, #ST_EGG_OPENED  ; 2
-
-_cont_step_egg :
 	;cGlbSpObjID++;
 	ld iy, #_cGlbSpObjID
 	inc 0 (iy)
@@ -3001,8 +3061,14 @@ _cont_step_egg :
 	or 0 (iy)
 	call _insert_new_screen_object_ex
 
+	ld a, #ST_EGG_CLOSED  ; = #ANIM_STEP_EGG_CLOSED
+	cp d
+	jr z, _end_param_egg
+	ld d, #ANIM_STEP_EGG_OPENED
+
+_end_param_egg :
 	ld ix, (#_pFreeAnimSpecialTile)
-	jr _insert_new_entity
+	jp _insert_new_entity
 
 _proc_param_dropper :
 	; set DROPPER attributes : cGlbWidth(B), cGlbStep(D) and cGlbCyle(H)
@@ -3029,7 +3095,7 @@ _proc_param_dropper :
 
 _proc_enemy :
 	inc hl
-	ld a, (hl)
+	ld a, (hl) ; 0IIIwwww
 	rra
 	rra
 	rra
@@ -3041,6 +3107,7 @@ _proc_enemy :
 	ld a, (#_cCreatedEnemyQtty)
 	or a
 	jr z, _insert_new_enemy
+	ld de, #14  ; sizeof(struct EnemyEntity)
 	ld b, a
 _try_find_enemy :
 	ld a, (#_cScreenMap)
@@ -3052,11 +3119,52 @@ _try_find_enemy :
 _check_new_enemy :
 	add iy, de
 	djnz _try_find_enemy
-
 _insert_new_enemy :
-	dec hl
+	; iy = free EnemyEntity record
+	; x, y, hitcounter, pat, frame and delay attributes will be set when Enemy released
 
-	jp _get_next_entity_XXXX
+	ld a, (hl); 0IIIwwww
+	and #0b00001111
+	rlca
+	rlca
+	rlca
+	rlca
+	ld b, a ; Width * 16
+
+	ld a, (#_cAuxEntityX)
+	rlca
+	rlca
+	rlca
+	ld 11 (iy), a
+
+	add a, b
+	ld 12 (iy), a
+
+	ld a, (#_cAuxEntityY)
+	add a, #3
+	rlca
+	rlca
+	rlca
+	;;add a, #16
+	ld 13 (iy), a
+
+	ld 3 (iy), #ENEMY_STATUS_INACTIVE
+
+	ld 8 (iy), #ET_ENEMY
+
+	ld a, (#_cScreenMap)
+	ld 9 (iy), a
+
+	ld 10 (iy), c
+
+	dec hl
+	ld a, (hl)  ; XYYYYYrd
+	and #0b00000001
+	ld 2 (iy), a
+	
+	ld iy, #_cCreatedEnemyQtty
+	inc 0 (iy)
+	jp _get_next_entity_2
 
 _proc_param_animate :
 	; set ANIMATE attributes : cGlbWidth(B), cGlbStep(D) and cGlbCyle(H)
@@ -5168,7 +5276,7 @@ bool is_player_cmd_up_ok()
 {
 __asm
 	xor a
-	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	ld (#_cGlbPlyFlag), a ; reset _cGlbPlyFlag
 
 	ld a, (#_sThePlayer); A = _sThePlayer.x
 	call _chkBodyTileQtty_ex_2 ; B = 1 or 2 horizontal tiles to test
@@ -5207,7 +5315,7 @@ _stairDetected :
 	; stairs detected
 	ld a, b
 	inc a
-	ld(_cGlbObjData), a; _cGlbObjData = 1 or 2 empty tiles
+	ld (#_cGlbObjData), a; _cGlbObjData = 1 or 2 empty tiles
 	ld hl, #_cGlbPlyFlag
 	set 4, (hl); special floor(stairs)
 	jp _dwEndConflicting
@@ -5315,7 +5423,7 @@ __asm
 	ld a, (#_cScreenEggsQtty)
 	ld b, a
 	or a
-	jr z, _no_egg_trigger_ex
+	jp z, _no_egg_trigger_ex
 	; there are some eggs in this screen - check for same Player and Egg Y coordinate
 	push ix
 	ld hl, #_sObjScreen - #1
@@ -5324,7 +5432,7 @@ _find_next_egg_scr :
 	inc hl
 	ld a, (hl)
 	cp #0xFF ; not found
-	jr z, _no_egg_trigger
+	jp z, _no_egg_trigger
 	push hl
 	pop ix
 	add hl, de
@@ -5334,11 +5442,11 @@ _find_next_egg_scr :
 	; found an egg - check for egg status
 	ld a, 4 (ix)
 	cp #ST_EGG_RELEASED
-	jr z, _search_other_egg
+	jp z, _search_other_egg
 	; check Y position
 	ld a, (#_sThePlayer + #1)
 	cp 3 (ix)
-	jr nz, _search_other_egg
+	jp nz, _search_other_egg
 	; player and Egg at the same Y coordinate - check the X distance
 	ld a, (#_sThePlayer)
 	sub 1 (ix)
@@ -5347,7 +5455,7 @@ _find_next_egg_scr :
 	neg
 _positive_X :
 	ld c, a
-	cp #8 * #7
+	cp #8 * #PLY_DIST_EGG_OPEN
 	jr nc, _search_other_egg
 	; found an egg (closed or opened) - animate it
 	ld a, 4 (ix)
@@ -5363,18 +5471,79 @@ _positive_X :
 	ld de, #05
 	pop hl
 	pop bc
-	jr _search_other_egg
-_test_release_fh :
-	; egg already opened
-	ld a, c
-	cp #8 * #4
-	jr nc, _search_other_egg
-	ld 4 (ix), #ST_EGG_RELEASED
-	;TODO: release FH
-
 _search_other_egg :
 	djnz _find_next_egg_scr
+	jr _no_egg_trigger
 
+_test_release_fh :
+  ; egg already opened
+	ld a, c
+	cp #8 * #PLY_DIST_EGG_FH_RELEASE
+	jr nc, _search_other_egg
+	ld 4 (ix), #ST_EGG_RELEASED
+	; find corresponding EnemyID + ScreenID and activate it
+	push iy
+	ld iy, #_sEnemies
+	ld a, (#_cCreatedEnemyQtty)
+	; no need for check - assume always > 0
+	;; or a
+	;; jr z, _no_egg_trigger_ex2
+	ld de, #14; sizeof(struct EnemyEntity)
+	ld b, a
+_try_find_enemy_trigger :
+  ld a, (#_cScreenMap)
+	cp 9 (iy); screenId
+	jr nz, _check_new_enemy_trigger
+	ld a, 0 (ix)  ; 0IIIOOOO
+	rra
+	rra
+	rra
+	rra
+	and #0b00001111
+	cp 10 (iy)  ; objId
+	jp z, _activate_enemy_trigger  ; enemy found - activate it
+_check_new_enemy_trigger :
+  add iy, de
+	djnz _try_find_enemy_trigger
+	; should never happen
+	jr _no_egg_trigger_ex2
+
+_activate_enemy_trigger :
+  ; iy = corresponding EnemyEntity record
+	; ix = Egg entity record
+	; now set x, y, hitcounter, pat, frame and delay attributes
+	ld b, 1 (ix); cX0
+	ld a, 2 (iy); dir
+	cp #ENEMY_SPRT_DIR_RIGHT
+	jr z, _enemy_right
+	ld a, #256 - #10
+	jr _cont_activate_enemy
+_enemy_right :
+  ld a, #6
+_cont_activate_enemy :
+  add a, b
+	ld 0 (iy), a  ; x
+
+	ld a, 3 (ix)  ; cY0
+	sub a, #8
+	ld 1 (iy), a  ; y
+
+	ld 3 (iy), #ENEMY_STATUS_AWAKING  ; status
+
+	ld 4 (iy), #ENEMY_HIT_COUNT  ; hitcounter
+
+; no need to set pattern attribute
+;;	ld a, (#_ENEMY_PAT_AWAKE_IDX)
+;;	ld 5 (iy), a  ; pat
+
+	ld 6 (iy), #0  ; frame
+	ld 7 (iy), #ENEMY_ANIM_DELAY  ; animation delay
+
+	ld hl, #_cActiveEnemyQtty
+	inc (hl)
+
+_no_egg_trigger_ex2 :
+	pop iy
 _no_egg_trigger :
 	pop ix
 _no_egg_trigger_ex :
@@ -6151,7 +6320,7 @@ __asm
 _itsaKey :
 	set 0, (hl) ; HAS_OBJECT_KEY
 	ld hl, #_cRemainKey
-	jp _diplayObjs_ex
+	jp _displayObjs_ex
 
 _itsYCard :
 	set 1, (hl) ; HAS_OBJECT_YELLOW_CARD
@@ -6160,7 +6329,7 @@ _itsYCard :
 	add a, #YELLOW_CARD_PTS
 	add a, l
 	ld (#_cRemainYellowCard), a
-	jp _diplayObjs
+	jp _displayObjs
 
 _itsGCard :
 	set 2, (hl) ; HAS_OBJECT_GREEN_CARD
@@ -6169,7 +6338,7 @@ _itsGCard :
 	add a, #GREEN_CARD_PTS
 	add a, l
 	ld (#_cRemainGreenCard), a
-	jp _diplayObjs
+	jp _displayObjs
 
 _itsRCard :
 	set 3, (hl) ; HAS_OBJECT_RED_CARD
@@ -6178,21 +6347,21 @@ _itsRCard :
 	add a, #RED_CARD_PTS
 	add a, l
 	ld (#_cRemainRedCard), a
-	jr _diplayObjs
+	jr _displayObjs
 		
 _itsaTool :
 	set 4, (hl) ; HAS_OBJECT_TOOL
-	jr _diplayObjs
+	jr _displayObjs
 
 _itsaMap :
 	set 5, (hl) ; HAS_OBJECT_MAP
 	call _display_minimap
-	jr _diplayObjs
+	jr _displayObjs
 
 _itsaScrew :
 	set 6, (hl) ; HAS_OBJECT_SCREW
 	ld hl, #_cRemainScrewdriver
-	jr _diplayObjs_ex
+	jr _displayObjs_ex
 
 _itsaFlashLight :
 	ld hl, #_cPlyAddtObjects
@@ -6265,9 +6434,9 @@ _itsaKnife :
 	set 7, (hl) ; HAS_OBJECT_KNIFE
 	ld hl, #_cRemainKnife
 
-_diplayObjs_ex :
+_displayObjs_ex :
 	inc (hl)
-_diplayObjs :
+_displayObjs :
 	call _display_objects
 
 _clearTile :
@@ -6413,13 +6582,31 @@ _check_power :
 	; _cPower = 0. Set PLYR_STATUS_DEAD and start dead animation timer
 	ld hl, #_cPlyDeadTimer
 	ld (hl), #DEAD_ANIM_TIMER
-	ld hl, #_sThePlayer + #03
+	ld hl, #_sThePlayer + #03  ; status
 	ld (hl), #PLYR_STATUS_DEAD
+	ld hl, #_sThePlayer + #06 ; frame
+	ld (hl), #0
+	ld a, (#_sThePlayer + #09) ; grabflag
+	cp #BOOL_TRUE
+	;jr nz, _cont_dead_player
+	call z, _set_grabbed_enemy_as_dead
+
+_cont_dead_player :
 	;TODO: right SFX here (dead player)
 	; mplayer_play_effect_p(SFX_HURT, SFX_CHAN_NO, 0);
 	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
 	ld de, #0x0005; 00 + SFX_HURT
 	call	_mplayer_play_effect_p_asm_direct
+	ret
+
+_set_grabbed_enemy_as_dead :
+	push ix
+	ld ix, (#_sGrabbedEnemyPtr)
+_set_grabbed_enemy_as_dead_ex :
+	ld 3 (ix), #ENEMY_STATUS_HURT ; enemy status
+	ld 6 (ix), #0
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+	pop ix
 	ret
 
 _check_lives :
@@ -6439,19 +6626,23 @@ _check_lives :
 	ld(hl), #CACHE_INVALID
 	ld hl, #_sThePlayer
 	ld a, (#_cPlySafePlaceX)
-	ld(hl), a
+	ld (hl), a
 	inc hl
 	ld a, (#_cPlySafePlaceY)
-	ld(hl), a
+	ld (hl), a
 	inc hl
 	ld a, (#_cPlySafePlaceDir)
-	ld(hl), a; _sThePlayer.dir = _cPlySafePlaceDir
+	ld (hl), a; _sThePlayer.dir = _cPlySafePlaceDir
 	inc hl
 	ld(hl), #PLYR_STATUS_STAND; _sThePlayer.status = PLYR_STATUS_STAND
 	inc hl
 	inc hl
 	inc hl
-	ld(hl), #00; _sThePlayer.frame = 0
+	ld (hl), #00; _sThePlayer.frame = 0
+	inc hl
+	inc hl
+	inc hl
+	ld (hl), #BOOL_FALSE ; grabflag
 	ld a, #BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a
 	ld l, #BOOL_TRUE; continue playing
@@ -6543,7 +6734,20 @@ __asm
 	; dead player animation
 	dec a
 	ld (#_cPlyDeadTimer), a
-	; TODO: set player pattern when dead
+	; set player pattern when dead
+	ld a, (#_sThePlayer + #06)  ; _sThePlayer.frame
+	cp #PLYR_DEAD_CYCLE
+	jr nz, _set_player_dead_pattern_ini
+	xor a
+_set_player_dead_pattern_ini :
+	ld b, #0
+	ld c, a
+	ld hl, #_ply_dead_pat_frames
+	add hl, bc
+	inc a
+	ld (#_sThePlayer + #06), a  ; _sThePlayer.frame
+	ld a, (hl)
+	ld (#_sGlbSpAttr + #02), a  ; _sGlbSpAttr.pattern
 	jp _updPlyrAttr
 
 _continue_display_player :
@@ -6573,13 +6777,13 @@ _chkFall :
 	ld hl, #_sThePlayer + #07; HL = &_sThePlayer.delay
 	ld a, (hl)
 	inc(hl)
-	cp #03;  sThePlayer.delay++ == 3 ?
+	cp #PLAYER_ANIM_DELAY ;  sThePlayer.delay++ == 3 ?
 	jp nz, _patFall
 	ld(hl), #00; _sThePlayer.delay = 0
 	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
 	inc a
 	and #0b00000001
-	ld(#_sThePlayer + #06), a
+	ld (#_sThePlayer + #06), a
 	jr _patFall2
 _patFall :
 	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
@@ -6597,7 +6801,7 @@ _chkClimb :
 	ld hl, #_sThePlayer + #07; HL = &_sThePlayer.delay
 	ld a, (hl)
 	inc(hl)
-	cp #03; sThePlayer.delay++ == 3 ?
+	cp #PLAYER_ANIM_DELAY ; sThePlayer.delay++ == 3 ?
 	jp nz, _patClimb
 	ld(hl), #00; _sThePlayer.delay = 0
 	ld a, (#_sThePlayer + #06); A = _sThePlayer.frame
@@ -6622,7 +6826,7 @@ _iamWalking : ; PLYR_STATUS_STAND or PLYR_STATUS_WALKING
 	ld hl,#_sThePlayer + #07 ; HL = &_sThePlayer.delay
 	ld a, (hl)
 	inc(hl)
-	cp #03;  sThePlayer.delay++ == 3 ?
+	cp #PLAYER_ANIM_DELAY ;  sThePlayer.delay++ == 3 ?
 	jp nz, _patWalk
 	ld hl, #_sThePlayer + #06 ; HL = &_sThePlayer.frame
 	inc (hl)
@@ -6644,7 +6848,7 @@ _patWalk :
 	ld hl, #_sThePlayer + #06; _sThePlayer.frame
 	ld c, (hl)
 	ld b, #0
-	ld hl, #_walk_frames
+	ld hl, #_ply_walk_frames
 	add hl, bc; HL = &_walk_frames[sThePlayer.frame]
 	add a, (hl); A = (walk_frames[sThePlayer.frame] + sThePlayer.dir * 3)
 	ld hl, #_PLYR_PAT_WALK_IDX; _sThePlayer.pat
@@ -6661,7 +6865,7 @@ _updPlyrAttr :
 	ld hl, #_sGlbSpAttr
 	push hl ; used at _spman_alloc_fixed_sprite() calls
 	ld a, (de)
-	dec a; y on the screen starts in 255
+	dec a  ; y on the screen starts in 255
 	ld (hl), a	; _sGlbSpAttr.y
 	inc hl
 	dec de
@@ -6737,11 +6941,406 @@ _do_player_display :
 	rra
 	rra
 	and #0b0001111
-	ld(#_sGlbSpAttr + #03), a  ; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR high nibble
-	call	_spman_alloc_fixed_sprite
+	ld (#_sGlbSpAttr + #03), a  ; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR high nibble
+	;;call	_spman_alloc_fixed_sprite
+	call	_spman_alloc_sprite
 	pop	af
 __endasm;
 } // display_player()
+
+
+/*
+* Update and display the active enemy sprites
+*/
+void update_and_display_enemies()
+{
+__asm
+	ld a, (#_cActiveEnemyQtty)
+	or a
+	ret z   ; no active enemies to update and display
+  ld b, a
+	ld a, (#_sThePlayer + #9) ; grabflag
+  xor #1
+  ld (#_bCheckPlayerColision), a
+  ld a, (#_cShotCount) ; 0 = NO SHOT ACTIVE, 1 = SHOT ACTIVE
+  ld (#_bCheckShotColision), a
+	ld a, #BOOL_FALSE
+	ld (#_bShotColisionWithEnemy), a
+	push ix
+	ld ix, #_sEnemies
+_start_check_enemy :
+	ld a, 3 (ix)
+	cp #ENEMY_STATUS_KILLED + #1  ; also includes #ENEMY_STATUS_INACTIVE
+	jr c, _next_enemy_to_check_ex
+	cp #ENEMY_STATUS_GRABBED
+	jp z, _anim_enemy_grab     ; always animate a grabber FH, even if its in a different screen
+	cp #ENEMY_STATUS_HURT
+	jp z, _anim_enemy_hurt     ; always animate a hurt FH, even if its in a different screen
+	ld c, a
+	ld a, (#_cScreenMap)
+  cp 9 (ix) ; screenId
+	jr nz, _next_enemy_to_check
+
+	; found an active enemy at this screen
+	ld a, c ; status
+	cp #ENEMY_STATUS_WALKING
+	jp z, _anim_enemy_walk
+	cp #ENEMY_STATUS_AWAKING
+	jr z, _anim_enemy_awake
+	cp #ENEMY_STATUS_JUMPING
+	jp z, _anim_enemy_jump
+	; should never happen
+_next_enemy_to_check_ex :
+	inc b
+_next_enemy_to_check :
+	ld de, #14  ; sizeof(struct EnemyEntity)
+	add ix, de
+	djnz _start_check_enemy
+	pop ix
+	ret
+
+_anim_enemy_awake :
+	; need to protect B
+	ld hl, #_sGlbSpAttr
+	push bc
+	push hl ; used at _spman_alloc_fixed_sprite() calls
+
+	; check if enemy reach the floor
+	inc 1 (ix)
+	ld a, 1 (ix)
+	cp 13 (ix) ; floor_y
+	jr nz, _continue_awake
+	ld 3 (ix), #ENEMY_STATUS_WALKING  ; status
+	ld 6 (ix), #0
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+
+_continue_awake :
+	dec a ; y on the screen starts in 255
+	ld (hl), a ; _sGlbSpAttr.y
+
+	inc hl
+	ld a, 0 (ix)
+	ld (hl), a  ; _sGlbSpAttr.x
+
+	; pattern = ENEMY_PAT_BASE_IDX + (enemy_awake_frames[Frame] + Dir * 5) * 8
+	ld de, #_enemy_awake_frames
+	ld hl, #_enemy_awake_frames
+	jp _do_display_enemy
+
+_anim_enemy_jump :
+	; need to protect B
+	ld hl, #_sGlbSpAttr
+	push bc
+	push hl ; used at _spman_alloc_fixed_sprite() calls
+
+	ld a, (#_sThePlayer + #1) ; yp
+	;ld a, 1 (ix)
+	ld 1 (ix), a
+	dec a ; y on the screen starts in 255
+	ld (hl), a ; _sGlbSpAttr.y
+
+_anim_enemy_jump_ex :
+  ; need to approximate enemy to the player
+	ld a, (#_sThePlayer) ; xp
+	ld b, a
+	sub 0 (ix) ; xe
+	jr nc, _positive_X2
+	cp #256 - #4 + #1
+	jr nc, _grab_it
+	inc a
+	jr _cont_jump_enemy
+_positive_X2 :
+	cp #4
+	jr c, _grab_it
+	dec a
+_cont_jump_enemy :
+	neg
+	add b
+	inc hl
+	ld 0 (ix), a ; xe
+	ld (hl), a ; _sGlbSpAttr.x
+
+	; pattern = ENEMY_PAT_BASE_IDX + (enemy_jump_frames[Frame] + Dir * 5) * 8
+	ld de, #_enemy_jump_frames
+	ld hl, #_enemy_jump_frames
+	jp _do_display_enemy
+
+_grab_it :
+	ld 3 (ix), #ENEMY_STATUS_GRABBED  ; status
+	ld 6 (ix), #0
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+
+	ld a, #BOOL_TRUE
+	ld (#_sThePlayer + #9), a  ; grabflag
+	ld (#_sGrabbedEnemyPtr), ix
+	jr _anim_enemy_grab_ex
+
+_anim_enemy_grab :
+	; need to protect B
+	ld hl, #_sGlbSpAttr
+	push bc
+	push hl ; used at _spman_alloc_fixed_sprite() calls
+
+	ld a, (#_sThePlayer + 1)
+	ld 1 (ix), a
+	dec a ; y on the screen starts in 255
+	ld (hl), a ; _sGlbSpAttr.y
+
+	; if Shield active, enemy is killed
+	ld a, (#_cPlyRemainShield)
+	or a
+	jp nz, _shot_killed_enemy
+
+_anim_enemy_grab_ex :
+	ld a, (#_sThePlayer) ; xp
+	ld 0 (ix), a
+	inc hl
+	ld (hl), a ; _sGlbSpAttr.x
+
+	ld a, (#_sThePlayer + #2) ; dir
+	ld 2 (ix), a ; dir
+
+	; TODO: player.grabtimer(10)
+
+	; pattern = ENEMY_PAT_BASE_IDX + (enemy_grab_frames[Frame] + Dir * 5) * 8
+	ld de, #_enemy_grab_frames
+	ld hl, #_enemy_grab_frames
+	jp _do_display_enemy
+
+_anim_enemy_walk :
+	; need to protect B
+	ld hl, #_sGlbSpAttr
+	push bc
+	push hl  ; used at _spman_alloc_fixed_sprite() calls
+
+	ld a, 1 (ix)
+	dec a ; y on the screen starts in 255
+	ld (hl), a ; _sGlbSpAttr.y
+
+	; check for player colision (then change to ENEMY_STATUS_JUMPING)
+	; if _bCheckPlayerColision is FALSE = no colision detection
+	; if sThePlayer.grabflag is TRUE = no colision detection
+	ld a, (#_bCheckPlayerColision)
+	cp #BOOL_FALSE
+	jr z, _no_enemy_colision
+
+	; if (ye + 16) < yp = no colision
+	; if (ye + 8) > (yp + 16) = no colision
+	ld b, 1 (ix) ; ye
+	ld a, #16
+	add b
+	ld c, a
+	ld a, (#_sThePlayer + #1) ; yp
+	cp c
+	jr nc, _no_enemy_colision
+	add #16
+	ld c, a
+	ld a, #8
+	add b
+	cp c
+	jr nc, _no_enemy_colision
+		
+	; if xe > (xp + 16) = no colision
+	; if (xe + 16) < xp = no colision
+	ld a, (#_sThePlayer) ; xp
+	ld b, 0 (ix) ; xe
+	add #16
+	cp b
+	jr c, _no_enemy_colision
+	sub #16
+	ld c, a
+	ld a, b
+	add #16
+	cp c
+	jr c, _no_enemy_colision
+
+	; enemy colision detected
+	; no need to check for the other enemies in this same screen
+	ld a, #BOOL_FALSE
+	ld (#_bCheckPlayerColision), a
+
+	ld 3 (ix), #ENEMY_STATUS_JUMPING  ; status
+	ld 6 (ix), #0
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+	jp _anim_enemy_jump_ex
+
+_no_enemy_colision :
+	; check for shot colision (then change to ENEMY_STATUS_HURT)
+	; if bCheckShotColision is FALSE = no colision detection
+	ld a, (#_bCheckShotColision)
+	cp #BOOL_FALSE
+	jr z, _no_shot_colision
+
+	; if (ys + 8) < (ye + 7) = no colision
+	; if (ys + 6) > (ye + 16) = no colision
+	ld b, 1 (ix) ; ye
+	ld a, #7
+	add b
+	ld c, a
+	ld a, (#_cShotY) ; ys
+	add #8
+	cp c
+	jr c, _no_shot_colision
+	dec a
+	dec a
+	ld c, a
+	ld a, #16
+	add b
+	cp c
+	jr c, _no_shot_colision
+
+	; if xe > (xs + 16) = no colision
+	; if (xe + 16) < xs = no colision
+	ld a, (#_cShotX) ; xs
+	ld b, 0 (ix) ; xe
+	add #16
+	cp b
+	jr c, _no_shot_colision
+	sub #16
+	ld c, a
+	ld a, b
+	add #16
+	cp c
+	jr c, _no_shot_colision
+
+	; shot colision detected
+	ld a, #BOOL_TRUE
+	ld (#_bShotColisionWithEnemy), a
+	dec 4 (ix) ; hitcounter
+	; TODO: SFX here
+	jr nz, _not_killed_enemy
+_shot_killed_enemy :
+	; enemy killed
+	; TODO: SFX here
+	ld 3 (ix), #ENEMY_STATUS_HURT ; status
+	ld 6 (ix), #0
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+	jr _anim_enemy_hurt_ex
+
+_no_shot_colision :
+_not_killed_enemy :
+	; update x and dir attributes
+	inc hl
+	ld a, 0 (ix)
+	ld b, a
+	ld (hl), a; _sGlbSpAttr.x
+	ld a, 2 (ix) ; dir
+	ld c, a
+	cp #ENEMY_SPRT_DIR_RIGHT ; 0
+	jr nz, _check_min_x
+	ld a, 12 (ix) ; max_x
+	sub #16
+	cp b
+	jr c, _change_enemy_dir
+	jr _continue_enemy_walk
+
+_check_min_x :
+	ld a, b
+	cp 11 (ix) ; min_x
+	jr c, _change_enemy_dir
+	jr _continue_enemy_walk
+
+_change_enemy_dir :
+	ld a, c
+	xor #1
+	ld 2 (ix), a ; dir
+
+_continue_enemy_walk :
+	ld de, #_enemy_walk_frames
+	ld hl, #_enemy_walk_frames
+
+_do_display_enemy :
+	ld a, 4 (ix) ; hitcount
+	cp #ENEMY_HIT_COUNT
+	ld a, #0x0A  ; not hurt - yellow
+	jr z, _do_display_enemy_ex
+	ld a, #0x09  ; hurt - light red
+_do_display_enemy_ex :
+	ld (#_sGlbSpAttr + #03), a ; _sGlbSpAttr.attr
+
+	call _upd_frame_and_display_enemy
+	pop	af
+	pop bc
+	jp _next_enemy_to_check
+
+_anim_enemy_hurt :
+  ; need to protect B
+	ld hl, #_sGlbSpAttr
+	push bc
+	push hl ; used at _spman_alloc_fixed_sprite() calls
+
+	ld a, 1 (ix)
+	dec a ; y on the screen starts in 255
+	ld(hl), a ; _sGlbSpAttr.y
+
+_anim_enemy_hurt_ex :
+	inc hl
+	ld a, 0 (ix)
+	ld (hl), a ; _sGlbSpAttr.x
+
+	; if frame = 7 then stop hurt animation and kill enemy
+	ld a, 6 (ix) ; frame
+	cp #7
+	jr nz, _anim_enemy_hurt_ex_2
+
+	ld 3 (ix), #ENEMY_STATUS_KILLED  ; status
+	ld hl, #_cActiveEnemyQtty
+	dec (hl)
+	ld a, #BOOL_FALSE
+	ld (#_sThePlayer + #9), a ; grabflag
+
+_anim_enemy_hurt_ex_2 :
+; pattern = ENEMY_PAT_BASE_IDX + (enemy_hurt_frames[Frame] + Dir * 5) * 8
+	ld de, #_enemy_hurt_frames
+	ld hl, #_enemy_hurt_frames
+	ld a, #0x09; light red
+	jp _do_display_enemy_ex
+
+
+_upd_frame_and_display_enemy :
+	ld c, 6 (ix) ; frame
+	ld b, #0
+	add hl, bc
+_get_enemy_frame :
+	ld a, (hl)
+	ld c, a
+	cp #SPRITE_ANIM_FRAME_KEEP  ; keep same frame
+	jr z, _cont_calc_frame_ex3
+	cp #SPRITE_ANIM_FRAME_RESTART  ; reset frame cycle
+	jr nz, _cont_calc_frame_ex2
+	ld 6 (ix), #0
+	ex de, hl
+	jr _get_enemy_frame
+_cont_calc_frame_ex3 :
+	dec 6 (ix)
+	dec hl
+	jr _get_enemy_frame
+
+_cont_calc_frame:
+	dec 7 (ix) ; delay counter
+	jr nz, _cont_calc_frame_ex
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+_cont_calc_frame_ex2 :
+	inc 6 (ix) ; frame++
+_cont_calc_frame_ex :
+	ld a, 2 (ix)  ; dir
+	cp #ENEMY_SPRT_DIR_RIGHT ; 0
+	jr z, _no_sprite_flip
+	ld hl, #_ENEMY_PAT_BASE_FLIP_IDX
+	dec 0 (ix)
+	jr _no_sprite_flip_ex
+_no_sprite_flip :
+	ld hl, #_ENEMY_PAT_BASE_IDX
+	inc 0 (ix)
+_no_sprite_flip_ex :
+	ld a, c  ; enemy_XXX_frames[Frame] + Dir * 5
+	add a, a
+	add a, a  ; (enemy_XXX_frames[Frame] + Dir * 5) * 4
+	add a, (hl)
+	ld (#_sGlbSpAttr + #02), a; _sGlbSpAttr.pattern
+	jp	_spman_alloc_fixed_sprite
+__endasm;
+}  // update_and_display_enemies()
 
 /*
 * Update player position and player status
@@ -6751,9 +7350,10 @@ __endasm;
 bool update_player()
 {
 	bGlbPlyMoved = false;
-	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessãrio,ja filtrado no run_game()
+	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessario,ja filtrado no run_game()
 
 	//display_number(15, 0, 3, cGlbPlyFlag);
+	if (sThePlayer.grabflag) player_hit(HIT_PTS_FACEHUG);
 
 	if (!is_player_falling())
 	{
@@ -7077,7 +7677,11 @@ _timeout_FL_ex :
 	call _display_flashlight
 
 _chkforShot :
-	;check if Shot is enabled
+	; check for bShotColisionWithEnemy flag. Kill shot if TRUE
+	ld a, (#_bShotColisionWithEnemy)
+	cp #BOOL_TRUE
+	jr z, _kill_shot
+	; check if Shot is enabled
 	ld a, (#_cShotCount)
 	dec a
 	jp nz, _check_explosion
@@ -7390,22 +7994,53 @@ __endasm;
 void check_for_fire()
 {
 __asm
-	; check for active shot in the screen (only 1 is supported)
-	ld a, (#_cShotCount)
-	dec a
-	ret z ; there is 1 active shot
-
-	; wait for _cShotTrigTimer=0 to fire again
-	ld a, (#_cShotTrigTimer)
-	or a
-	ret nz
-
 	; check if Fire was triggered - if (cCtrlCmd & UBOX_MSX_CTL_FIRE1)
 	ld	a, (#_cCtrlCmd)
 	bit	4, a
 	ret z; no fire triggered
 
-	; check for Player status - NO fire starts while climbing, falling or dead
+	; player cant shot if grabbeb by an enemy
+	ld a, (#_sThePlayer + #9) ; grabflag
+	cp #BOOL_TRUE
+	jr nz, _cont_shot_player
+	; check for knife to hit the enemy
+	ld a, (#_cRemainKnife)
+	or a
+	ret z ; player dont have a knife to use
+	ld b, a
+	; check if the player has already hit by a knife
+	push ix
+	ld ix, (#_sGrabbedEnemyPtr)
+	ld a, 3 (ix)
+	cp #ENEMY_STATUS_HURT
+	jr nz, _do_hurt_enemy_with_knife
+	pop ix
+	ret
+_do_hurt_enemy_with_knife :
+	ld a, b
+	dec a
+	ld (#_cRemainKnife), a
+	or a
+	jr nz, _still_have_knife
+	ld hl, #_cPlyObjects
+	res 7, (hl) ; no more HAS_OBJECT_KNIFE
+	call _display_objects
+_still_have_knife :
+  ; kill enemy
+	jp _set_grabbed_enemy_as_dead_ex
+
+_cont_shot_player :
+	; check for active shot in the screen(only 1 is supported)
+	ld a, (#_cShotCount)
+	or a
+	ret nz ; there is 1+ active shot
+
+	; wait for _cShotTrigTimer = 0 to fire again
+	ld a, (#_cShotTrigTimer)
+	or a
+	ret nz
+
+  ; check for Player status - NO fire starts while climbing, falling or dead
 	ld a, (#_sThePlayer + #03); A = _sThePlayer.status
 	cp #PLYR_STATUS_CLIMB
 	ret z ; climbing
@@ -7422,7 +8057,7 @@ __asm
 	ret z ; jumping up/down
 
 _test_shot :
-	ld a, (#_cPlyAddtObjects)
+  ld a, (#_cPlyAddtObjects)
 	bit 0, a
 	ret z  ; player dont have the gun object
 	; check if Player have available Amno
@@ -8018,7 +8653,7 @@ _not_special_tile :
 	cp 4 (ix)	; pCurAnimTile->cLastFrame
 	jp z, _upd_and_next_tile
 	ld 4 (ix), a  ; pCurAnimTile->cLastFrame = A
-	cp #0xFE  ; disable special animated tile
+	cp #ANIM_CYCLE_STEP_STOP  ; disable special animated tile
 	jp nz, _continue_animation
 	; if (cGlbCurFrame == 0xFE) {...} // disable special animated tile
 	ld a, 2 (ix)
@@ -8178,9 +8813,9 @@ _do_insert_anim_queue :
 
 _continue_animation :
 	ld c, #BLANK_TILE
-	cp #0xFF  ; blank tile
+	cp #ANIM_CYCLE_STEP_BLANK  ; blank tile
 	jr z, _insert_anim_queue
-	add a, 5 (ix); A = pCurAnimTile->cTile + cGlbCurFrame
+	add a, 5 (ix)  ; A = pCurAnimTile->cTile + cGlbCurFrame
 	ld c, a
 
 _insert_anim_queue :
@@ -8350,21 +8985,20 @@ void Run_Game()
 
 				bGlbPlyChangedPosition |= bGlbPlyMoved;
 
+				// update and display all the enemies (first so the facehug stays in front of the player sprite)
+				update_and_display_enemies();
+
 				// display updated player sprite
 				display_player();
 
 				// update the objects statuses (map, shot, shield) and display sprites
 				update_and_display_objects();
+				
+				// display all sprites on the screen
+				spman_update();
 
 				// display & animate Score
 				update_and_display_score();
-
-				// update all the entities(enemies):
-				//pCurEntities = sEntities;
-				//update_enemies();
-				
-				// display all sprites on screen
-				spman_update();
 
 				// display all updated animated tiles on the screen and reset pAnimTileList
 				display_animated_tiles();
