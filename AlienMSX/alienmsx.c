@@ -396,7 +396,7 @@ const uint8_t enemy_awake_frames[] = { 0, 2, 2, 2, 2, 1, 1, 0, 0xFC };  // frame
 const uint8_t enemy_walk_frames[]  = { 0, 1, 0xFD };        // frame 0, 1 then restart
 const uint8_t enemy_jump_frames[]  = { 2, 0xFC };           // frame 2 then keep at 2
 const uint8_t enemy_grab_frames[]  = { 3, 0xFC };           // frame 3 then keep at 3
-const uint8_t enemy_hurt_frames[]  = { 2, 2, 2, 4, 4, 4, 4, 4, 0xFC };        // frame 2, 4 then keep at 4
+const uint8_t enemy_hurt_frames[]  = { 3, 3, 3, 3, 4, 4, 4, 4, 4, 0xFC };  // frame 2, 4 then keep at 4
 
 #define SPRITE_ANIM_FRAME_RESTART 0xFD
 #define SPRITE_ANIM_FRAME_KEEP    0xFC
@@ -468,6 +468,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define GAME_TEXT_GAME_WIN_ID        7
 #define GAME_TEXT_INTRO_CONTROL_ID   8
 #define GAME_TEXT_INTRO_MENU_ID      9
+#define GAME_TEXT_XXXX_ID           10
 
 #define TILE_TYPE_BLANK	         0b00000000    // Blank tile
 #define TILE_TYPE_OBJECT         0b00000001    // Object tile
@@ -554,6 +555,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 
 #define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
 #define SCORE_INTERACTV_POINTS 20  //  20 points to the score when activating an interactive
+#define SCORE_ENEMY_HIT_POINTS 30  //  30 points to the score when hit an enemy
 #define SCORE_MISSION_POINTS   50  //  50 points to the score when complete a mission
 #define SCORE_LEVELUP_POINTS  100  // 100 points to the score when level complete
 
@@ -5721,7 +5723,7 @@ _mission_already_completed :
 _add_score_points :
 	ld hl, #_cScoretoAdd
 	add a, (hl); cScoretoAdd += A
-	ld(hl), a
+	ld (hl), a
 	ret
 
 _execute_open_locker :
@@ -7271,23 +7273,31 @@ _anim_enemy_hurt :
 
 	ld a, 1 (ix)
 	dec a ; y on the screen starts in 255
-	ld(hl), a ; _sGlbSpAttr.y
+	ld (hl), a ; _sGlbSpAttr.y
 
 _anim_enemy_hurt_ex :
-	inc hl
+	ld a, 2 (ix)  ; dir
+	cp #ENEMY_SPRT_DIR_RIGHT
 	ld a, 0 (ix)
+	jr z, _add_2_x
+	sub a, #4
+_add_2_x :
+  add a, #2
+	inc hl
 	ld (hl), a ; _sGlbSpAttr.x
 
-	; if frame = 7 then stop hurt animation and kill enemy
+	; if frame = 8 then stop hurt animation and kill enemy
 	ld a, 6 (ix) ; frame
-	cp #7
+	cp #8
 	jr nz, _anim_enemy_hurt_ex_2
 
 	ld 3 (ix), #ENEMY_STATUS_KILLED  ; status
 	ld hl, #_cActiveEnemyQtty
 	dec (hl)
 	ld a, #BOOL_FALSE
-	ld (#_sThePlayer + #9), a ; grabflag
+	ld (#_sThePlayer + #9), a  ; grabflag
+	ld a, #SCORE_ENEMY_HIT_POINTS
+	call _add_score_points
 
 _anim_enemy_hurt_ex_2 :
 ; pattern = ENEMY_PAT_BASE_IDX + (enemy_hurt_frames[Frame] + Dir * 5) * 8
@@ -7295,7 +7305,6 @@ _anim_enemy_hurt_ex_2 :
 	ld hl, #_enemy_hurt_frames
 	ld a, #0x09; light red
 	jp _do_display_enemy_ex
-
 
 _upd_frame_and_display_enemy :
 	ld c, 6 (ix) ; frame

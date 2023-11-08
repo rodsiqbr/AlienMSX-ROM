@@ -1,7 +1,7 @@
 //-------------------------------------------------	
 // applicationsettings.h created automatically			
 // by make.bat											
-// on 17:33:22,92 , 06/11/2023 				
+// on 16:00:22,21 , 08/11/2023 				
 //														
 // DO NOT BOTHER EDITING THIS.							
 // ALL CHANGES WILL BE LOST.							

@@ -7,7 +7,7 @@
         },
         {
             "description": "CREDITS VALUE",
-	    "text": "<<11RODRIGO SIQUEIRA|1RODRIGO SIQUEIRA|1JUAN J. MARTINEZ|1DANILO ANGELO|1V0.9.02B @ 2023||"
+	    "text": "<<11RODRIGO SIQUEIRA|1RODRIGO SIQUEIRA|1JUAN J. MARTINEZ|1DANILO ANGELO|1V0.9.1B @ 2023||"
         },
 	{
 	    "description": "LEVEL 1 INFO",
@@ -39,7 +39,7 @@
         },
         {
             "description": "INTRO MENU",
-	    "text": "<<90START GAME|0GAME CREDITS||"
+	    "text": "<<90START GAME|0GAME CREDITS|0LEVEL CODE:||"
         }
     ]
 }
