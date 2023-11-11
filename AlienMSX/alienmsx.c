@@ -13,6 +13,7 @@
 // 2. mapgen.py deve garantir que não hava 2 Lockers com o mesmo ID em um mesmo Level
 // 3. Mission complete SFX
 // 4. Criar SXF_INTERACTIVE sound FX
+// 5. depois de climb up, player precisa andar antes de pular novamente (bGlbPlyJumpOK sem timer)
 
 
 #include <stdio.h>
@@ -52,7 +53,7 @@
 
 #include "data/maplvl1.h"    // Map Level 1
 #include "data/maplvl2.h"    // Map Level 2
-//#include "data/maplvl3.h"    // Map Level 3 (differential from Level 1)
+//#include "data/maplvl3.h"    // Map Level 3 (differential map from Level 1)
 
 
 // ----------------------------------------------------------
@@ -72,7 +73,7 @@ typedef struct
 	uint8_t type;          //    8 | entity type
 //	void (*update)();      // 9-10 | not used, global update routine used instead
 	uint8_t grabflag;      //    9 | player is grabbed by a facehugger flag
-	uint8_t grabtimer;     //   10 | timer to trigger a hit if grabbed
+	uint8_t grabtimer;     //   10 | timer to trigger a hit if grabbed - NOT USED
 } PlyEntity;
 
 typedef struct
@@ -81,7 +82,7 @@ typedef struct
 	uint8_t y;             //    1 | entity y position
 	uint8_t dir;           //    2 | entity direction
 	uint8_t status;        //    3 | entity status
-	uint8_t hitcounter;    //    4 | enemy hit counter - NOT USED
+	uint8_t hitcounter;    //    4 | enemy hit counter
 	uint8_t pat;           //    5 | entity sprite pattern # - NOT USED
 	uint8_t frame;         //    6 | entity sprite frame #
 	uint8_t delay;         //    7 | entity sprite frame delay counter
@@ -327,7 +328,6 @@ enum pattern_type
 
 #define MAX_ENEMIES_PER_SCREEN      3
 #define AVERAGE_ENEMIES_PER_SCREEN  2
-//void update_player(void);
 
 
 // several player control status: sprite direction, status, jump stage, jump direction, color
@@ -346,9 +346,9 @@ enum pattern_type
 #define PLYR_JUMP_STAGE_UP     0
 #define PLYR_JUMP_STAGE_DOWN   1
 
-#define PLYR_JUMP_DIR_NONE     0
-#define PLYR_JUMP_DIR_LEFT     1
-#define PLYR_JUMP_DIR_RIGHT    2
+#define PLYR_JUMP_DIR_NONE     0     // should be 0 to jump to work
+#define PLYR_JUMP_DIR_LEFT     1     // should be 1 to jump to work
+#define PLYR_JUMP_DIR_RIGHT    2     // should be 2 to jump to work
 
 #define PLYR_UP_JUMP_CYCLES    20  // # of cycles (Y offset) for a jump (8 + 8 + 4)
 
@@ -564,7 +564,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define DEAD_ANIM_TIMER        25  // 5 cycles, each cycle = 5 distinct frame
 #define KEY_PRESS_DELAY        16  // delay in cycles before accept a new key press
 
-#define ENEMY_ANIM_DELAY       48
+#define ENEMY_ANIM_DELAY       96
 #define PLAYER_ANIM_DELAY       3
 
 #define CACHE_INVALID           0xFF
@@ -622,11 +622,7 @@ uint8_t cPortalFlag;  // used at is_player_jumping()
 uint8_t cAnimCycleParityFlag;
 bool bGlbSpecialProcessing;
 bool bChangeMap, bGlbMMEnabled;
-//uint8_t cGlbTimer;
-//uint8_t cGlbWidth;
-//uint8_t cGlbCyle;
-//uint8_t cGlbStep;
-//uint8_t cGlbFlag;
+
 uint8_t cAuxEntityX;   // used at Load_Entities() + its subroutines
 uint8_t cAuxEntityY;   // used at Load_Entities() + its subroutines
 uint8_t cObjType;      // used at Load_Entities() + its subroutines
@@ -640,10 +636,9 @@ uint8_t cGlbFLDelay;
 PlyEntity sThePlayer;
 EnemyEntity sEnemies[AVERAGE_ENEMIES_PER_SCREEN * MAPS];  // all the loaded enemy entities in the map
 EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs the player, this is the enemy ptr
-//LiveEntity* pCurEntities;
 
 // Global variables for player control
-uint8_t cGlbPlyFlag; // special flag to describe player conflict with screen tiles
+uint8_t cGlbPlyFlag; // special global flag to describe player conflict with screen tiles
 uint8_t cGlbPlyJumpCycles;
 uint8_t cGlbPlyJumpStage;
 uint8_t cGlbPlyJumpDirection;
@@ -656,7 +651,7 @@ uint8_t cPlySafePlaceX, cPlySafePlaceY, cPlySafePlaceDir;
 uint8_t cPlyPortalDestinyX, cPlyPortalDestinyY;
 bool bGlbPlyMoved;            // TRUE if player has walked RIGHT/LEFT, climbed UP/DOWN or falling DOWN
 bool bGlbPlyChangedPosition;  // TRUE if player has changed position (belt, colision, Moved)
-bool bGlbPlyJumpOK; // avoid a jump just after a climp up
+bool bGlbPlyJumpOK;           // avoid an undesired jump just after a climp up
 
 uint8_t cPlyObjects, cPlyAddtObjects;
 uint8_t cLives;
@@ -739,11 +734,6 @@ struct FlashLightStatusData sFlashLightStatusDataAux;
 
 struct AnimatedTile* pFreeAnimTile;
 struct AnimatedTile* pFreeAnimSpecialTile;
-
-
-//struct AnimatedTile* pCurAnimTile;
-//struct AnimatedTile* pCurAnimSpecialTile;
-//struct AnimatedTile* pInsertAnimTile;
 
 struct AnimTileList* pAnimTileList;
 
@@ -6675,9 +6665,22 @@ _sttJump :
 	ld (hl), #PLYR_UP_JUMP_CYCLES
 	ld hl, #_cGlbPlyJumpStage
 	ld (hl), #PLYR_JUMP_STAGE_UP
+
+	; if Player status = STAND, direction = NONE
 	ld hl, #_cGlbPlyJumpDirection
-	ld (hl), #PLYR_JUMP_DIR_NONE
-	jr _setStatus
+	ld d, a
+	ld a, (#_sThePlayer + #03) ; status
+	cp #PLYR_STATUS_STAND
+	ld a, #PLYR_JUMP_DIR_NONE
+	jr z, _set_jmp_none
+	ld a, (#_sThePlayer + #02) ; dir
+	xor #1
+	inc a ; HUGE workaroud to convert player dir => jump dir
+_set_jmp_none :
+  ;ld (hl), #PLYR_JUMP_DIR_NONE
+  ld (hl), a
+	;jr _setStatus
+	jr _setStatus2
 
 _sttClbDown :
 	ld a, (#_sThePlayer + #01)
@@ -6824,10 +6827,10 @@ _iamWalking : ; PLYR_STATUS_STAND or PLYR_STATUS_WALKING
 	jp z, _patWalk ; player has not moved
 	; update the walking animation
 	ld a, #BOOL_TRUE
-	ld (_bGlbPlyJumpOK), a ; _bGlbPlyJumpOK = true;
-	ld hl,#_sThePlayer + #07 ; HL = &_sThePlayer.delay
+	ld (#_bGlbPlyJumpOK), a ; _bGlbPlyJumpOK = true;
+	ld hl, #_sThePlayer + #07 ; HL = &_sThePlayer.delay
 	ld a, (hl)
-	inc(hl)
+	inc (hl)
 	cp #PLAYER_ANIM_DELAY ;  sThePlayer.delay++ == 3 ?
 	jp nz, _patWalk
 	ld hl, #_sThePlayer + #06 ; HL = &_sThePlayer.frame
@@ -6931,7 +6934,7 @@ _do_player_display :
 	ld (#_cGlbPlyColor), a
 	and #0b00001111
 	ld (#_sGlbSpAttr + #03), a	; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR low nibble
-	; allocate the player sprites; fixed so they never flicker
+	; allocate the player sprites; main sprite fixed so they never flicker
 	call	_spman_alloc_fixed_sprite
 	; second one is 4 patterns away(16x16 sprites)
 	ld a, (#_sGlbSpAttr + #02)
@@ -6945,6 +6948,7 @@ _do_player_display :
 	and #0b0001111
 	ld (#_sGlbSpAttr + #03), a  ; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR high nibble
 	;;call	_spman_alloc_fixed_sprite
+	; second player sprite can flicker, thus enabling other sprites to be shown in certain circunstances (2 player + enemy killed + enemy walking + shield)
 	call	_spman_alloc_sprite
 	pop	af
 __endasm;
@@ -7050,10 +7054,14 @@ _anim_enemy_jump_ex :
 	cp #256 - #4 + #1
 	jr nc, _grab_it
 	inc a
+	inc a
+	inc a
 	jr _cont_jump_enemy
 _positive_X2 :
 	cp #4
 	jr c, _grab_it
+	dec a
+	dec a
 	dec a
 _cont_jump_enemy :
 	neg
@@ -7126,8 +7134,10 @@ _anim_enemy_walk :
 	cp #BOOL_FALSE
 	jr z, _no_enemy_colision
 
+	; relax a bit the colision detection to be easier to escape from facehug
 	; if (ye + 16) < yp = no colision
-	; if (ye + 8) > (yp + 16) = no colision
+	;; if (ye + 8) > (yp + 16) = no colision
+	; if (ye + 9) > (yp + 16) = no colision
 	ld b, 1 (ix) ; ye
 	ld a, #16
 	add b
@@ -7137,22 +7147,26 @@ _anim_enemy_walk :
 	jr nc, _no_enemy_colision
 	add #16
 	ld c, a
-	ld a, #8
+	ld a, #9
 	add b
 	cp c
 	jr nc, _no_enemy_colision
 		
-	; if xe > (xp + 16) = no colision
-	; if (xe + 16) < xp = no colision
+	; relax a bit the colision detection to be easier to escape from facehug
+	;; if xe > (xp + 16) = no colision
+	;; if (xe + 16) < xp = no colision
+	; if (xe + 1) > (xp + 12) = no colision
+	; if (xe + 15) < (xp + 4) = no colision
 	ld a, (#_sThePlayer) ; xp
 	ld b, 0 (ix) ; xe
-	add #16
+	inc b
+	add #12
 	cp b
 	jr c, _no_enemy_colision
-	sub #16
+	sub #8
 	ld c, a
 	ld a, b
-	add #16
+	add #14
 	cp c
 	jr c, _no_enemy_colision
 
@@ -7164,7 +7178,9 @@ _anim_enemy_walk :
 	ld 3 (ix), #ENEMY_STATUS_JUMPING  ; status
 	ld 6 (ix), #0
 	ld 7 (ix), #ENEMY_ANIM_DELAY
-	jp _anim_enemy_jump_ex
+	;;jp _anim_enemy_jump_ex
+  jp _do_display_enemy_end
+
 
 _no_enemy_colision :
 	; check for shot colision (then change to ENEMY_STATUS_HURT)
@@ -7261,6 +7277,7 @@ _do_display_enemy_ex :
 	ld (#_sGlbSpAttr + #03), a ; _sGlbSpAttr.attr
 
 	call _upd_frame_and_display_enemy
+_do_display_enemy_end :
 	pop	af
 	pop bc
 	jp _next_enemy_to_check
