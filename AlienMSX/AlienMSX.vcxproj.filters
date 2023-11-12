@@ -104,6 +104,9 @@
     <ClInclude Include="data\enemies.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\fatalts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">
@@ -134,15 +137,6 @@
       <Filter>Resource Files</Filter>
     </None>
     <None Include="data\map_conf.json">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="data\MapLevel1v3.json">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="data\MapLevel2v1.json">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="data\mapgen.py">
       <Filter>Resource Files</Filter>
     </None>
     <None Include="data\png2sprites.py">
@@ -199,6 +193,15 @@
     <None Include="uboxlib\src\ubox_ext\randombyte.z80">
       <Filter>UBoxLib Files</Filter>
     </None>
+    <None Include="data\MapLevel1v4.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\MapLevel2v2.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\mapgen2.py">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Config\ApplicationSettings.txt">
@@ -250,12 +253,6 @@
     <Image Include="data\Font3TS_32x2.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="data\Game0TSv3_FULL_16x14.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="data\Game1TSv1_FULL_16x14.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="data\IntroTS_16x6.png">
       <Filter>Resource Files</Filter>
     </Image>
@@ -274,13 +271,22 @@
     <Image Include="data\ScoreTSv3_16x4.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="data\Game0TSv3_16x6.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="data\Game1TSv1_16x6.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="data\Enemies_12x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game_FatalTS_16x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game0TSv4_16x5.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game0TSv4_FULL_16x15.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game1TSv2_16x5.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Game1TSv2_FULL_16x15.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

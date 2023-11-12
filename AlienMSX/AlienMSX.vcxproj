@@ -58,6 +58,7 @@
   <ItemGroup>
     <ClInclude Include="applicationsettings.h" />
     <ClInclude Include="data\enemies.h" />
+    <ClInclude Include="data\fatalts.h" />
     <ClInclude Include="data\font1ts.h" />
     <ClInclude Include="data\font2ts.h" />
     <ClInclude Include="data\font3ts.h" />
@@ -80,9 +81,9 @@
   <ItemGroup>
     <None Include="applicationsettings.s" />
     <None Include="data\gametext.json" />
-    <None Include="data\mapgen.py" />
-    <None Include="data\MapLevel1v3.json" />
-    <None Include="data\MapLevel2v1.json" />
+    <None Include="data\mapgen2.py" />
+    <None Include="data\MapLevel1v4.json" />
+    <None Include="data\MapLevel2v2.json" />
     <None Include="data\map_conf.json" />
     <None Include="data\png2sprites.py" />
     <None Include="data\png2tiles.py" />
@@ -131,10 +132,11 @@
     <Image Include="data\Font1TS_32x2.png" />
     <Image Include="data\Font2TS_32x2.png" />
     <Image Include="data\Font3TS_32x2.png" />
-    <Image Include="data\Game0TSv3_16x6.png" />
-    <Image Include="data\Game0TSv3_FULL_16x14.png" />
-    <Image Include="data\Game1TSv1_16x6.png" />
-    <Image Include="data\Game1TSv1_FULL_16x14.png" />
+    <Image Include="data\Game0TSv4_16x5.png" />
+    <Image Include="data\Game0TSv4_FULL_16x15.png" />
+    <Image Include="data\Game1TSv2_16x5.png" />
+    <Image Include="data\Game1TSv2_FULL_16x15.png" />
+    <Image Include="data\Game_FatalTS_16x2.png" />
     <Image Include="data\IntroTS_16x6.png" />
     <Image Include="data\Objects_12x2.png" />
     <Image Include="data\Player_Ash_16x2.png" />
