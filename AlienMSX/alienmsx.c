@@ -169,7 +169,6 @@ const uint8_t cCycleTable[] = {
 																1, 0xFE, 0, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, // 9 = interactive 2 stages (0 = on -> off / 2 = off -> on)
 																0, 1, 2, 0, 1, 2, 0, 1, 2, 0xFF,                      // 10 = portal
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 11 = locker open
-//																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 2, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
 																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 6, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
 																// Intro logo animation blocks
 																16, 1, 1, 1, 1,							// I
@@ -451,7 +450,6 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define GAME_PWR_LOCK_TL_OFFSET    44 	  // Lock Device <Interactive> tile offset
 #define GAME_SOLD_TL_OFFSET	       46 	  // start tile offset for Solid tiles
 #define GAME_EGG_TL_OFFSET	       70 	  // start tile offset for Egg tiles
-//#define GAME_FATL_TL_OFFSET	       76 	  // start tile offset for Fatal(animated) tiles
 #define GAME_COLLECT_TL_OFFSET	   76 	  // start tile offset for Collectible tiles
 #define GAME_FATL_TL_OFFSET	       80 	  // start tile offset for Fatal(animated) tiles
 
@@ -480,7 +478,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define TILE_TYPE_INTERACTIVE    0b10010101    // Interactive tile
 #define TILE_TYPE_WALL           0b10010110    // Wall tile
 #define TILE_TYPE_EGG            0b10000101    // Alien Egg tile
-#define TILE_TYPE_COLLECTIBLE    0b10000110    // Collectible tile
+#define TILE_TYPE_COLLECTIBLE    0b00000110    // Collectible tile
 #define TILE_TYPE_SOLID          0b10000111    // Solid tile
 #define TILE_TYPE_FATAL	         0b00100111    // Fatal tile
 #define TILE_TYPE_PORTAL         0b00001111    // Portal tile
@@ -612,7 +610,7 @@ uint8_t cMissionStatus[MAX_MISSIONS]; // up to 4 missions per level
 uint8_t cMissionQty, cRemainMission;
 bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 uint8_t cCtrl, cCtrlCmd;
-struct sprite_attr sGlbSpAttr;        // sprite attribute - used by all entities
+struct sprite_attr sGlbSpAttr;        // global sprite attribute struct - used by all entities
 
 // Global variables for runtime speed optimization
 uint16_t iGameCycles;
@@ -653,7 +651,7 @@ uint8_t cPlySafePlaceX, cPlySafePlaceY, cPlySafePlaceDir;
 uint8_t cPlyPortalDestinyX, cPlyPortalDestinyY;
 bool bGlbPlyMoved;            // TRUE if player has walked RIGHT/LEFT, climbed UP/DOWN or falling DOWN
 bool bGlbPlyChangedPosition;  // TRUE if player has changed position (belt, colision, Moved)
-bool bGlbPlyJumpOK;           // avoid an undesired jump just after a climp up
+bool bGlbPlyJumpOK;           // flag to avoid an undesired jump just after a climp up
 
 uint8_t cPlyObjects, cPlyAddtObjects;
 uint8_t cLives;
@@ -821,7 +819,6 @@ _test_gamegs :
 
 	; GAME STAGE
 	ld a, #TS_SCORE_SIZE + #TS_GAME0_SIZE + #TS_FATAL_SIZE
-	;;ld a, #TS_SCORE_SIZE + #TS_GAME0_SIZE
 	ld (#_FONT1_TILE_OFFSET), a
 
 	; upload score + gameX + fatal + font1 tileset
@@ -856,9 +853,10 @@ _continue_game_ts :
 	call _ubox_set_tiles
 
 	; memcpy(cPowerTile, cBuffer + (SCORE_POWER_TILE + 1) * 8, 8 * 3); //copy the original power tile pattern
-	ld a, #SCORE_POWER_TL_OFFSET + #01
-	ld h, #0
-	ld l, a
+	;;ld a, #SCORE_POWER_TL_OFFSET + #01
+	;;ld h, #0
+	ld hl, #SCORE_POWER_TL_OFFSET + #01
+	;;ld l, a
 	add hl, hl
 	add hl, hl
 	add hl, hl
@@ -957,7 +955,7 @@ __asm
 	pop ix
 	ret
 
-; Input: A = Text block # to be found (0 - 9)
+; Input: A = Text block # to be found (0 - 9 ;)
 ; Output: A = BOOL_TRUE, HL = text buffer address
 ;         A = BOOL_FALSE
 ; Changes: A, B, C, E, H, L
@@ -1296,6 +1294,7 @@ _player_hit_asm_direct :
 	ret nz
 	ld a, h
 _hit_execute :
+	; TODO: add cPowerQtty to _cGlbPlyHitCount
 	ld (#_cGlbPlyHitCount), a
 	ld a, #BOOL_TRUE
 	ld (#_sThePlayer + #4), a  ; player.hitflag = TRUE
@@ -1439,7 +1438,7 @@ __endasm;
 
 void display_level()
 {
-	display_number(28, 0, 1, cLevel);
+	display_number(28, 0, 1, cLevel);  // keep in C - cant call _displ_num due to stack parameter order
 __asm
 	; display_number(30, 0, 2, cScreenMap);
 	ld	a, (#_cScreenMap)
@@ -1539,7 +1538,7 @@ __endasm;
 	display_gun_amno();
 	display_flashlight();
 	display_shield();
-	put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1,2,3,4
+	put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1, 2, 3 and 4
 }  // Draw_Score_Panel()
 
 void display_intro_credits()
@@ -2147,7 +2146,7 @@ __asm
 	; SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
 	; EGG attributes        : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
 	; A, IX and IY can be used/changed
-	; BC, DE, H cannot be used without push/pop first
+	; BC, DE, H cannot be used without push/pop first at the caller
 
 	ld a, (#_cGlbSpObjID)
 _insert_new_screen_object_ex :
@@ -2155,7 +2154,6 @@ _insert_new_screen_object_ex :
 	ld 0 (iy), a ; cObjID
 
 	ld a, (#_cAuxEntityX)
-	;;and #0b00011111
 	rlca
 	rlca
 	rlca
@@ -2163,7 +2161,6 @@ _insert_new_screen_object_ex :
 
 	ld l, a
 	ld a, b ; cGlbWidth
-	;;and #0b00011111
 	rlca
 	rlca
 	rlca
@@ -2173,7 +2170,6 @@ _insert_new_screen_object_ex :
 	ld 2 (iy), a ; cX1
 
 	ld a, (#_cAuxEntityY)
-	;;and #0b00011111
 	rlca
 	rlca
 	rlca
@@ -2203,82 +2199,6 @@ _insert_new_screen_object_ex :
 	inc 0 (iy)
 __endasm;
 }  // void insert_new_screen_object()
-
-/*
-// Input:
-//   _cGlbSpObjID => ObjectScreen->cObjID
-//  _iGlbPosition => ObjectScreen->cX0, ObjectScreen->cY0
-//   _cGlbWidth => ObjectScreen->cX1, ObjectScreen->cY1
-// _cGlbCyle => ObjectScreen->cObjClass
-//   _cGlbStep => ObjectScreen->cObjStatus for ANIM_CYCLE_FACEHUG_EGG only
-
-void insert_new_screen_object()
-{
-	__asm
-	; TODO: precisa refazer completamente quando converter Load_Entities() para ASM e depois novamente quando suportar ENEMIES[_iGlbPosition não usaddo]
-		; #_cAuxEntityX, #_cAuxEntityY
-		; SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
-		; EGG attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
-		; A, HL, IXand IY can be used / changed
-		; DE, BC need to push / pop
-
-		ld hl, (#_pFreeObjectScreen)
-		ld a, (#_cGlbSpObjID)
-		ld(hl), a; cObjID
-
-		ld de, (#_iGlbPosition)
-		ld bc, #0x0500; C = 0, B = 5(loop counter)
-		or a; clear carry
-		_div32_loop :
-	rr d
-		rr e
-		rr c
-		djnz _div32_loop
-		; E = #_iGlbPosition div 32 (tile Y)
-		; C = (#_iGlbPosition mod 32) * 8 (pixel X)
-		ld a, e
-		and #0b00011111
-		rlca
-		rlca
-		rlca
-		ld b, a
-		; B = (#_iGlbPosition div 32) * 8 (pixel Y)
-		inc hl
-		ld(hl), c; cX0
-		ld a, (#_cGlbWidth)
-		and #0b00011111
-		rlca
-		rlca
-		rlca
-		dec a
-		; A = (#_cGlbWidth * 8) - 1
-		add a, c
-		inc hl
-		ld(hl), a; cX1
-		ld a, b
-		inc hl
-		ld(hl), a; cY0
-		add a, #8 - #1
-		inc hl
-		ld(hl), a; cY1
-		ld d, h
-		ld e, l
-		ld a, (#_cGlbCyle)
-		inc hl
-		ld(hl), a; cObjClass
-		inc hl
-		ld(#_pFreeObjectScreen), hl
-
-		cp #ANIM_CYCLE_FACEHUG_EGG
-		ret nz
-		ex de, hl
-		ld a, (#_cGlbStep)
-		ld(hl), a; ST_EGG_CLOSED(0), ST_EGG_OPENED(2)
-		ld hl, #_cScreenEggsQtty
-		inc(hl)
-		__endasm;
-}  // void insert_new_screen_object()
-*/
 
 /* Input:
 *   IX = struct AnimatedTile * => (IX+9)=ObjectID
@@ -2522,15 +2442,6 @@ unsigned int iBuffOffset;
 	// Enemy 5 frames x 1 sprite per frame = 5 sprites (16 x 16 each sprite)
 	ENEMY_PAT_BASE_IDX = spman_alloc_pat(PAT_ENEMY_BASE, cBuffer, 5, 0);
 	ENEMY_PAT_BASE_FLIP_IDX = spman_alloc_pat(PAT_ENEMY_BASE_FLIP, cBuffer, 5, 1);
-	// Awaking: 1 frames x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
-	//ENEMY_PAT_AWAKE_IDX = spman_alloc_pat(PAT_ENEMY_AWAKE, cBuffer + (2 * 1 * 4 * 8), 1, 0);
-	//spman_alloc_pat(PAT_ENEMY_AWAKE_FLIP, cBuffer + (2 * 1 * 4 * 8), 1, 1);
-	// Grabed: 1 frames x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
-	//ENEMY_PAT_GRAB_IDX = spman_alloc_pat(PAT_ENEMY_GRAB, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
-	//spman_alloc_pat(PAT_ENEMY_GRAB_FLIP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 1);
-	// Killed: 1 frames x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
-	//ENEMY_PAT_KILL_IDX = spman_alloc_pat(PAT_ENEMY_KILL, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
-	//spman_alloc_pat(PAT_ENEMY_KILL_FLIP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 1);
 } // void Load_Sprites()
 
 
@@ -4027,11 +3938,11 @@ void reset_obj_history()
 {
 __asm
 	ld hl, #_sObjTileHistory
-	ld(#_pFreeObjTileHistory), hl
+	ld (#_pFreeObjTileHistory), hl
 	ld bc, #MAX_OBJ_HISTORY_SIZE + #01
 	ld de, #04
 _reset_loop :
-	ld(hl), #0xFF
+	ld (hl), #0xFF
 	add hl, de
 	dec bc; does not affect Z flag
 	ld a, b
@@ -4048,7 +3959,6 @@ __endasm;
 void insert_new_obj_history()
 {
 __asm
-	; TODO: precisa refazer completamente quando converter Load_Entities() para ASM[_iGlbPosition não usaddo]
 	ld b, a ; B = cTile
 _insert_new_obj_history_ex :
 	ld hl, (#_pFreeObjTileHistory)
@@ -4062,7 +3972,7 @@ _insert_new_obj_history_ex :
 	inc hl
 	ld (hl), b
 	inc hl
-	ld(#_pFreeObjTileHistory), hl
+	ld (#_pFreeObjTileHistory), hl
 __endasm;
 }  // insert_new_obj_history()
 
@@ -4108,7 +4018,7 @@ _check_iPos :
 _upd_tile :
 	; replace old Tile# with new one
 	ld a, b
-	ld(hl), a
+	ld (hl), a
 __endasm;
 }  // update_existing_obj_history()
 
@@ -4145,7 +4055,7 @@ __asm
 	ld(#_iGlbPosition), de
 	call _update_existing_obj_history
 	pop hl
-	ld(#_iGlbPosition), hl
+	ld (#_iGlbPosition), hl
 __endasm;
 }  // void update_wall_history(uint16_t iPosition, uint8_t cTile)
 
@@ -4381,7 +4291,7 @@ _upd_endShift_vert :
 __endasm;
 }  // void update_player_position(}
 
-		/*
+/*
 * Shift screen map left, right, up, down (player reach end of the screen) or teletransport. Adjust Minimap cMapX/cMapY coordinates
 * cMap_Data = new map data to be displayed
 * cTemp_Map_Data = old map data to be replaced (currently left or right shifts only)
@@ -4595,7 +4505,7 @@ __endasm;
 
 /* 
 * Find the right special Gate/Wall/Locker (2 tiles) / Interactive (1 tile) / Egg (4 tiles) animated tile in the Tile list and activate it
-* This function is only being called for Interactive (ANIMATE_OBJ_INTER) if:
+* This function is only being called for an Interactive object (ANIMATE_OBJ_INTER) if:
 *   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
 *   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
 *   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW (is_player_walking_ok())
@@ -4652,7 +4562,6 @@ _TileFound :
 	; check for egg to be hit (1st shot) or destroyed (5th shot)
 	inc hl  ; HL = &sAnimSpecialTiles->cStep
 	ld c, (hl)
-	;;ld a, #EGG_SHOTS_TO_DESTROY
 	ld de, #04
 	add hl, de
 	dec (hl); sAnimSpecialTiles->cTimeLeft--
@@ -4662,7 +4571,6 @@ _TileFound :
 	or c
 	; check for first Egg tile - if cStep = 0 then its the first shot into this egg
 	jr nz, _exit_egg
-	;;ld a, #EGG_SHOTS_TO_DESTROY
 	ld a, #ST_EGG_OPENED << #4 | #UPD_OBJECT_EGG
 	jr _anim_egg
 
@@ -5537,9 +5445,7 @@ _cont_activate_enemy :
 
 	ld 4 (iy), #ENEMY_HIT_COUNT  ; hitcounter
 
-; no need to set pattern attribute
-;;	ld a, (#_ENEMY_PAT_AWAKE_IDX)
-;;	ld 5 (iy), a  ; pat
+  ; no need to set pattern attribute
 
 	ld 6 (iy), #0  ; frame
 	ld 7 (iy), #ENEMY_ANIM_DELAY  ; animation delay
@@ -7389,7 +7295,7 @@ __endasm;
 bool update_player()
 {
 	bGlbPlyMoved = false;
-	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessario,ja filtrado no run_game()
+	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessario, ja filtrado no run_game()
 
 	//display_number(15, 0, 3, cGlbPlyFlag);
 	if (sThePlayer.grabflag) player_hit(HIT_PTS_FACEHUG);
@@ -8906,15 +8812,75 @@ __asm
 	ld a, #SONG_SILENCE
 	call _mplayer_init_asm_direct
 
-	; Fill_Box(6, 6, 20, 9, BLANK_TILE);
+	; Fill_Box(6, 6, 20, 11, BLANK_TILE);
 	xor a
 	ld bc, #0x0606
-	ld de, #0x1409
+	ld de, #0x140B
 	call _fill_block_asm_direct
 
 	ld a, #GAME_TEXT_LEVEL_COMPLETED_ID
 	call _search_text_block
 	ld bc, #0x0707
+	
+#define CRC8_SALT_1 0b00000101
+#define CRC8_SALT_2 0b11011001
+
+	; TODO: calculate and show Level code
+_encript_lvl_code :
+	; step 1: iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
+	; step 2: scramble nibbles [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  to  [4, 1, 8, 3, 5, 9, 2, 0] (discard SALT_2)
+	; step 3: SUM '0' to each nibble
+	; step 4: print it
+	ld hl, #_cBuffer
+	ld hl, (#_iScore)
+
+	ld hl, #_cBuffer
+	ld de, #04
+	call _crc8b
+
+
+	; simple CRC - 8 (9bit) routine using the CCITT(Comité Consultatif International Téléphonique et Télégraphique)
+	; polynominal x8 + x2 + x + 1. For binary data x = 2, so the polynominal translates to 28 + 22 + 2 + 1 = 256 + 4 + 2 + 1 = 263
+	; which in binary is 00000001 00000111. For this implementation the high - order bit(9th bit), which is always 1,
+	; is omitted so it becomes 00000111, 7 in decimal or 0x07 in hex
+	;; ==================================================================== =
+  ;; input - hl = start of memory to check, de = length of memory to check
+	;; returns - a = result crc
+	;; 20b
+	;; ==================================================================== =
+_crc8b:
+	xor a ; 4t - initial value of crc = 0 so first byte can be XORed in(CCITT)
+	ld c, $07 ; 7t - c = polyonimal used in loop (small speed up)
+_byteloop8b:
+	xor (hl) ; 7t - xor in next byte, for first pass a = (hl)
+	inc hl ; 6t - next mem
+	ld b, 8 ; 7t - loop over 8 bits
+_rotate8b :
+	add a, a ; 4t - shift crc left one
+	jr nc, _nextbit8b ; 12 / 7t - only xor polyonimal if msb set(carry = 1)
+	xor c ; 4t - CRC8_CCITT = 0x07
+_nextbit8b:
+	djnz _rotate8b ; 13 / 8t
+	ld b, a; 4t - preserve a in b
+	dec de ; 6t - counter - 1
+	ld a, d ; 4t - check if de = 0
+	or e ; 4t
+	ld a, b ; 4t - restore a
+	jr nz, _byteloop8b ; 12 / 7t
+	ret ; 10t
+
+	;; Display_Text(18, 7, FONT2_TILE_OFFSET, ".UNOFFICIAL");
+	;ld	hl, #__intro_str_0
+	;push	hl
+	;ld	a, (#_FONT2_TILE_OFFSET)
+	;push	af
+	;inc	sp
+	;ld	de, #0x0712
+	;push	de
+	;call	_display_text
+	;pop	af
+	;inc	sp
+
 	jp _display_msg_and_wait
 __endasm;
 }  // void draw_level_up_message()
@@ -9061,8 +9027,10 @@ void Run_Game()
 			// 'continue_game_loop()=false' OR 'Changing Map'
 			if (cLives) // if cLives != 0 then: 'Next map/Portal processing' OR Level 'Completed processing'
 			{
-				if (!cRemainMission)
+				//if (!cRemainMission)
+				if (iScore > 10)
 				{
+					cRemainMission = 0;
 					cLevel++;
 					iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
 				}
