@@ -40,10 +40,11 @@
 #include "data/font1ts.h"    // font 1 Tileset
 #include "data/font2ts.h"    // font 2 Tileset
 //#include "data/font3ts.h"  // font 3 Tileset - NOT USED
-#include "data/scorets.h"    // score Tileset
 #include "data/introts.h"    // intro Tileset
+#include "data/scorets.h"    // score Tileset
 #include "data/game0ts.h"    // game map level 1 and 3 Tileset
 #include "data/game1ts.h"    // game map level 2 Tileset
+#include "data/fatalts.h"    // game map Fatal Tilesets (same for Level 1, 2 and 3)
 
 // Include all texts, maps, sprites(player, objects and all the enemies)
 #include "data/gametext.h"   // Intro text, Credits text, GameOver text ...
@@ -168,8 +169,8 @@ const uint8_t cCycleTable[] = {
 																1, 0xFE, 0, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, // 9 = interactive 2 stages (0 = on -> off / 2 = off -> on)
 																0, 1, 2, 0, 1, 2, 0, 1, 2, 0xFF,                      // 10 = portal
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 11 = locker open
-																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 2, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
-//																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 6, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
+//																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 2, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
+																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 6, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
 																// Intro logo animation blocks
 																16, 1, 1, 1, 1,							// I
 																5, 3, 2, 2, 2,							// A
@@ -228,11 +229,12 @@ cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + 
 
 #define INTRO_BLOCK_OFFSET      13 // start row for Intro block animation data at cCycleTable[]
 
-#define INTRO_GAMESTAGE    1
-#define LEVEL_GAMESTAGE    2
-#define GAME_GAMESTAGE     3
-#define GAMEOVER_GAMESTAGE 4
-#define FINAL_GAMESTAGE    5
+
+#define GAMESTAGE_INTRO    1
+#define GAMESTAGE_LEVEL    2
+#define GAMESTAGE_GAME     3
+#define GAMESTAGE_GAMEOVER 4
+#define GAMESTAGE_FINAL    5
 
 // Special Tiles animation status
 #define ST_DISABLED 0
@@ -242,10 +244,6 @@ cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + 
 #define LEFT_MOST_TILE     0xE0
 #define RIGHT_MOST_TILE    0xF0
 
-//#define UPD_OBJECT_UP_1    10
-//#define UPD_OBJECT_DOWN_1  11
-//#define UPD_OBJECT_RIGHT_1 12
-//#define UPD_OBJECT_LEFT_1  13
 #define UPD_OBJECT_EGG     0b00001111             // 0bxxxx1111 where xxxx = new status (ST_EGG_OPENED, ST_EGG_RELEASED, ST_EGG_DESTROYED) + 1111 = UPDATE_OBJ_EGG (15)
 #define UPD_OBJECT_UP_8    ANIM_CYCLE_SLIDER_UP
 #define UPD_OBJECT_DOWN_8  ANIM_CYCLE_SLIDER_DOWN
@@ -453,7 +451,10 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define GAME_PWR_LOCK_TL_OFFSET    44 	  // Lock Device <Interactive> tile offset
 #define GAME_SOLD_TL_OFFSET	       46 	  // start tile offset for Solid tiles
 #define GAME_EGG_TL_OFFSET	       70 	  // start tile offset for Egg tiles
-#define GAME_FATL_TL_OFFSET	       76 	  // start tile offset for Fatal(animated) tiles
+//#define GAME_FATL_TL_OFFSET	       76 	  // start tile offset for Fatal(animated) tiles
+#define GAME_COLLECT_TL_OFFSET	   76 	  // start tile offset for Collectible tiles
+#define GAME_FATL_TL_OFFSET	       80 	  // start tile offset for Fatal(animated) tiles
+
 
 #define BLANK_TILE               0x00                    // BLANK tile position in any Tileset
 #define BLACK_TILE               SCORE_BLACK_TL_OFFSET   // BLACK tile position in Score Tileset [SCORE_BLACK_TL_OFFSET]
@@ -479,6 +480,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define TILE_TYPE_INTERACTIVE    0b10010101    // Interactive tile
 #define TILE_TYPE_WALL           0b10010110    // Wall tile
 #define TILE_TYPE_EGG            0b10000101    // Alien Egg tile
+#define TILE_TYPE_COLLECTIBLE    0b10000110    // Collectible tile
 #define TILE_TYPE_SOLID          0b10000111    // Solid tile
 #define TILE_TYPE_FATAL	         0b00100111    // Fatal tile
 #define TILE_TYPE_PORTAL         0b00001111    // Portal tile
@@ -754,7 +756,7 @@ void load_tileset()
 {
 __asm
 	ld a, (#_cGameStage)
-	cp #INTRO_GAMESTAGE
+	cp #GAMESTAGE_INTRO
 	jr nz, _test_levelgs
 
   ; INTRO STAGE
@@ -794,7 +796,7 @@ _intro_stage :
 	ret
 
 _test_levelgs :
-	cp #LEVEL_GAMESTAGE
+	cp #GAMESTAGE_LEVEL
 	jr nz, _test_gamegs
 
   ; GAME LEVEL STAGE
@@ -814,19 +816,20 @@ _do_uncompress :
 	ret
 
 _test_gamegs :
-	cp #GAME_GAMESTAGE
+	cp #GAMESTAGE_GAME
 	jp nz, _test_gameovergs
 
 	; GAME STAGE
-	ld a, #TS_SCORE_SIZE + #TS_GAME0_SIZE
+	ld a, #TS_SCORE_SIZE + #TS_GAME0_SIZE + #TS_FATAL_SIZE
+	;;ld a, #TS_SCORE_SIZE + #TS_GAME0_SIZE
 	ld (#_FONT1_TILE_OFFSET), a
 
-	; upload score + gameX + font1 tileset
+	; upload score + gameX + fatal + font1 tileset
 	; zx0_uncompress(cBuffer, score);
 	ld hl, #_score
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
-	; zx0_uncompress(cBuffer + GAME_TILE_OFFSET * 8, game0);
+
 	ld hl, #TS_SCORE_SIZE
 	ld a, (#_cLevel)
 	cp #2
@@ -836,6 +839,10 @@ _test_gamegs :
 _ts_Level2 :
 	ld bc, #_game1
 _continue_game_ts :
+	call _do_uncompress
+
+	ld hl, #TS_SCORE_SIZE + #TS_GAME0_SIZE
+	ld bc, #_fatal
 	call _do_uncompress
 
 	; zx0_uncompress(cBuffer + FONT1_TILE_OFFSET * 8, font1);
@@ -866,7 +873,7 @@ _continue_game_ts :
 	ld hl, #_score_colors
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
-	; zx0_uncompress(cBuffer + GAME_TILE_OFFSET * 8, game0_colors);
+
 	ld hl, #TS_SCORE_SIZE
 	ld a, (#_cLevel)
 	cp #2
@@ -876,6 +883,10 @@ _continue_game_ts :
 _colorts_Level2 :
 	ld bc, #_game1_colors
 _continue_game_colorts :
+	call _do_uncompress
+
+	ld hl, #TS_SCORE_SIZE + #TS_GAME0_SIZE
+	ld bc, #_fatal_colors
 	call _do_uncompress
 
 	; zx0_uncompress(cBuffer + FONT1_TILE_OFFSET * 8, font1_colors);
@@ -890,7 +901,7 @@ _continue_game_colorts :
 	ret
 
 _test_gameovergs :
-	cp #GAMEOVER_GAMESTAGE
+	cp #GAMESTAGE_GAMEOVER
 	jr nz, _test_finalgs
 
 	; GAME OVER STAGE
@@ -915,7 +926,7 @@ _gameover_step_2 :
 	jr _gameover_step_1_ex
 
 _test_finalgs :
-	cp #FINAL_GAMESTAGE
+	cp #GAMESTAGE_FINAL
 	ret nz
 __endasm;
 }  // void load_tileset()
@@ -1743,7 +1754,7 @@ void Draw_Intro()
 	mplayer_init(SONG, SONG_SILENCE);
 	ubox_disable_screen();
 	// upload intro tileset
-	cGameStage = INTRO_GAMESTAGE;
+	cGameStage = GAMESTAGE_INTRO;
 	load_tileset();
 	//Load_Tileset(INTRO_TS);
 	// clear the screen
@@ -2392,7 +2403,7 @@ __asm
   ld a, #SONG_SILENCE
   ld hl, #_SONG
   call _mplayer_init_asm_direct
-  ld a, #LEVEL_GAMESTAGE
+  ld a, #GAMESTAGE_LEVEL
 	ld (#_cGameStage), a
 	call _load_tileset
 
@@ -3973,7 +3984,7 @@ void load_gamelevel_data()
 {
 __asm
   ld hl, #_cGameStage
-	ld (hl), #GAME_GAMESTAGE
+	ld (hl), #GAMESTAGE_GAME
 	call _load_tileset
 
 	; cMapX = cMapY = cScreenMap = 0;
@@ -4249,6 +4260,8 @@ _getTileClass_ex :
 	ld e, a
 	cp #TS_SCORE_SIZE + #GAME_FATL_TL_OFFSET
 	jp nc, _setFatal
+;;	cp #TS_SCORE_SIZE + #GAME_COLLECT_TL_OFFSET
+;;	jp nc, _setCollect
 	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
 	jp nc, _setEgg
 	cp #TS_SCORE_SIZE + #GAME_SOLD_TL_OFFSET
@@ -8918,7 +8931,7 @@ void Run_Game()
 		// clear the screen
 		ubox_fill_screen(BLANK_TILE);
 		ubox_enable_screen();
-		cGameStage = LEVEL_GAMESTAGE;
+		cGameStage = GAMESTAGE_LEVEL;
 		// Level 2 TEST
 		cLevel = 2;
 		draw_game_level_info();
@@ -9085,7 +9098,7 @@ void draw_game_over()
 __asm
   call _ubox_disable_screen
 	ld hl, #_cGameStage
-	ld (hl), #GAMEOVER_GAMESTAGE
+	ld (hl), #GAMESTAGE_GAMEOVER
 	call _load_tileset
 	ld	l, #0x00
 	call	_ubox_fill_screen

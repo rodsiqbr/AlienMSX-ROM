@@ -9,24 +9,25 @@ $(OUTPUT)/tiles.h: tiles.png
 py png2tiles.py -i intro --zx0 IntroTS_16x6.png >introts.h
 --py png2tiles.py -i score --zx0 ScoreTS_15x3.png >scorets.h
 py png2tiles.py -i score --zx0 ScoreTSv3_16x4.png >scorets.h
-py png2tiles.py -i fatal --zx0 Game_FatalTS_10x3.png >fatalts.h
 py png2tiles.py -i font1 --zx0 Font1TS_32x2.png >font1ts.h
 py png2tiles.py -i font2 --zx0 Font2TS_32x2.png >font2ts.h
 --py png2tiles.py -i font3 --zx0 Font3TS_32x2.png >font3ts.h
 --py png2tiles.py -i game0 --zx0 game0ts.png >game0ts.h
 --py png2tiles.py -i game0 --zx0 game0tsv1.png >game0ts.h
 --py png2tiles.py -i game0 --zx0 game0tsv2.png >game0ts.h
-py png2tiles.py -i game0 --zx0 game0tsv3_16x6.png >game0ts.h
-py png2tiles.py -i game1 --zx0 Game1TSv1_16x6.png >game1ts.h
+--py png2tiles.py -i game0 --zx0 game0tsv3_16x6.png >game0ts.h
+--py png2tiles.py -i game1 --zx0 game1tsv1_16x6.png >game1ts.h
 
-xx py png2tiles.py -i game0 --zx0 Game0TSv3_16x4.png >game0ts.h
-xx py png2tiles.py -i game1 --zx0 Game1TSv1_16x4.png >game1ts.h
-
+py png2tiles.py -i game0 --zx0 Game0TSv4_16x5.png >game0ts.h
+py png2tiles.py -i game1 --zx0 Game1TSv2_16x5.png >game1ts.h
+py png2tiles.py -i fatal --zx0 Game_FatalTS_16x2.png >fatalts.h
 
 --py mapgen.py -t Game0 --zx0 --max-ents 24 --room-height 21 alienmap.json alienmap > alienmap.h
 --py mapgen.py -t Game0 --zx0 --max-ents 24 --room-height 21 maplevel1.json maplvl1 > maplvl1.h
-py mapgen2.py -t Game0 --zx0 --max-ents 24 --room-height 21 maplevel1v3.json maplvl1 > maplvl1.h
-py mapgen2.py -t Game1 --zx0 --max-ents 24 --room-height 21 maplevel2v1.json maplvl2 > maplvl2.h
+--py mapgen2.py -t Game0 --zx0 --max-ents 24 --room-height 21 maplevel1v3.json maplvl1 > maplvl1.h
+--py mapgen2.py -t Game1 --zx0 --max-ents 24 --room-height 21 maplevel2v1.json maplvl2 > maplvl2.h
+py mapgen2.py -t Game0 --zx0 --max-ents 24 --room-height 21 maplevel1v4.json maplvl1 > maplvl1.h
+py mapgen2.py -t Game1 --zx0 --max-ents 24 --room-height 21 maplevel2v2.json maplvl2 > maplvl2.h
 
 
 --py txtgen.py --zx0 levels.json levels >levels.h
