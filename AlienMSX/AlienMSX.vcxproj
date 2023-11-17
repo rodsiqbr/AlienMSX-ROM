@@ -67,6 +67,7 @@
     <ClInclude Include="data\gametext.h" />
     <ClInclude Include="data\introts.h" />
     <ClInclude Include="data\maplvl1.h" />
+    <ClInclude Include="data\maplvl2.h" />
     <ClInclude Include="data\objects.h" />
     <ClInclude Include="data\player.h" />
     <ClInclude Include="data\scorets.h" />

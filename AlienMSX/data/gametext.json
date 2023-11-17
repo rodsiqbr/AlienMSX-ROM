@@ -39,7 +39,7 @@
         },
         {
             "description": "INTRO MENU",
-	    "text": "<<90START GAME|0GAME CREDITS|0LEVEL CODE:||"
+	    "text": "<<90START GAME|0GAME CREDITS|0LEVEL CODE:         ||"
         }
     ]
 }

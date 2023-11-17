@@ -107,6 +107,9 @@
     <ClInclude Include="data\fatalts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\maplvl2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">

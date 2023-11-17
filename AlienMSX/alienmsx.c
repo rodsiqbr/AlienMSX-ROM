@@ -411,12 +411,14 @@ const uint8_t enemy_hurt_frames[]  = { 3, 3, 3, 3, 4, 4, 4, 4, 4, 0xFC };  // fr
 uint8_t FONT1_TILE_OFFSET;  // first font tile (' ') position in the Tileset
 uint8_t FONT2_TILE_OFFSET; 
 
-#define INTRO_CTRL_TILE_NR (TS_FONT1_SIZE + 65) // first Control tile starts at position 65 in the 'Intro' Tileset
-#define INTRO_BOX_TILE_NR  (TS_FONT1_SIZE + 94) // first Box Tile tile starts at position 94 in the 'Intro' Tileset
-#define INTRO_MENU_POS 16                       // Y position for Intro menu
+#define INTRO_CTRL_TILE_NR     (TS_FONT1_SIZE + 65) // first Control tile starts at position 65 in the 'Intro' Tileset
+#define INTRO_BOX_TILE_NR      (TS_FONT1_SIZE + 94) // first Box Tile tile starts at position 94 in the 'Intro' Tileset
+#define INTRO_MENU_POS_X        6                   // X position for Intro menu
+#define INTRO_MENU_POS_Y       16                   // Y position for Intro menu
+#define MAX_INTRO_MENU_OPTIONS  3                   // only 3 option in the intro menu
 
-#define INTRO_CTRL_CYCLE 8
-const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
+#define INTRO_CTRL_CYCLE        8
+const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2, 4 << 2, 3 << 2, 2 << 2, 1 << 2 };
 
 // score tile #defines for C & ASM code
 #define SCORE_POWER_TL_OFFSET   11
@@ -578,6 +580,9 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0, 1, 2, 3, 4, 3, 2, 1 };
 #define LEVEL_02_MISSIONS_QTTY 2
 #define LEVEL_03_MISSIONS_QTTY 4
 
+#define CRC8_SALT_1            0b00000101
+#define CRC8_SALT_2            0b11011001
+
 #define SCR_SHIFT_RIGHT    0
 #define SCR_SHIFT_LEFT     1
 #define SCR_SHIFT_UP       2
@@ -610,6 +615,8 @@ uint8_t cMissionStatus[MAX_MISSIONS]; // up to 4 missions per level
 uint8_t cMissionQty, cRemainMission;
 bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 uint8_t cCtrl, cCtrlCmd;
+uint8_t cCodeLenght, cMenuOption;
+
 struct sprite_attr sGlbSpAttr;        // global sprite attribute struct - used by all entities
 
 // Global variables for runtime speed optimization
@@ -1548,17 +1555,29 @@ __asm
 	
 	ld a, #GAME_TEXT_CREDITS_LABEL_ID
 	call _search_text_block
-	ld b, #INTRO_MENU_POS
+	ld b, #INTRO_MENU_POS_Y
 	ld c, #0x01
 	ld de, #0x0000
 	call _display_format_text_block
 
 	ld a, #GAME_TEXT_CREDITS_VALUE_ID
 	call _search_text_block
-	ld b, #INTRO_MENU_POS + #1
+	ld b, #INTRO_MENU_POS_Y + #1
 	ld c, #14
 	ld de, #0x0000
 	call _display_format_text_block
+
+	call _clean_buff
+	call _wait_fire
+
+	; execute _clear_box again before returns
+_clear_box :
+	; Fill_Box(1, INTRO_MENU_POS, 30, 7, BLANK_TILE);
+	xor a
+	ld c, #0x01
+	ld b, #INTRO_MENU_POS_Y
+	ld de, #0x1E07
+	jp _fill_block_asm_direct
 
 _clean_buff :
 	call	_ubox_wait
@@ -1568,17 +1587,7 @@ _clean_buff :
 	call	_ubox_read_ctl
 	bit	4, l
 	jr	nz, _clean_buff
-
-	call _wait_fire
-
-	; execute _clear_box again before returns
-_clear_box :
-	; Fill_Box(1, INTRO_MENU_POS, 30, 7, BLANK_TILE);
-	xor a
-	ld c, #0x01
-	ld b, #INTRO_MENU_POS
-	ld de, #0x1E07
-	jp _fill_block_asm_direct
+	ret
 
 _wait_fire :
 	call	_ubox_wait
@@ -1743,9 +1752,448 @@ __intro_color_tbl:
 __endasm;
 }  // void display_game_logo()
 
+
+/*
+* Display Intro Screen + Interactive menu and waits for user selection
+*/
+void draw_intro_screen()
+{
+__asm
+  ; mplayer_init(SONG, SONG_SILENCE);
+	ld a, #SONG_SILENCE
+	ld hl, #_SONG
+	call _mplayer_init_asm_direct
+
+  call _ubox_disable_screen
+
+	; upload intro tileset
+	ld hl, #_cGameStage
+	ld (hl), #GAMESTAGE_INTRO
+	call _load_tileset
+
+	; clear the screen
+	ld	l, #BLANK_TILE
+	call	_ubox_fill_screen
+	call _ubox_enable_screen
+
+	call _display_game_logo
+
+	ld a, #SONG_INTRO
+	ld hl, #_SONG
+	call _mplayer_init_asm_direct
+
+	ld a, (#_cCtrl)
+	cp #UBOX_MSX_CTL_NONE
+	jr nz, _cctrl_selected
+	; display_text(3, INTRO_MENU_POS, FONT1_TILE_OFFSET, "PRESS FIRE OR TRIGGER >");
+	ld a, #GAME_TEXT_INTRO_CONTROL_ID
+	call _search_text_block
+	ld b, #INTRO_MENU_POS_Y
+	ld c, #0x03
+	ld de, #0x0000
+	call _display_format_text_block
+
+	; wait until fire is pressed - can be space (control will be cursors), or any fire button on a joystick
+	call _ubox_reset_tick
+	ld c, #0
+_cctrl_loop :
+	ld a, (#_cCtrl)
+	cp #UBOX_MSX_CTL_NONE
+	jr nz, _finish_cctrl_loop
+	call _ubox_select_ctl
+	ld	a, l
+	ld (#_cCtrl), a
+
+	ld a, (#_ubox_tick)
+	cp #15
+	jr nz, _cctrl_loop
+	push bc
+	; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 9 + (cCtrl_frames[cCont] << 2), 2, 2);
+	ld hl, #_cCtrl_frames
+	ld b, #0
+	add hl, bc
+	ld a, (hl)
+  add a, #INTRO_CTRL_TILE_NR + #9
+	ld c, #INTRO_MENU_POS_X + #20
+	ld b, #INTRO_MENU_POS_Y
+	ld de, #0x0202
+	call	_put_tile_block_asm_direct
+	pop bc
+	inc c
+	ld a, c
+	cp #INTRO_CTRL_CYCLE
+	jr nz, _cont_cctrl_anim
+	ld c, #0
+_cont_cctrl_anim :
+	call _ubox_reset_tick
+	jr _cctrl_loop
+
+_finish_cctrl_loop :
+	; put_tile_block(3, INTRO_MENU_POS, BLANK_TILE, 23, 1);
+	xor a
+	ld b, #INTRO_MENU_POS_Y
+	ld c, #0x03
+	ld de, #0x1701
+	call	_fill_block_asm_direct
+
+_cctrl_selected :
+	; display the selected control
+	ld a, (#_cCtrl)
+	cp #UBOX_MSX_CTL_CURSOR
+	jr nz, _try_joy_1
+
+	;void put_tile_block(uint8_t x, uint8_t y, uint8_t start_tile, uint8_t width, uint8_t height);
+	; A = Start Tile
+	; C = X
+	; B = Y
+	; D = Width
+	; E = Height
+
+  ; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 5, 2, 2);
+	ld a, #INTRO_CTRL_TILE_NR + #5
+	jr _disp_cctrl
+_try_joy_1 :
+	; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR, 2, 2);
+	ld a, #INTRO_CTRL_TILE_NR
+_disp_cctrl :
+	ld c, #INTRO_MENU_POS_X + #20
+	ld b, #INTRO_MENU_POS_Y
+	ld de, #0x0202
+	call	_put_tile_block_asm_direct
+	ld a, (#_cCtrl)
+	cp #UBOX_MSX_CTL_PORT1
+	jr z, _end_display_cctrl
+_try_joy_2 :
+	cp #UBOX_MSX_CTL_PORT2
+	jr nz, _end_display_cctrl
+	; ubox_put_tile(27, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 4);
+	ld a, #INTRO_CTRL_TILE_NR + #4
+	ld b, #INTRO_MENU_POS_Y
+	ld c, #INTRO_MENU_POS_X + #20 + #1
+	call _put_tile_asm_direct
+
+_end_display_cctrl :
+	; display_text(8, INTRO_MENU_POS, FONT1_TILE_OFFSET, "START GAME");
+	; display_text(8, INTRO_MENU_POS + 1, FONT1_TILE_OFFSET, "GAME CREDITS");
+	ld a, #GAME_TEXT_INTRO_MENU_ID
+	call _search_text_block
+	ld b, #INTRO_MENU_POS_Y
+	ld c, #INTRO_MENU_POS_X
+	ld de, #0x0000
+	call _display_format_text_block
+
+	xor a
+	ld (#_cMenuOption), a
+_start_user_selection :
+	call _display_curr_selection
+
+_select_user_option :
+	call _clean_buff
+	; continuous loop until 'Start Game' or 'Level Code + valid code ' selected
+	call _ubox_reset_tick
+_select_user_option_ex :
+	ld a, (#_ubox_tick)
+	cp #8
+	jr nc, _try_up_or_down
+	ld a, (#_cCtrl)
+  ld l, a
+	call _ubox_read_ctl
+	ld a, l
+	ld (#_cCtrlCmd), a
+	jr _select_user_option_ex
+
+_try_up_or_down :
+	ld a, (#_cCtrlCmd)
+  and #UBOX_MSX_CTL_UP
+	jr z, _try_menu_down
+	ld a, (#_cMenuOption)
+	or a
+	jr nz, _up_menu_option
+	ld a, #MAX_INTRO_MENU_OPTIONS
+_up_menu_option :
+	dec a
+	ld (#_cMenuOption), a
+	jr _start_user_selection
+
+_try_menu_down :
+	ld a, (#_cCtrlCmd)
+	and #UBOX_MSX_CTL_DOWN
+	jr z, _try_menu_fire
+	ld a, (#_cMenuOption)
+	inc a
+	cp #MAX_INTRO_MENU_OPTIONS
+	jr nz, _down_menu_option
+	xor a
+_down_menu_option :
+	ld (#_cMenuOption), a
+	jr _start_user_selection
+
+_try_menu_fire :
+	ld a, (#_cCtrlCmd)
+	and #UBOX_MSX_CTL_FIRE1
+	jp z, _select_user_option
+	
+	ld a, (#_cMenuOption)
+	cp #1
+	jr nz, _try_level_code
+	; credits
+	call _display_intro_credits;
+	jp _cctrl_selected
+
+_try_level_code :
+  cp #2
+	ret nz ; start game selected
+	
+	xor a
+	ld (#_cCodeLenght), a
+	ld (#_cBuffer + #18), a
+
+	call _display_ins_code
+
+_get_input_code : 
+	; ESC, RET and BACKSPACE
+	ld l, #0x07
+	call _ubox_read_keys
+	ld a, l
+	cp #UBOX_MSX_KEY_ESC
+	jp z, _cctrl_selected
+	cp #UBOX_MSX_KEY_BS
+	jp z, _insert_backspace
+	cp #UBOX_MSX_KEY_RET
+	jp z, _decode_level_code
+
+	; A and B
+	ld l, #0x02
+	call _ubox_read_keys
+	ld a, l
+	ld c, #0
+	cp #UBOX_MSX_KEY_A
+	jr nz, _test_B
+	jr _new_key_typed
+_test_B :
+	inc c
+	cp #UBOX_MSX_KEY_B
+	jr nz, _test_C_to_J
+	jr _new_key_typed
+
+	; C to J
+_test_C_to_J :
+	ld l, #0x03
+	call _ubox_read_keys
+	ld a, l
+	ld c, #2
+	ld b, #8  ; 8 keys to check for line row #3
+	ld d, #UBOX_MSX_KEY_C
+_test_all_keys_from_row :
+	cp d
+	jr z, _new_key_typed
+	inc c ; carry 0
+	rl d
+	djnz _test_all_keys_from_row
+
+  ; K to R
+	ld l, #0x04
+	call _ubox_read_keys
+	ld a, l
+	ld c, #10
+	ld b, #8  ; 8 keys to check for line row #4
+	ld d, #UBOX_MSX_KEY_K
+_test_all_keys_from_row_2 :
+  cp d
+	jr z, _new_key_typed
+	inc c; carry 0
+	rl d
+	djnz _test_all_keys_from_row_2
+
+	jp _get_input_code
+
+_new_key_typed :
+	ld hl, #_cCodeLenght
+	ld a, (hl)
+	cp #8
+	jr z, _get_input_code
+	ld a, c
+	add a, #'A'
+	ld c, (hl)
+	inc (hl)
+	ld b, #0
+	ld hl, #_cBuffer + #10
+	add hl, bc
+	ld (hl), a
+
+	call _display_ins_code
+	; mplayer_play_effect_p(SFX_TYPING, SFX_CHAN_NO, 0);
+_wait_and_reak_key_ex_2 :
+	ld de, #0x000A; 00 + SFX_TYPING
+_wait_and_reak_key_ex :
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	call	_mplayer_play_effect_p_asm_direct
+_wait_and_reak_key :
+	; wait some cycles before restart reading keyboard
+	ld	l, #12
+	call _ubox_wait_for
+	jp _get_input_code
+
+_display_ins_code :
+	ld hl, #_cCodeLenght
+	ld a, #8
+	sub (hl)
+	jr z, _disp_lvl_code
+	ld b, a
+	ld hl, #_cBuffer + #17
+_upd_code_buffer :
+	ld (hl), #'-'
+	dec hl
+	djnz _upd_code_buffer
+
+_disp_lvl_code :
+ ;; Display_Text(17, 18, FONT2_TILE_OFFSET, cBuffer + 10);
+	ld hl, #_cBuffer + #10
+	push hl
+	ld a, (#_FONT2_TILE_OFFSET)
+	push af
+	inc	sp
+	ld de, #0x1211
+	push de
+	call _display_text
+	pop	af
+	inc	sp
+	pop af
+	ret
+
+_decode_level_code :
+	ld a, (#_cCodeLenght)
+	cp #8
+	jr nz, _wait_and_reak_key
+	; step 1: DEC 'A' to each CHAR code to generate original nibble
+	; step 2: un - shuffle nibbles[4, 1, 8, 3, 5, 9, 2, 0] to [0, 1, 2, 3, 4, 5, *6, *7, 8, 9] (insert SALT_2)
+	ld hl, #_cBuffer
+	ld a, (#_cBuffer + #17)
+	call _do_sub_and_rotate
+	ld b, a
+	ld a, (#_cBuffer + #11)
+	call _do_sub_and_merge
+	ld a, (#_cBuffer + #16)
+	call _do_sub_and_rotate
+	ld b, a
+	ld a, (#_cBuffer + #13)
+	call _do_sub_and_merge
+	ld a, (#_cBuffer + #10)
+	call _do_sub_and_rotate
+	ld b, a
+	ld a, (#_cBuffer + #14)
+	call _do_sub_and_merge
+	ld a, #CRC8_SALT_2
+	ld (hl), a
+	inc hl
+	ld a, (#_cBuffer + #12)
+	call _do_sub_and_rotate
+	ld b, a
+	ld a, (#_cBuffer + #15)
+	call _do_sub_and_merge
+
+	; step 3: compute back iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
+	; step 4: check SALT_1, cLives, cLeveland CRC. Reject code if fails
+	ld hl, #_cBuffer
+	ld de, #04
+	call _crc8b
+	ld b, a  ; calculated CRC8
+	ld a, (#_cBuffer + #4) ; CRC8 byte from input code
+	cp b
+	jr nz, _lvl_code_invalid
+
+	ld a, (#_cBuffer + #2) ; cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit]
+	ld b, a
+	and #0b00000111
+	cp #CRC8_SALT_1
+	jr nz, _lvl_code_invalid
+
+	ld a, b
+	rrca
+	rrca
+	rrca
+	and #0b00000011 ; valid = 2 or 3
+	ld c, a ; temp cLevel
+	cp #2
+	jr c, _lvl_code_invalid
+
+	ld a, b
+	rlca
+	rlca
+	rlca
+	and #0b00000111; valid = 1 to 5
+	ld d, a ; temp cLives
+	or a
+	jr z, _lvl_code_invalid
+	cp #6
+	jr nc, _lvl_code_invalid
+
+	; code is valid!
+	ld hl, #_cLevel
+	ld (hl), c
+	ld hl, #_cLives
+	ld (hl), d
+	ld hl, (#_cBuffer + #0)
+	ld (#_iScore), hl
+	ret ; exit from intro menu and start game with level code information
+
+_lvl_code_invalid :
+	; mplayer_play_effect_p(SFX_HURT, SFX_CHAN_NO, 0);
+	ld de, #0x0005; 00 + SFX_HURT
+	jp _wait_and_reak_key_ex
+
+
+_do_sub_and_rotate :
+	sub #'A'
+	rlca
+	rlca
+	rlca
+	rlca
+	;and #0b00001111
+	;;and #0b11110000
+	ret
+
+_do_sub_and_merge :
+	sub #'A'
+	;and #0b11110000
+	or b
+	ld (hl), a
+	inc hl
+	ret
+
+_insert_backspace :
+	ld a, (#_cCodeLenght)
+	or a
+	jp z, _wait_and_reak_key
+	dec a
+	ld (#_cCodeLenght), a
+	call _display_ins_code
+	jp _wait_and_reak_key_ex_2
+
+_display_curr_selection :
+	; clear current selection
+	; put_tile_block(6, INTRO_MENU_POS, BLANK_TILE, 1, MAX_INTRO_MENU_OPTIONS);
+	xor a
+	ld b, #INTRO_MENU_POS_Y
+	ld c, #INTRO_MENU_POS_X - #2
+	ld d, #0x01
+	ld e, #MAX_INTRO_MENU_OPTIONS
+	call	_fill_block_asm_direct
+
+	; ubox_put_tile(6, INTRO_MENU_POS + cMenuOption, FONT1_TILE_OFFSET + '_' - ' '); // >
+	ld a, (#_cMenuOption)
+	add #INTRO_MENU_POS_Y
+	ld b, a
+	ld c, #INTRO_MENU_POS_X - #2
+	ld a, (#_FONT1_TILE_OFFSET)
+	add a, #'_' - #' '
+	jp _put_tile_asm_direct
+__endasm;
+}  // void draw_intro_screen()
+
 /*
 * Display Intro Screen and waits for user interaction
-*/
+
 void Draw_Intro()
 {
 	uint8_t cCont, cMenuOption;
@@ -1876,6 +2324,7 @@ __endasm;
 		}
 	}
 } // void Draw_Intro()
+*/
 
 /*
 * Display the right game map
@@ -8812,76 +9261,136 @@ __asm
 	ld a, #SONG_SILENCE
 	call _mplayer_init_asm_direct
 
+	; TODO: check for GAME WIN instead of LEVEL UP
+
 	; Fill_Box(6, 6, 20, 11, BLANK_TILE);
 	xor a
 	ld bc, #0x0606
 	ld de, #0x140B
 	call _fill_block_asm_direct
-
-	ld a, #GAME_TEXT_LEVEL_COMPLETED_ID
-	call _search_text_block
-	ld bc, #0x0707
 	
-#define CRC8_SALT_1 0b00000101
-#define CRC8_SALT_2 0b11011001
-
-	; TODO: calculate and show Level code
-_encript_lvl_code :
-	; step 1: iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
-	; step 2: scramble nibbles [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  to  [4, 1, 8, 3, 5, 9, 2, 0] (discard SALT_2)
-	; step 3: SUM '0' to each nibble
-	; step 4: print it
-	ld hl, #_cBuffer
+_encode_lvl_code :
+	; step 1: compute iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
 	ld hl, (#_iScore)
+	ld (#_cBuffer), hl
+
+	ld a, (#_cLevel)
+	inc a ; next level required [2 or 3]
+	rlca
+	rlca
+	rlca
+	or #CRC8_SALT_1
+	ld b, a ; cLevel + SALT_1
+	ld a, (#_cLives)
+	rrca
+	rrca
+	rrca
+	or b ; cLives + cLevel + SALT_1
+	ld (#_cBuffer + #2), a
+
+	ld a, #CRC8_SALT_2
+	ld (#_cBuffer + #3), a
 
 	ld hl, #_cBuffer
 	ld de, #04
 	call _crc8b
+	ld (#_cBuffer + #4), a ; CRC8
 
+	; step 2: suffle nibbles[0, 1, 2, 3, 4, 5, *6, *7, 8, 9] to [4, 1, 8, 3, 5, 9, 2, 0] (discard SALT_2)
+	; step 3: SUM 'A' to each nibble to generate a new CHAR code
+	ld a, (#_cBuffer + #2)
+	call _do_rotate_and_add
+	ld (#_cBuffer + #10), a ; [4]
+
+	ld a, (#_cBuffer + #0)
+	call _do_clean_and_add
+	ld (#_cBuffer + #11), a ; [4, 1]
+
+	ld a, (#_cBuffer + #4)
+	call _do_rotate_and_add
+	ld (#_cBuffer + #12), a ; [4, 1, 8]
+
+	ld a, (#_cBuffer + #1)
+	call _do_clean_and_add
+	ld (#_cBuffer + #13), a ; [4, 1, 8, 3]
+
+	ld a, (#_cBuffer + #2)
+	call _do_clean_and_add
+	ld (#_cBuffer + #14), a ; [4, 1, 8, 3, 5]
+
+	ld a, (#_cBuffer + #4)
+	call _do_clean_and_add
+	ld (#_cBuffer + #15), a ; [4, 1, 8, 3, 5, 9]
+
+	ld a, (#_cBuffer + #1)
+	call _do_rotate_and_add
+	ld (#_cBuffer + #16 ),a ; [4, 1, 8, 3, 5, 9, 2]
+
+	ld a, (#_cBuffer + #0)
+	call _do_rotate_and_add
+	ld (#_cBuffer + #17), a ; [4, 1, 8, 3, 5, 9, 2, 0]
+
+	xor a
+	ld (#_cBuffer + #18), a ; [4, 1, 8, 3, 5, 9, 2, 0] + '\0'
+
+	; step 4: print it
+	;; Display_Text(14, 15, FONT1_TILE_OFFSET, cBuffer + 10);
+	ld hl, #_cBuffer + #10
+	push hl
+	ld a, (#_FONT1_TILE_OFFSET)
+	push af
+	inc	sp
+	ld de, #0x0F0E
+	push de
+	call _display_text
+	pop	af
+	inc	sp
+	pop af
+
+	ld a, #GAME_TEXT_LEVEL_COMPLETED_ID
+	call _search_text_block
+	ld bc, #0x0707
+	jp _display_msg_and_wait
+
+_do_rotate_and_add :
+	rlca
+	rlca
+	rlca
+	rlca
+_do_clean_and_add :
+	and #0b00001111
+	add #'A'
+	ret
 
 	; simple CRC - 8 (9bit) routine using the CCITT(Comité Consultatif International Téléphonique et Télégraphique)
 	; polynominal x8 + x2 + x + 1. For binary data x = 2, so the polynominal translates to 28 + 22 + 2 + 1 = 256 + 4 + 2 + 1 = 263
 	; which in binary is 00000001 00000111. For this implementation the high - order bit(9th bit), which is always 1,
 	; is omitted so it becomes 00000111, 7 in decimal or 0x07 in hex
-	;; ==================================================================== =
+	;; =====================================================================
   ;; input - hl = start of memory to check, de = length of memory to check
 	;; returns - a = result crc
 	;; 20b
 	;; ==================================================================== =
-_crc8b:
-	xor a ; 4t - initial value of crc = 0 so first byte can be XORed in(CCITT)
-	ld c, $07 ; 7t - c = polyonimal used in loop (small speed up)
-_byteloop8b:
-	xor (hl) ; 7t - xor in next byte, for first pass a = (hl)
-	inc hl ; 6t - next mem
-	ld b, 8 ; 7t - loop over 8 bits
+_crc8b :
+	xor a ; initial value of crc = 0 so first byte can be XORed in(CCITT)
+	ld c, #0x07 ; c = polyonimal used in loop (small speed up)
+_byteloop8b :
+	xor (hl) ; xor in next byte, for first pass a = (hl)
+	inc hl ; next mem
+	ld b, #8 ; loop over 8 bits
 _rotate8b :
-	add a, a ; 4t - shift crc left one
-	jr nc, _nextbit8b ; 12 / 7t - only xor polyonimal if msb set(carry = 1)
-	xor c ; 4t - CRC8_CCITT = 0x07
-_nextbit8b:
-	djnz _rotate8b ; 13 / 8t
-	ld b, a; 4t - preserve a in b
-	dec de ; 6t - counter - 1
-	ld a, d ; 4t - check if de = 0
-	or e ; 4t
-	ld a, b ; 4t - restore a
-	jr nz, _byteloop8b ; 12 / 7t
-	ret ; 10t
-
-	;; Display_Text(18, 7, FONT2_TILE_OFFSET, ".UNOFFICIAL");
-	;ld	hl, #__intro_str_0
-	;push	hl
-	;ld	a, (#_FONT2_TILE_OFFSET)
-	;push	af
-	;inc	sp
-	;ld	de, #0x0712
-	;push	de
-	;call	_display_text
-	;pop	af
-	;inc	sp
-
-	jp _display_msg_and_wait
+	add a, a ; shift crc left one
+	jr nc, _nextbit8b ; only xor polyonimal if msb set(carry = 1)
+	xor c ; CRC8_CCITT = 0x07
+_nextbit8b :
+	djnz _rotate8b
+	ld b, a ; preserve a in b
+	dec de ; counter - 1
+	ld a, d ; check if de = 0
+	or e
+	ld a, b ; restore a
+	jr nz, _byteloop8b
+	;ret
 __endasm;
 }  // void draw_level_up_message()
 
@@ -8919,10 +9428,7 @@ void Run_Game()
 		cPlyRemainShield = INVULNERABILITY_SHIELD;
 
 		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
-		cRemainYellowCard = cRemainGreenCard = cRemainRedCard = 0;
-		cRemainKey = cRemainScrewdriver = cRemainKnife = 0;
-
-		cScoretoAdd = cPlyRemainAmno = 0;
+		cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = 0;
 
 		do  // loop at each screen map
 		{
@@ -9019,12 +9525,12 @@ void Run_Game()
 
 				// ensure we wait to our desired update rate
 				ubox_wait();
-			} while (continue_game_loop());  // loop until death or change map
+			} while (continue_game_loop());  // loop until death or changed map
 
 			// hide all the sprites
 			spman_hide_all_sprites();
 
-			// 'continue_game_loop()=false' OR 'Changing Map'
+			// 'continue_game_loop()=false' OR 'Map Changed'
 			if (cLives) // if cLives != 0 then: 'Next map/Portal processing' OR Level 'Completed processing'
 			{
 				//if (!cRemainMission)
@@ -9068,7 +9574,7 @@ __asm
 	ld hl, #_cGameStage
 	ld (hl), #GAMESTAGE_GAMEOVER
 	call _load_tileset
-	ld	l, #0x00
+	ld	l, #BLANK_TILE
 	call	_ubox_fill_screen
 	call _ubox_enable_screen
 	; mplayer_init(SONG, SONG_GAME_OVER);
@@ -9119,17 +9625,18 @@ void main(void)
 
 	while (true) // continuous loop - do not return to BASIC/BIOS
 	{
-		bIntroAnim = true;
-		Draw_Intro();
-
 		// global variable initialization - for every game start
 		iScore = 0;
 		cLives = INITIAL_LIVES;
 		cPower = 100;  // starts with full power level
-		cLevel = 1;
+		cLevel = 1;    // at Level 1
+
+		bIntroAnim = true;
+		draw_intro_screen();
 
 		// play the game until cLives=0
 		Run_Game();
+		// TODO: check for GAME WIN, then do not show Gameover
 		draw_game_over();
 	}
 }  // void main()
