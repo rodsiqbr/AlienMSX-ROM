@@ -4,13 +4,6 @@
 
 
 // TODOS: Bugs list:
-// 1. trocar ubox_put_tile para 
-//; if calling direct from an ASM routine, no need to use the stack
-//; A = Tile
-//; C = X
-//; B = Y
-//_put_tile_asm_direct::
-// 2. mapgen.py deve garantir que não hava 2 Lockers com o mesmo ID em um mesmo Level
 // 3. Mission complete SFX
 // 4. Criar SXF_INTERACTIVE sound FX
 // 5. depois de climb up, player precisa andar antes de pular novamente (bGlbPlyJumpOK sem timer)
@@ -160,7 +153,7 @@ const uint8_t cCycleTable[] = {
                                 0, 1, 0, 1, 0, 1, 1, 0, 1, 0,                         // 0 = acid
                                 0, 1, 2, 2, 2, 1, 0xFF, 0xFF, 0xFF, 0xFF,             // 1 = steam
                                 0, 1, 1, 0, 1, 0xFF, 0xFF, 0xFF, 1, 1,                // 2 = energy ray AND force field
-                                0, 1, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,    // 3 = oil drop
+                                0, 1, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,    // 3 = oil drop (3H = step 7; 4H = step 0; 5H = step 1)
                                 0, 1, 2, 0, 1, 2, 0, 1, 2, 0,                         // 4 = mat, anti-clockwise = 0
                                 2, 1, 0, 2, 1, 0, 2, 1, 0, 2,                         // 5 = mat, clockwise = 1
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 6 = gate open
@@ -535,7 +528,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define FLASHLIGHT_BATTR_PTS   30
 #define INVULNERABILITY_SHIELD 05
 #define MAX_AMNO_SHIELD        99
-#define ONE_SECOND_TIMER       26  // = 1 sec
+#define ONE_SECOND_TIMER       25  // = 1 sec
 
 #define EGG_SHOTS_TO_DESTROY    7
 #define ST_EGG_CLOSED           0  // must be 0 for animation to work
@@ -577,7 +570,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define MISSION_COMPLETE       2
 
 #define LEVEL_01_MISSIONS_QTTY 3
-#define LEVEL_02_MISSIONS_QTTY 2
+#define LEVEL_02_MISSIONS_QTTY 3
 #define LEVEL_03_MISSIONS_QTTY 4
 
 #define CRC8_SALT_1            0b00000101
@@ -1518,6 +1511,7 @@ void Draw_Score_Panel()
 {
 	put_tile_block(0, 0, SCORE_MAP_TL_OFFSET + 6, 2, 3);  // LIFE:, SCORE: & POWER:
 	put_tile_block(26, 0, SCORE_MAP_TL_OFFSET + 6 + 2 * 3, 2, 2);  // LEVEL: & MISSIONS:
+	put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1, 2, 3 and 4
 
 __asm
   ; ubox_put_tile(9, 2, SCORE_SHIELD_TL_OFFSET);
@@ -1545,7 +1539,6 @@ __endasm;
 	display_gun_amno();
 	display_flashlight();
 	display_shield();
-	put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1, 2, 3 and 4
 }  // Draw_Score_Panel()
 
 void display_intro_credits()
@@ -1841,13 +1834,6 @@ _cctrl_selected :
 	ld a, (#_cCtrl)
 	cp #UBOX_MSX_CTL_CURSOR
 	jr nz, _try_joy_1
-
-	;void put_tile_block(uint8_t x, uint8_t y, uint8_t start_tile, uint8_t width, uint8_t height);
-	; A = Start Tile
-	; C = X
-	; B = Y
-	; D = Width
-	; E = Height
 
   ; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 5, 2, 2);
 	ld a, #INTRO_CTRL_TILE_NR + #5
@@ -2190,141 +2176,6 @@ _display_curr_selection :
 	jp _put_tile_asm_direct
 __endasm;
 }  // void draw_intro_screen()
-
-/*
-* Display Intro Screen and waits for user interaction
-
-void Draw_Intro()
-{
-	uint8_t cCont, cMenuOption;
- 
-	mplayer_init(SONG, SONG_SILENCE);
-	ubox_disable_screen();
-	// upload intro tileset
-	cGameStage = GAMESTAGE_INTRO;
-	load_tileset();
-	//Load_Tileset(INTRO_TS);
-	// clear the screen
-	ubox_fill_screen(BLANK_TILE);
-	ubox_enable_screen();
-
-	display_game_logo();
-
-	mplayer_init(SONG, SONG_INTRO);
-
-	if (cCtrl == UBOX_MSX_CTL_NONE)
-	{
-		//display_text(3, INTRO_MENU_POS, FONT1_TILE_OFFSET, "PRESS FIRE OR TRIGGER >");
-__asm
-	ld a, #GAME_TEXT_INTRO_CONTROL_ID
-	call _search_text_block
-	ld b, #INTRO_MENU_POS
-	ld c, #0x03
-	ld de, #0x0000
-	call _display_format_text_block
-__endasm;
-
-		ubox_reset_tick();
-		cCont = 0;
-		// wait until fire is pressed
-		// can be space (control will be cursors), or any fire button on a joystick
-		while (cCtrl == UBOX_MSX_CTL_NONE)
-		{
-			cCtrl = ubox_select_ctl();
-			if (ubox_tick >= 15)
-			{
-				put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 9 + (cCtrl_frames[cCont] << 2), 2, 2);
-				if (++cCont == INTRO_CTRL_CYCLE) cCont=0;
-				ubox_reset_tick();
-			}
-		}
-//		display_text(3, INTRO_MENU_POS, FONT1_TILE_OFFSET, "                       ");
-__asm
-		; put_tile_block(3, INTRO_MENU_POS, BLANK_TILE, 23, 1);
-		xor a
-		ld b, #INTRO_MENU_POS
-		ld c, #0x03
-		ld de, #0x1701
-		call	_fill_block_asm_direct
-__endasm;
-	}
-
-Redraw_Intro_Menu:
-	// display the selected control
-	if (cCtrl == UBOX_MSX_CTL_CURSOR) // keyboard
-	{
-		put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 5, 2, 2);
-	}
-	else if (cCtrl == UBOX_MSX_CTL_PORT1) // joystick 1
-	{
-		put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR, 2, 2);
-	}
-	else // cCtrl == UBOX_MSX_CTL_PORT2 - joystick 2
-	{
-__asm
-		; ubox_put_tile(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR);
-		ld a, #INTRO_CTRL_TILE_NR
-		ld b, #INTRO_MENU_POS
-		ld c, #26
-		call _put_tile_asm_direct
-		; ubox_put_tile(27, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 4);
-		ld a, #INTRO_CTRL_TILE_NR + #4
-		ld b, #INTRO_MENU_POS
-		ld c, #27
-		call _put_tile_asm_direct
-__endasm;
-		put_tile_block(26, INTRO_MENU_POS + 1, INTRO_CTRL_TILE_NR + 2, 2, 1);
-	}
-
-__asm
-  ; display_text(8, INTRO_MENU_POS, FONT1_TILE_OFFSET, "START GAME");
-  ; display_text(8, INTRO_MENU_POS + 1, FONT1_TILE_OFFSET, "GAME CREDITS");
-  ld a, #GAME_TEXT_INTRO_MENU_ID
-  call _search_text_block
-  ld b, #INTRO_MENU_POS
-  ld c, #0x08
-  ld de, #0x0000
-  call _display_format_text_block
-__endasm;
-
-	cMenuOption = 0;
-__asm
-	; ubox_put_tile(6, INTRO_MENU_POS, FONT1_TILE_OFFSET + '_' - ' ') ; // >
-	ld a, (#_FONT1_TILE_OFFSET)
-	add a, #'_' - #' '
-	ld b, #INTRO_MENU_POS
-	ld c, #6
-	call _put_tile_asm_direct
-__endasm;
-
-	do
-	{
-		ubox_wait();
-	} while (ubox_read_ctl(cCtrl) & UBOX_MSX_CTL_FIRE1);
-	while (true) // continuous loop until 'Start Game' selected
-	{
-		ubox_reset_tick();
-		while (ubox_tick < 10)
-		{
-			cCtrlCmd = ubox_read_ctl(cCtrl);
-		}
-		if (cCtrlCmd & (UBOX_MSX_CTL_UP | UBOX_MSX_CTL_DOWN))
-		{
-			ubox_put_tile(6, INTRO_MENU_POS + cMenuOption, FONT1_TILE_OFFSET + ' ' - ' '); // blank
-			cMenuOption = cMenuOption ^ 1;
-			ubox_put_tile(6, INTRO_MENU_POS + cMenuOption, FONT1_TILE_OFFSET + '_' - ' '); // >
-			continue;
-		}
-		if (cCtrlCmd & UBOX_MSX_CTL_FIRE1)
-		{
-			if (!cMenuOption) break; //Start Game
-			// Credits
-			display_intro_credits();
-			goto Redraw_Intro_Menu;
-		}
-	}
-} // void Draw_Intro()
-*/
 
 /*
 * Display the right game map
@@ -4361,7 +4212,7 @@ __asm
 _try_Level2 :
 	dec a
 	jr nz, _try_Level3
-	; Level = 2, Missions = 2
+	; Level = 2, Missions = 3
 	ld a, #LEVEL_02_MISSIONS_QTTY
 	jr _reset_missions
 _try_Level3 :
@@ -9272,16 +9123,25 @@ __asm
 _encode_lvl_code :
 	; step 1: compute iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
 	ld hl, (#_iScore)
+	
+	;;;ld hl, #300
+
 	ld (#_cBuffer), hl
 
 	ld a, (#_cLevel)
 	inc a ; next level required [2 or 3]
+
+	;;;ld a, #2
+
 	rlca
 	rlca
 	rlca
 	or #CRC8_SALT_1
 	ld b, a ; cLevel + SALT_1
 	ld a, (#_cLives)
+
+	;;;ld a, #3
+
 	rrca
 	rrca
 	rrca
@@ -9407,8 +9267,10 @@ void Run_Game()
 		ubox_fill_screen(BLANK_TILE);
 		ubox_enable_screen();
 		cGameStage = GAMESTAGE_LEVEL;
+
 		// Level 2 TEST
 		cLevel = 2;
+
 		draw_game_level_info();
 
 		ubox_disable_screen();
@@ -9533,10 +9395,10 @@ void Run_Game()
 			// 'continue_game_loop()=false' OR 'Map Changed'
 			if (cLives) // if cLives != 0 then: 'Next map/Portal processing' OR Level 'Completed processing'
 			{
-				//if (!cRemainMission)
-				if (iScore > 10)
+				if (!cRemainMission)
+				///if (iScore > 10)
 				{
-					cRemainMission = 0;
+					///cRemainMission = 0;
 					cLevel++;
 					iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
 				}
