@@ -5386,8 +5386,9 @@ _not_NextM_3 :
 
 _upper_tile_not_solid :
 	; not solid, so check if player has reached the top floor
-	ld c, #7
-	ld d, #12
+	;;ld c, #7
+	;;;;ld d, #12
+	ld d, #8
 	call _calcTileXYAddr
 	ld a, (hl)
 	ld l, #BOOL_TRUE; everything ok
@@ -5395,10 +5396,11 @@ _upper_tile_not_solid :
 	ret nz
 
 	; blank tile found. adjust Y position, set avoid_jump counter and stop climbing
-	ld hl, #_sThePlayer + #01; HL = &_sThePlayer.y
+	ld hl, #_sThePlayer + #01 ; HL = &_sThePlayer.y
 	ld a, (hl)
-	sub #3
-	ld (hl), a ; _sThePlayer.y -= 3
+	;;;;sub #3
+	and a, #0b11111000 ; round y to be multiple of 8
+	ld (hl), a
 
 	xor a ; A = BOOL_FALSE
 	ld (#_bGlbPlyJumpOK), a  ; bGlbPlyJumpOK = false
@@ -5438,14 +5440,14 @@ __asm
 	ld a, (#_sThePlayer + #03); A = _sThePlayer.status
 	ld l, #BOOL_FALSE
 	cp #PLYR_STATUS_CLIMB
-	ret nz; not climbing
+	ret nz ; not climbing
 
 	xor a
 	ld (#_cGlbPlyFlag), a; reset _cGlbPlyFlag
 	inc a
 	ld (#_bGlbPlyMoved), a; player has moved DOWN
 
-	ld a, (#_sThePlayer + #01); A = _sThePlayer.y
+	ld a, (#_sThePlayer + #01) ; A = _sThePlayer.y
 	inc a
 	ld (#_sThePlayer + #01), a
 		
@@ -5453,13 +5455,22 @@ __asm
 	ld l, #BOOL_TRUE; everything ok
 	cp #22 * #8
 	jr c, _not_NextM_2
-	cp #24 * #8 - #2
+	;;;;cp #24 * #8 - #2
+	cp #24 * #8 - #4
 	ret c
 	; Next map detected
 	jp _do_nextm_down
 _not_NextM_2 :
-	; not Next map - check if player has reached the floor
-	ld c, #7
+	; not Next map - check if player should keep climbing down
+  ld c, #7
+  ld d, #8
+  call _calcTileXYAddr
+  ld a, (hl)
+  bit #6, a  ; test if bit 6 (SPECIAL TILE BIT) is set
+  jr z, _no_cable_so_end_climbing_down
+
+	; now check if player has reached the floor
+	;;ld c, #7
 	ld d, #16
 	call _calcTileXYAddr
 	ld a, (hl)
@@ -5478,6 +5489,7 @@ _flSolid :
 	and #0b11111000
 	ld (#_sThePlayer + #1), a
 	; TODO: SFX here? (reach floor)
+_no_cable_so_end_climbing_down :
 _cdSolid :
 	; solid tile found. Stop climbing
 	ld hl, #_sThePlayer + #03; HL = &_sThePlayer.status
@@ -6920,7 +6932,8 @@ _set_jmp_none :
 
 _sttClbDown :
 	ld a, (#_sThePlayer + #01)
-	add a, #04
+	;;;;add a, #04
+	add a, #08
 	jr _sttClimb
 _sttClbUp :
 	ld a, (#_sThePlayer + #01)
