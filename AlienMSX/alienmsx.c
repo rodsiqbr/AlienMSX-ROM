@@ -5374,7 +5374,18 @@ __asm
 	or #SCR_SHIFT_UP << #5
 	jp _do_nextm_up
 _not_NextM_3 :
-	; not Next map - check if player has reached the top floor
+	; not Next map - check if player has reached a solid tile
+	ld c, #7
+	ld d, #0
+	call _calcTileXYAddr
+	ld a, (hl)
+	bit #7, a ; SOLID BIT
+	jr z, _upper_tile_not_solid
+	bit #6, a ; test if bit 6 (SPECIAL TILE BIT) is set
+	jr z, _upper_tile_is_solid_so_dont_climb_up
+
+_upper_tile_not_solid :
+	; not solid, so check if player has reached the top floor
 	ld c, #7
 	ld d, #12
 	call _calcTileXYAddr
@@ -5389,12 +5400,18 @@ _not_NextM_3 :
 	sub #3
 	ld (hl), a ; _sThePlayer.y -= 3
 
-	xor a
+	xor a ; A = BOOL_FALSE
 	ld (#_bGlbPlyJumpOK), a  ; bGlbPlyJumpOK = false
 	ld (#_bGlbPlyMoved), a   ; player has not moved
-	inc a
+	inc a ; A = BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a ; but player has changed position
 	jr _cdSolid
+
+_upper_tile_is_solid_so_dont_climb_up :
+	ld hl, #_sThePlayer + #01 ; HL = &_sThePlayer.y
+	inc (hl) ; rollback y position
+	; TODO: SFX HERE
+	ld l, #BOOL_TRUE; everything ok
 __endasm;
 }  // bool is_player_climb_up()
 
