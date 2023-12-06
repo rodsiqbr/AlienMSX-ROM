@@ -6,7 +6,7 @@
 // TODOS: Bugs list:
 // 3. Mission complete SFX
 // 4. Criar SXF_INTERACTIVE sound FX
-// 5. depois de climb up, player precisa andar antes de pular novamente (bGlbPlyJumpOK sem timer)
+// 6. falling e jumping precisam detectar se o player passou através de um FF horizontal
 
 
 #include <stdio.h>
@@ -649,9 +649,10 @@ uint8_t cGlbPlyHitCount;
 uint8_t cPlyNewX, cPlyNewY;
 uint8_t cPlySafePlaceX, cPlySafePlaceY, cPlySafePlaceDir;
 uint8_t cPlyPortalDestinyX, cPlyPortalDestinyY;
+uint8_t cGlbPlyJumpTimer;     // timer to avoid an undesired jump just after a climp up
 bool bGlbPlyMoved;            // TRUE if player has walked RIGHT/LEFT, climbed UP/DOWN or falling DOWN
 bool bGlbPlyChangedPosition;  // TRUE if player has changed position (belt, colision, Moved)
-bool bGlbPlyJumpOK;           // flag to avoid an undesired jump just after a climp up
+
 
 uint8_t cPlyObjects, cPlyAddtObjects;
 uint8_t cLives;
@@ -2959,11 +2960,15 @@ _proc_param_gate :
 	jp _insert_new_entity
 
 _proc_param_forcefield :
-	; set FORCEFIELD attributes : cGlbWidth(B), cGlbStep(D) and cGlbCyle(H)
+	; set FORCEFIELD attributes : cGlbWidth(B), cGlbStep(D), cGlbCyle(H) and cGlbDir(L)
+	; cGlbFlag
+	ld a, (hl)
+	and #0b00000001
 	inc hl
 	ld b, (hl)
 	inc hl
 	push hl
+	ld l, a
 	ld h, #ANIM_CYCLE_FORCEFIELD
 	ld d, #0
 	jp _insert_new_entity_0
@@ -3458,7 +3463,8 @@ _proc_et_gate :
 	ld iy, #_cGlbTile
 	inc 0 (iy)
 
-	; if (!cGlbFlag) iGlbPosition += 32 else iGlbPosition++
+_next_gate_or_ff_tile_position :
+; if (!cGlbFlag) iGlbPosition += 32 else iGlbPosition++
 	ld a, l
 	or a
 	jr z, _gate_obj_vert
@@ -3474,7 +3480,7 @@ _gate_obj_create :
 
 _proc_et_forcefield :
 	push bc
-	jr _gate_obj_vert
+	jr _next_gate_or_ff_tile_position	
 
 _proc_et_sliderfloor :
 	;pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer;
@@ -5386,7 +5392,7 @@ _not_NextM_3 :
 
 _upper_tile_not_solid :
 	; not solid, so check if player has reached the top floor
-	;;ld c, #7
+	;ld c, #7  ; C=7 already
 	;;;;ld d, #12
 	ld d, #8
 	call _calcTileXYAddr
@@ -5402,8 +5408,9 @@ _upper_tile_not_solid :
 	and a, #0b11111000 ; round y to be multiple of 8
 	ld (hl), a
 
+	ld a, #ONE_SECOND_TIMER
+	ld (#_cGlbPlyJumpTimer), a
 	xor a ; A = BOOL_FALSE
-	ld (#_bGlbPlyJumpOK), a  ; bGlbPlyJumpOK = false
 	ld (#_bGlbPlyMoved), a   ; player has not moved
 	inc a ; A = BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a ; but player has changed position
@@ -5418,7 +5425,7 @@ __endasm;
 }  // bool is_player_climb_up()
 
 /*
-* When descending, check if the player continues descending or has stopped descending (reached the ground)
+* When descending, check if the player continues descending or stopped descending (reached the ground or cable has ended)
 * Returns:	true (1 - player continue climbing)
 *							cGlbPlyFlag = 76543210
 *										        ||||||||
@@ -5431,7 +5438,7 @@ __endasm;
 *														|L------ Object
 *														L------- Interactive
 *					    cGlbObjData = shift direction + screen destination when Next Map detected
-*						false (0 - player is not climbing (was not before or player reach the floor))
+*						false (0 - player is not climbing (was not before, player reach the floor or cable has ended))
 *							sThePlayer.status = PLYR_STATUS_STAND (if player stopped climbing)
 */
 bool is_player_climb_down()
@@ -5470,7 +5477,7 @@ _not_NextM_2 :
   jr z, _no_cable_so_end_climbing_down
 
 	; now check if player has reached the floor
-	;;ld c, #7
+	;ld c, #7  ; C = 7 already
 	ld d, #16
 	call _calcTileXYAddr
 	ld a, (hl)
@@ -6065,12 +6072,12 @@ __endasm;
 } // void player_moving_at_belt()
 
 /*
-* Check player falling status and update X,Y position
+* Check player falling status, solid colision (with horizontal forcefield) and update X,Y position
 * Returns:	true (1 - player is falling)
 *							cGlbPlyFlag = 76543210
 *										        ||||||||
 *														|||||||L Fatal
-*														||||||L- Solid
+*														||||||L- Solid *
 *														|||||L-- Gate
 *														||||L--- Empty floor
 *														|||L---- Special floor (belt)
@@ -6083,6 +6090,7 @@ __endasm;
 */
 bool is_player_falling()
 {
+// TODO: check for solid colision
 __asm
 	ld a, (#_sThePlayer + #03) ; A = _sThePlayer.status
 	ld l, #BOOL_FALSE
@@ -6933,7 +6941,7 @@ _set_jmp_none :
 _sttClbDown :
 	ld a, (#_sThePlayer + #01)
 	;;;;add a, #04
-	add a, #08
+	add a, #8
 	jr _sttClimb
 _sttClbUp :
 	ld a, (#_sThePlayer + #01)
@@ -7075,8 +7083,6 @@ _iamWalking : ; PLYR_STATUS_STAND or PLYR_STATUS_WALKING
 	or a
 	jp z, _patWalk ; player has not moved
 	; update the walking animation
-	ld a, #BOOL_TRUE
-	ld (#_bGlbPlyJumpOK), a ; _bGlbPlyJumpOK = true;
 	ld hl, #_sThePlayer + #07 ; HL = &_sThePlayer.delay
 	ld a, (hl)
 	inc (hl)
@@ -7624,16 +7630,42 @@ __endasm;
 */
 bool update_player()
 {
-	bGlbPlyMoved = false;
+__asm
+  ld a, (#_cGlbPlyJumpTimer)
+	or a
+	jr z, 00100$
+	dec a
+	ld (#_cGlbPlyJumpTimer), a
+
+00100$:
+	;bGlbPlyMoved = false; 
+	ld a, #BOOL_FALSE
+	ld (#_bGlbPlyMoved), a
+
+	;if (sThePlayer.grabflag) player_hit(HIT_PTS_FACEHUG);
+	ld a, (#_sThePlayer + #9) ; sThePlayer.grabflag
+	or a
+	jr z, 00101$	
+	ld	a, #HIT_PTS_FACEHUG
+	call	_player_hit_asm_direct
+00101$:
+__endasm;
+
+	////bGlbPlyMoved = false;
 	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessario, ja filtrado no run_game()
 
 	//display_number(15, 0, 3, cGlbPlyFlag);
-	if (sThePlayer.grabflag) player_hit(HIT_PTS_FACEHUG);
+	////if (sThePlayer.grabflag) player_hit(HIT_PTS_FACEHUG);
 
 	if (!is_player_falling())
 	{
 		if (is_player_jumping())
 		{
+			// TODO: check colision with Solid (horizontal forcefield)
+			//if (cGlbPlyFlag & COLISION_SOLID)
+			//{
+			//	player_hit(HIT_PTS_SMALL);
+			//}
 			if (cGlbPlyFlag & COLISION_FATAL)
 			{
 				//if (!cPlyRemainShield) player_hit(HIT_PTS_SMALL);
@@ -7759,7 +7791,7 @@ bool update_player()
 						}
 						else
 						{
-							if (bGlbPlyJumpOK)
+							if (!cGlbPlyJumpTimer)
 							{
 								// start a jump
 								update_player_status(PLYR_STATUS_JUMPING);
@@ -7818,6 +7850,11 @@ bool update_player()
 	}
 	else
 	{
+		// check for solid colision (horizontal forcefield) - act as colision with a Fatal
+		if (cGlbPlyFlag & COLISION_SOLID)
+		{
+			player_hit(HIT_PTS_SMALL);
+		}
 		if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
 		{
 			// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
@@ -9312,7 +9349,6 @@ void Run_Game()
 		// global variable initialization - once per level
 		cLastPower = 0xFF;  // force update on the first display_power() call
 		bGlbMMEnabled = bChangeMap = false;
-		bGlbPlyJumpOK = true;
 		cGlbGameSceneLight = LIGHT_SCENE_ON_FL_ANY;
 		cGlbFlashLightAction = GAME_LIGHTS_ACTION_NONE;
 		cPlyObjects = cPlyAddtObjects = HAS_NO_OBJECT;  // Player starts with no objects
@@ -9320,7 +9356,7 @@ void Run_Game()
 		cPlyRemainShield = INVULNERABILITY_SHIELD;
 
 		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
-		cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = 0;
+		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = 0;
 
 		do  // loop at each screen map
 		{

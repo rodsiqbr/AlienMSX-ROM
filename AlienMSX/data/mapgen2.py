@@ -377,15 +377,22 @@ def main():
                 if special > 15:
                     special = 15
 
-# forcefield: ttttXXXX|XYYYYY00|0000hhhh  (3 bytes)
+# forcefield: ttttXXXX|XYYYYY0d|0000hhhh  (3 bytes)
 #          tttt = type (8)
 #          XXXXX = tile X (0-31)
 #          YYYYY = tile Y (0-23)
-#          hhhh = vertical Height (max 7)
+#          d = direction: vertical (0 - default) / horizontal (1)
+#          hhhh = vertical Height (max 7) / horizontal Height
             if name == "forcefield":
-                special = obj["height"] // 8
-                if special > 7:
-                    special = 7
+                XtraBits = int(get_property(obj, "direction", 0))
+                if XtraBits > 1:
+                    XtraBits = 1
+                if XtraBits == 1:
+                    special = obj["width"] // 8
+                else:
+                    special = obj["height"] // 8
+                    if special > 7:
+                        special = 7
 
 # egg: ttttXXXX|XYYYYY00|00000III (3 bytes)
 #          tttt = type (9)
