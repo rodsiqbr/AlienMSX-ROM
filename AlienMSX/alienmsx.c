@@ -528,16 +528,16 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define FLASHLIGHT_BATTR_PTS   30
 #define INVULNERABILITY_SHIELD 05
 #define MAX_AMNO_SHIELD        99
-#define ONE_SECOND_TIMER       25  // = 1 sec
+#define ONE_SECOND_TIMER       30  // = 1 sec
 
 #define EGG_SHOTS_TO_DESTROY    7
-#define ST_EGG_CLOSED           0  // must be 0 for animation to work
+#define ST_EGG_CLOSED           0  // ** must be 0 for animation to work
 #define ST_EGG_OPENED           2
 #define ST_EGG_RELEASED         3
 #define ST_EGG_DESTROYED        4
 
-#define ANIM_STEP_EGG_CLOSED    0  // must be 0 for animation to work
-#define ANIM_STEP_EGG_OPENED    2  // must be 2 for animation to work
+#define ANIM_STEP_EGG_CLOSED    0  // ** must be 0 for animation to work
+#define ANIM_STEP_EGG_OPENED    2  // ** must be 2 for animation to work
 
 #define PLY_DIST_EGG_OPEN       8  // minimum # tiles distance from Player to Egg to open it
 #define PLY_DIST_EGG_FH_RELEASE 6  // minimum # tiles distance from Player to an opened Egg to release Enemy (FaceHug)
@@ -635,7 +635,7 @@ uint8_t cGlbFLDelay;
 // our live entities - enemies and the player
 PlyEntity sThePlayer;
 EnemyEntity sEnemies[AVERAGE_ENEMIES_PER_SCREEN * MAPS];  // all the loaded enemy entities in the map
-EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs the player, this is the enemy ptr
+EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs the player, this is the enemy entity ptr
 
 // Global variables for player control
 uint8_t cGlbPlyFlag; // special global flag to describe player conflict with screen tiles
@@ -2705,6 +2705,9 @@ void Load_Sprites()
 {
 unsigned int iBuffOffset;
 
+	// init sprites after every level
+	spman_init();
+	
 	//uncompress "player_ash" + "player_ripley" sprite data
   zx0_uncompress(cBuffer, player_obj);
   if (cLevel == 1)
@@ -9336,7 +9339,7 @@ void Run_Game()
 		cGameStage = GAMESTAGE_LEVEL;
 
 		// Level 2 TEST
-		cLevel = 2;
+		//cLevel = 2;
 
 		draw_game_level_info();
 
@@ -9538,7 +9541,7 @@ void main(void)
 	ubox_wvdp(1, 0b11100010); //0xe2
 
 	// init sprite and patterns
-	spman_init();
+	//spman_init();
 
 	// init the music/fx player
 	mplayer_init(SONG, SONG_SILENCE);
@@ -9550,6 +9553,8 @@ void main(void)
 	cCtrl = UBOX_MSX_CTL_NONE;
 
 	zx0_uncompress(cGameText, gametext);
+	
+	//TODO: uncompress ALIEN tiles and pre-calculate flip tiles
 
 	while (true) // continuous loop - do not return to BASIC/BIOS
 	{
@@ -9560,11 +9565,13 @@ void main(void)
 		cLevel = 1;    // at Level 1
 
 		bIntroAnim = true;
+		// intro screen + selection menu (including Level Selection)
 		draw_intro_screen();
 
-		// play the game until cLives=0
+		// play the game from the selected Level until cLives=0
 		Run_Game();
-		// TODO: check for GAME WIN, then do not show Gameover
+	
+	// TODO: check for GAME WIN, then do not show Gameover
 		draw_game_over();
 	}
 }  // void main()
