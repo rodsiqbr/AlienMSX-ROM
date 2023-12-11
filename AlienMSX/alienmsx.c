@@ -159,7 +159,7 @@ const uint8_t cCycleTable[] = {
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 6 = gate open
 																1, 1, 1, 0, 0xFE, 0xFF, 0xFF, 0xFF, 0, 0xFE,          // 7 = gate close
 																0, 0xFE, 1, 0xFE, 0xFF, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, // 8 = break wall 3 stages
-																1, 0xFE, 0, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, // 9 = interactive 2 stages (0 = on -> off / 2 = off -> on)
+																1, 0xFE, 0, 0xFE, 0xFE, 0xFF, 0xFE, 0xFE, 0xFE, 0xFE, // 9 = interactive 3 stages (on -> off = step 0 / off -> on = step 2 / collectible item = step 5)
 																0, 1, 2, 0, 1, 2, 0, 1, 2, 0xFF,                      // 10 = portal
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 11 = locker open
 																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 6, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
@@ -391,14 +391,15 @@ const uint8_t enemy_hurt_frames[]  = { 3, 3, 3, 3, 4, 4, 4, 4, 4, 0xFC };  // fr
 #define SPRITE_ANIM_FRAME_RESTART 0xFD
 #define SPRITE_ANIM_FRAME_KEEP    0xFC
 
-#define COLISION_FATAL 0b00000001
-#define COLISION_SOLID 0b00000010
-#define COLISION_GATE  0b00000100
-#define COLISION_EMPTY 0b00001000
-#define COLISION_FLOOR 0b00010000
-#define COLISION_NEXTM 0b00100000
-#define COLISION_OBJCT 0b01000000
-#define COLISION_INTER 0b10000000
+#define COLISION_FATAL       0b00000001
+#define COLISION_SOLID       0b00000010
+#define COLISION_GATE        0b00000100
+#define COLISION_EMPTY       0b00001000
+#define COLISION_FLOOR       0b00010000
+#define COLISION_NEXTM       0b00100000
+#define COLISION_OBJCT       0b01000000
+#define COLISION_COLLECTIBLE 0b01000000
+#define COLISION_INTER       0b10000000
 
 // fonts usefull info
 uint8_t FONT1_TILE_OFFSET;  // first font tile (' ') position in the Tileset
@@ -435,7 +436,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 
 
 // Game tile #defines for C & ASM code
-#define GAME_SPEC_TL_OFFSET	       07     // start tile offset for <Special> tiles
+#define GAME_SPEC_TL_OFFSET	       08     // start tile offset for <Special> tiles
 #define GAME_SPECSD_TL_OFFSET	     12 	  // start tile offset for <Special> <Solid> tiles
 #define GAME_SP_BLT_TL_OFFSET      15 	  // start tile offset for <Special> Belt tiles
 #define GAME_SP_GAT_TL_OFFSET	     24 	  // start tile offset for <Special> Gate (animated) tiles
@@ -446,7 +447,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define GAME_SOLD_TL_OFFSET	       46 	  // start tile offset for Solid tiles
 #define GAME_EGG_TL_OFFSET	       70 	  // start tile offset for Egg tiles
 #define GAME_COLLECT_TL_OFFSET	   76 	  // start tile offset for Collectible tiles
-#define GAME_FATL_TL_OFFSET	       80 	  // start tile offset for Fatal(animated) tiles
+#define GAME_FATL_TL_OFFSET	       80 	  // start tile offset for Fatal (animated) tiles
 
 
 #define BLANK_TILE               0x00                    // BLANK tile position in any Tileset
@@ -512,6 +513,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define INTERACTIVE_ACTION_LIGHT_ONOFF  0
 #define INTERACTIVE_ACTION_LOCKER_OPEN  1
 #define INTERACTIVE_ACTION_MISSION_CPLT 2
+#define INTERACTIVE_ACTION_COLLECT_CPLT 3
 
 #define GAME_LIGHTS_ACTION_NONE 0
 #define GAME_LIGHTS_ACTION_ON   1
@@ -549,8 +551,9 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define HIT_PTS_DEATH          MAX_POWER
 
 #define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
-#define SCORE_INTERACTV_POINTS 20  //  20 points to the score when activating an interactive
+#define SCORE_INTERACTV_POINTS 25  //  25 points to the score when activating an interactive
 #define SCORE_ENEMY_HIT_POINTS 30  //  30 points to the score when hit an enemy
+#define SCORE_COLLECTBL_POINTS 40  //  40 points to the score when collect a collectible item
 #define SCORE_MISSION_POINTS   50  //  50 points to the score when complete a mission
 #define SCORE_LEVELUP_POINTS  100  // 100 points to the score when level complete
 
@@ -587,6 +590,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define ANIMATE_OBJ_INTER  3
 #define ANIMATE_OBJ_LOCKER 4
 #define ANIMATE_OBJ_EGG    5
+#define ANIMATE_OBJ_COLLC  6
 
 #define BOOL_FALSE 0
 #define BOOL_TRUE  1
@@ -639,6 +643,8 @@ EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs th
 
 // Global variables for player control
 uint8_t cGlbPlyFlag; // special global flag to describe player conflict with screen tiles
+uint8_t cJmpHeadTileType;
+uint8_t cJmpFootTileType;
 uint8_t cGlbPlyJumpCycles;
 uint8_t cGlbPlyJumpStage;
 uint8_t cGlbPlyJumpDirection;
@@ -3061,7 +3067,7 @@ _proc_param_interactive :
 	ld a, (hl)
 	and a, #0b00000011
 	inc hl
-	; check for Action = INTERACTIVE_ACTION_LOCKER_OPEN or INTERACTIVE_ACTION_MISSION_CPLT, then store the (Locker ID / Mission #) as ObjID
+	; check for Action = INTERACTIVE_ACTION_LOCKER_OPEN or INTERACTIVE_ACTION_MISSION_CPLT or INTERACTIVE_ACTION_COLLECT_CPLT, then store the (Locker ID / Mission #) as ObjID
 	cp #INTERACTIVE_ACTION_LIGHT_ONOFF
 	jr nz, _intr_obj_lock_or_mission
 	; cGlbFlag = ++cGlbSpObjID;
@@ -3076,10 +3082,17 @@ _intr_obj_lock_or_mission :
 _end_intr_obj :
 	inc hl
 	push hl
-	; cGlbStep = 0; cGlbCyle = ANIM_CYCLE_INTERACTIVE; cGlbWidth is always 1 for Interactive; cGlbDir = Action (0b000000aa)
+	; cGlbStep = 0; cGlbCyle = ANIM_CYCLE_INTERACTIVE;
+	; cGlbWidth is 2 for INTERACTIVE_ACTION_COLLECT_CPLT; otherwise always 1; cGlbDir = Action(0b000000aa)
 	ld d, #0
-	ld h, #ANIM_CYCLE_INTERACTIVE
 	ld b, #1
+	cp #INTERACTIVE_ACTION_COLLECT_CPLT
+	jr nz, _interactive_is_not_collectible
+	inc b ; cGlbWidth = 2
+	ld d, #5 ; cGlbStep = 5
+
+_interactive_is_not_collectible :
+	ld h, #ANIM_CYCLE_INTERACTIVE
 	ld l, a
 
 	; adjust initial tile and step based on Object History in this screen
@@ -3556,7 +3569,10 @@ _proc_et_interactive :
 	ld bc, (#_iGlbPosition)
 	add iy, bc
 	ld 0 (iy), a
-	jp _upd_animtile_ptr_ex
+
+	; iGlbPosition += 32; /* 2 vertical tiles if INTERACTIVE_ACTION_COLLECT_CPLT */
+	jp _gate_obj_vert
+	;;jp _upd_animtile_ptr_ex
 
 _proc_et_portal :
 	; store the screen destination (0000DDDD) in cMap_ObjIndex[] map
@@ -3737,465 +3753,6 @@ _end_entities :
 	pop ix
 __endasm;
 }  // void load_entities()
-
-
-/*
-* Uncompress and load entities data from Map
-*/
-/*
-void Load_Entities()
-{
-	uint8_t* pMapData;
-	uint8_t cObjType;
-
-	reset_screen_objects();
-	//memset(cMap_ObjIndex, 0x00, MAP_W * MAP_H);
-	//memset(sAnimTiles, 0x00, sizeof(struct AnimatedTile) * MAX_ANIM_TILES);
-	//memset(sAnimSpecialTiles, 0x00, sizeof(struct AnimatedTile) * MAX_ANIM_SPEC_TILES);
-	//memset(sEnemies, 0x00, sizeof(LiveEntity) * MAX_ENEMIES);
-	//memset(&sThePlayer, 0x00, sizeof(LiveEntity));
-	pCurAnimTile = sAnimTiles;
-	pCurAnimSpecialTile = sAnimSpecialTiles;
-	//pCurEntities = sEntities;
-
-	// get to the beginning of the entities:
-	//pMapData = pCurMapData + (MAP_H * MAP_W);
-
-	pMapData = cMap_Data + (MAP_H * MAP_W);
-	cAnimTilesQty = cAnimSpecialTilesQty = cGlbSpecialTilesActive = cGlbSpObjID = 0;
-
-//player: dd..tttt | x | y (3 bytes)
-//          dd = direction: look right(0) / look left(1)
-//          tttt = type(1)
-//          x = x position (0 - 256)
-//          y = y position (0 - 192)
-
-//safeplace: dd..tttt | x | y (3 bytes)
-//          dd = direction: look right(0) / look left(1)
-//          tttt = type(2)
-//          x = x position (0 - 256)
-//          y = y position (0 - 192)
-
-//enemy: ....tttt | X | Y | 0IIIwwww (4 bytes)
-//					tttt = type(3)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          0III = Enemy ID ID(0 - 7) - should match an existing EggID
-//          wwww = horizontal width (wwww blocks of 16 pixels wide)
-
-//animate: cc..tttt | X | Y | ffff0001 (4 bytes)
-//          cc = cycle#
-//          tttt = type(4)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          ffff = frame#
-//          0001 = width 1
-
-//belt: dd..tttt | X | Y | ....wwww (4 bytes)
-//          dd = direction: anti - clockwise(0) / clockwise(1)
-//					tttt = type(5)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          wwww = horizontal width
-
-//dropper: 11..tttt | X | Y | ffffhhhh (4 bytes)
-//          11 = cycle# always 3
-//          tttt = type(6)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          ffff = frame#
-//          hhhh = vertical Height
-
-//portal: d...tttt | X | Y | DDDD0011 (4 bytes)
-//          d = player position in the destination portal : left(0) / right(1)
-//          tttt = type(7) 
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          DDDD = screen destination (0 - 15, same level)
-//					0011 = vertical width is always 3
-
-//forcefield: 10..tttt | X | Y | ....hhhh (4 bytes)
-//					10 = cycle# always 2
-//          tttt = type(8)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          hhhh = vertical Height(max 7)
-
-//egg: ....tttt | X | Y | 0III0100 (4 bytes)
-//          tttt = type(9)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          0III = egg ID(0 - 7)
-//          0100 = width 4
-
-//gate: dKKKtttt | X | Y | TTTTwwww (4 bytes)
-//          d = direction: vertical(0) / horizontal(1)
-//          KKK = Key [0-5] (0 = none, 1 = key, 2 = yellow cart, 3 = green card, 4 = red card, 5 = tool)
-//          tttt = type(10)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          TTTT = time in seconds to close gate
-//          wwww = horizontal / vertical width
-
-//wall: ....tttt | X | Y | HHHH0010 (4 bytes)
-//          tttt = type(11)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          HHHH = hardness: # of shots to break the wall
-//          0010 = vertical width is always 2
-
-//interactive: aa..tttt | X | Y | eeee0001 (4 bytes)
-//          aa = action [0-3] (0 = lights on/off, 1 = locker open, 2 = mission complete )
-//          tttt = type(12)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          eeee = locker ID / misssion #
-//					0001 =  width is always 1
-
-//slider: dd..tttt | X | Y | llllwwww (4 bytes)
-//          dd = direction: UP(0) / DOWN(1) / RIGHT(2) / LEFT(3)
-//          tttt = type(13)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          llll = movement distance / lenght
-//          wwww = horizontal width
-
-//locker: ....tttt | X | Y | IIII0010 (4 bytes)
-//          tttt = type(14)
-//          X = tile X(0 - 31)
-//          Y = tile Y(0 - 23)
-//          IIII = locker ID (0 - 15)
-//          0010 = vertical width is always 2
-
-	// the entity list ends with 0xFF
-	while (*pMapData != 0xFF)
-	{
-		// first byte is the object Type (lower nibble) + additional flags (higher nibble)
-		cObjType = pMapData[0] & 0x0F;
-		
-		// check if player or enemy
-		if (cObjType == ET_PLAYER) // Player entity must exist only 1 per level, at the first screen map
-		{
-			//just set sThePlayer once per level
-			if (sThePlayer.type == ET_UNUSED)
-			{
-				sThePlayer.x = pMapData[1];
-				sThePlayer.y = pMapData[2] + 8 * 3;
-				sThePlayer.dir = pMapData[0] >> 6;
-				sThePlayer.status = PLYR_STATUS_STAND;
-				sThePlayer.hitflag = sThePlayer.grabflag = BOOL_FALSE;
-				sThePlayer.type = ET_PLAYER;
-				// we don't use 'sThePlayer.pat'. Use global variables instead (PLYR_PAT_XXX_IDX)
-				// we don't use 'sThePlayer.update'. Use update_player() directly
-				//sThePlayer.update = update_player;
-			}
-			pMapData += 3;
-			continue;
-		}
-		if (cObjType == ET_SAFEPLACE)
-		{
-			cPlySafePlaceX = pMapData[1];
-			cPlySafePlaceY = pMapData[2] + 8 * 3;
-			cPlySafePlaceDir = pMapData[0] >> 6;
-			pMapData += 3;
-			continue;
-		}
-		if (cObjType == ET_ENEMY)
-		{
-			//TODO: do something
-			pMapData += 4;
-			continue;
-		}
-
-		// entity is an animated tile - Generic configuration
-		pInsertAnimTile = pCurAnimTile;
-		cGlbFlag = 0;
-		iGlbPosition = ((pMapData[2] + 3) << 5) + pMapData[1]; // (Y + 3) * 32 + X 
-		cGlbTile = cMap_Data[iGlbPosition - (3 * 32)]; // get the base tile from Map + Object History update
-
-		cGlbCyle = pMapData[0] >> 6;
-		cGlbStep = pMapData[3] >> 4;
-		cGlbWidth = pMapData[3] & 0b00001111;
-
-		// custom configuration per Object Type
-		if (cObjType == ET_GATE)
-		{
-			if (!cGlbTile) // if its a gate that is always opened (Object History), no need to animate
-			{
-				pMapData += 4;
-				continue;
-			}
-			pInsertAnimTile = pCurAnimSpecialTile;
-			cGlbFlag = cGlbCyle >> 1;
-			cGlbCyle = ANIM_CYCLE_GATE_OPEN;
-			cGlbTimer = cGlbStep * (60 / 2 / 7);  // convert sec -> number of frames;
-			cGlbStep = 0;
-			cGlbSpObjID++;
-		}
-		else if (cObjType == ET_WALL)
-		{
-			if (!cGlbTile) // if its a wall that was always destroyed (Object History), no need to animate
-			{
-				pMapData += 4;
-				continue;
-			}
-			pInsertAnimTile = pCurAnimSpecialTile;
-			cGlbCyle = ANIM_CYCLE_WALL_BREAK;
-			// TODO: Armazenar o nro de tiros já recebidos no histórico desse objeto e restaurar quando voltar nessa tela
-			// Precisa armazenar a qtde de tiros restantes em 1 novo atributo de Object History, atualizar sempre que 1 novo tiro é dado e recuperar o
-			// pInsertAnimTile->cTimeLeft a cada recarga de tela
-			cGlbTimer = cGlbStep;
-			// Adjust initial tile and step based on Object History in this screen
-			//cGlbFlag = (GAME_TILE_OFFSET + GAME_WALL_BRK_TL_OFFSET);
-			cGlbFlag = (TS_SCORE_SIZE + GAME_WALL_BRK_TL_OFFSET);
-			if (cGlbTile == cGlbFlag)
-				cGlbStep = 2;
-			else if (cGlbTile == (cGlbFlag + 1))
-				cGlbStep = 4;
-			else
-				cGlbStep = 0;
-			cGlbTile = cGlbFlag; // base tile for Wall is always (GAME_TILE_OFFSET + GAME_WALL_BRK_TL_OFFSET)
-			cGlbSpObjID++;
-		}
-		else if (cObjType == ET_BELT)
-		{
-			cGlbCyle += ANIM_CYCLE_BELT;  // 4 = anti - clockwise (0), 5 = clockwise (1)
-		}
-		else if (cObjType == ET_SLIDERFLOOR)
-		{
-			pInsertAnimTile = pCurAnimSpecialTile;
-			cGlbCyle += ANIM_CYCLE_SLIDER_UP;  // 50 = UP (0), 51 = DOWN (1), 52 = RIGHT (2), 53 = LEFT (3)
-			cGlbTimer = cGlbStep;
-			cGlbStep = LEFT_MOST_TILE;
-			cGlbSpObjID++;
-			insert_new_screen_object();
-		}
-		else if (cObjType == ET_INTERACTIVE)
-		{
-			pInsertAnimTile = pCurAnimSpecialTile;
-			//cGlbTimer = cGlbStep; // extra information (Locker ID / Mission #)
-
-			// Check for Action = INTERACTIVE_ACTION_LOCKER_OPEN or INTERACTIVE_ACTION_MISSION_CPLT, then store the (Locker ID / Mission #) as ObjID
-			if (cGlbCyle == INTERACTIVE_ACTION_LIGHT_ONOFF)
-			{
-				cGlbTimer = ++cGlbSpObjID;
-			}
-			else
-			{
-				cGlbTimer = cGlbStep; // extra information (Locker ID / Mission #)
-			}
-			cGlbStep = 0;
-			cGlbCyle = ANIM_CYCLE_INTERACTIVE;
-			// Adjust initial tile and step based on Object History in this screen	
-			//if (cGlbTile == (GAME_TILE_OFFSET + GAME_PWR_SWITCH_TL_OFFSET + 1))
-			if (cGlbTile == (TS_SCORE_SIZE + GAME_PWR_SWITCH_TL_OFFSET + 1))
-			{
-				cGlbTile--;  // need to animate the power switch interative object from the base tile
-				cGlbStep = 2; // starts at animation stage 2 (PowerSwitch is OFF)
-			}
-		}
-		else if (cObjType == ET_FORCEFIELD)
-		{
-			//cGlbCyle = ANIM_CYCLE_FORCEFIELD; // hardcoded in python parsing routine
-			cGlbStep = 0;
-		}
-		else if (cObjType == ET_PORTAL)
-		{
-			cGlbCyle = ANIM_CYCLE_PORTAL;
-			cGlbFlag = cGlbStep;
-			//if (cScreenShiftDir == SCR_SHIFT_PORTAL)
-			//	cGlbStep = cPlyPortalDestinyY - sThePlayer.y;  // adjust cPlyPortalDestinyY with Y offset if player is jumping
-			//else
-			//	cGlbStep = 0;
-			// store Player X and Y position as destination at this screen if Player is coming from a Portal		
-			//cPlyPortalDestinyY = ((pMapData[2] + 3) << 3) + 8 - cGlbStep;
-			cPlyPortalDestinyY = ((pMapData[2] + 3) << 3) + 8;
-			cGlbStep = 0;
-			cPlyPortalDestinyX = pMapData[1] << 3;
-			if (!(pMapData[0] & 0b10000000))
-				cPlyPortalDestinyX += 4;
-			else
-				cPlyPortalDestinyX -= 12;
-		}
-		else if (cObjType == ET_LOCKER)
-		{
-			if (cLockerOpened[cGlbStep] == true) // Locker was opened already - must clear the way
-			{
-				cMap_Data[iGlbPosition - (3 * 32)] = cMap_Data[iGlbPosition + 32 - (3 * 32)] = BLANK_TILE;
-				cMap_TileClass[iGlbPosition - (3 * 32)] = cMap_TileClass[iGlbPosition + 32 - (3 * 32)] = TILE_TYPE_BLANK;
-				pMapData += 4;
-				continue;
-			}
-			pInsertAnimTile = pCurAnimSpecialTile;
-			cGlbCyle = ANIM_CYCLE_LOCKER_OPEN;
-			cGlbFlag = cGlbStep;  // Locker ID (0000IIII)
-			cGlbStep = 0;
-		}
-		else if (cObjType == ET_EGG)
-		{
-			if (!cGlbTile) // if its an egg that was always destroyed (Object History), no need to animate
-			{
-				pMapData += 4;
-				continue;
-			}
-			pInsertAnimTile = pCurAnimSpecialTile;
-			cGlbCyle = ANIM_CYCLE_FACEHUG_EGG;
-			cGlbFlag = cGlbStep;  // Egg ID (00000III)
-			// Width is always 4
-			if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET)
-				cGlbStep = 0;
-			else // if (cGlbTile == TS_SCORE_SIZE + GAME_EGG_TL_OFFSET + 2)
-				cGlbStep = 2;
-			cGlbSpObjID++;
-			//GAMBIARRA - PARA CORRIGIR QUANDO MUDAR PARA ASM
-			cGlbSpObjID |= (cGlbFlag << 4);
-			insert_new_screen_object();
-			//GAMBIARRA - PARA CORRIGIR QUANDO MUDAR PARA ASM
-			cGlbSpObjID &= 0b00001111;
-		}
-
-		// create the necessary AnimTile(Dropper, Belt, Animate, Portal, ForceField) or AnimSpecialTile(Gate, Wall, Interactive, Slider, Locker, Egg) records.
-		do
-		{
-			pInsertAnimTile->iPosition = iGlbPosition;
-			pInsertAnimTile->cCycleMode = cGlbCyle;
-			pInsertAnimTile->cStep = cGlbStep;
-			pInsertAnimTile->cLastFrame = 0xAA; // not valid & non-blank
-			pInsertAnimTile->cTile = cGlbTile;
-			pInsertAnimTile->cSpTileStatus = ST_DISABLED;
-			switch (cObjType)
-			{
-				case ET_BELT:
-					// Store the Belt direction (cGlbCyle) in cMap_ObjIndex[] map
-					cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbCyle;  // Direction (000000dd)
-					// calculate the next belt tile attributes
-					iGlbPosition++;
-					if (!cGlbFlag) // first tile from mat
-					{
-						cGlbTile += 3;
-						cGlbFlag = 1;
-					}
-					else if (cGlbWidth == 2) cGlbTile += 3; // last tile from mat
-					break;
-
-				case ET_SLIDERFLOOR:
-					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer;
-					pInsertAnimTile->cSpObjID = cGlbSpObjID;
-					if (cGlbWidth == 2) // last tile from slider
-						cGlbStep = RIGHT_MOST_TILE;
-					else
-						cGlbStep = 0;
-					// calculate the next slider tile attributes
-					//cGlbTile = pCurMapData[++iGlbPosition - (3 * 32)]; // get the base tile from Map
-
-					cGlbTile = cMap_Data[++iGlbPosition - (3 * 32)]; // get the base tile from Map
-					break;
-
-				case ET_DROPPER:
-					// calculate the next dropper tile attributes
-					cGlbStep = (10 + cGlbStep - 2) % 10;
-					iGlbPosition += 32;
-					break;
-
-				case ET_GATE:
-					// calculate the next gate tile attributes
-					pInsertAnimTile->cTimer = cGlbTimer;
-					// Store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
-					////pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | ((pMapData[0] & 0b11110000) << 1)); // Key + ObjectID (kkkOOOOO)
-					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | (pMapData[0] & 0b01110000)); // Key + ObjectID (0kkkOOOO)
-					//pInsertAnimTile->cSpTileStatus = ST_DISABLED;
-					cGlbStep = 5;
-					cGlbTile++;
-					if (!cGlbFlag)
-						iGlbPosition += 32; // Vertical gate	
-					else
-						iGlbPosition++;					
-					break;
-
-				case ET_LOCKER:
-					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = 0;
-					////pInsertAnimTile->cSpObjID = 0b11010000 | cGlbFlag;  // special mask to avoid Locker ObjID conflict with Gates and Interactive ObjIDs
-					pInsertAnimTile->cSpObjID = 0b11000000 | cGlbFlag;  // special mask to avoid Locker ObjID conflict with Gates and Interactive ObjIDs (1100OOOO)
-					cGlbStep = 5;
-					cGlbTile++;
-					iGlbPosition += 32; // Vertical always
-					break;
-
-				case ET_WALL:
-					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = cGlbTimer; // # of shots for break the wall
-					// Store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
-					//pInsertAnimTile->cSpTileStatus = ST_DISABLED;
-					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
-					//pCurMapData[iGlbPosition - (3 * 32)] = cGlbTile;
-					//cMap_Data[iGlbPosition - (3 * 32)] = cGlbTile;
-					cMap_TileClass[iGlbPosition - (3 * 32)] = TILE_TYPE_WALL;
-					iGlbPosition += 32; // Wall is always vertical
-					break;
-
-				case ET_INTERACTIVE:
-					// Store the ObjectID both in AnimSpecialTile record and cMap_ObjIndex[] map
-					////pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbSpObjID | ((pMapData[0] >> 1) & 0b01100000));   // Action + ObjectID (0aaOOOOO)
-					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbTimer | ((pMapData[0] >> 2) & 0b00110000) | 0b10000000);   // Action + ObjectID (10aaOOOO)
-					//pInsertAnimTile->cTimer = cGlbTimer;  // Locker ID or Mission # (if Action = 1 or Action = 2)
-					//pInsertAnimTile->cSpTileStatus = ST_DISABLED;
-					break;
-
-				case ET_PORTAL:
-					// Store the screen destination (0000DDDD) in cMap_ObjIndex[] map
-					cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbFlag;  // Screen Destination (0000DDDD)
-					iGlbPosition += 32; // Vertical portal
-					cGlbStep++;
-					break;
-
-				case ET_FORCEFIELD:
-					iGlbPosition += 32; // Vertical always
-					break;
-			
-				case ET_EGG:
-					pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = (cGlbFlag << 4) | cGlbSpObjID;  // EggID + ObjectID (0iiiOOOO)
-					//pInsertAnimTile->cSpObjID = cMap_ObjIndex[iGlbPosition - (3 * 32)] = cGlbSpObjID;
-					pInsertAnimTile->cTimer = pInsertAnimTile->cTimeLeft = EGG_SHOTS_TO_DESTROY; // # of shots for destroy the egg
-					if (cGlbWidth == 3)
-					{
-						cGlbTile = TS_SCORE_SIZE + GAME_EGG_TL_OFFSET + 4; // first egg body tile
-						cGlbStep+=4;
-						iGlbPosition += 31; // change from last tile from Egg top to first tile from Egg body
-					}
-					else
-					{
-						cGlbTile++;
-						iGlbPosition++;
-					}
-					break;
-			}
-			// update the right xxAnimTile pointer
-			if (cObjType >= ET_EGG)
-			{
-				cAnimSpecialTilesQty++;
-				pCurAnimSpecialTile++;
-			}
-			else
-			{
-				cAnimTilesQty++;
-				pCurAnimTile++;
-			}
-			pInsertAnimTile++;
-		} while (--cGlbWidth > 0);
-
-#ifdef DEBUG
-		if ((cAnimTilesQty > MAX_ANIM_TILES) || (cAnimSpecialTilesQty > MAX_ANIM_SPEC_TILES_FULL))
-		{
-			//PANIC MSG!!!
-			ubox_enable_screen();
-			display_text(5, 10, FONT1_TILE_OFFSET, "LOAD_ENTITIES() PANIC!");
-			while (true);
-		}
-#endif // DEBUG
-
-		pMapData += 4;
-	}
-} // void Load_Entities() 
-*/
 
 /* 
 * Loads the right game level data (Tileset, Missions, Sprite Colors, cMapX/cMapY/cScreenMap) based on cLevel
@@ -4479,8 +4036,8 @@ _getTileClass_ex :
 	ld e, a
 	cp #TS_SCORE_SIZE + #GAME_FATL_TL_OFFSET
 	jp nc, _setFatal
-;;	cp #TS_SCORE_SIZE + #GAME_COLLECT_TL_OFFSET
-;;	jp nc, _setCollect
+  cp #TS_SCORE_SIZE + #GAME_COLLECT_TL_OFFSET
+  jp nc, _setCollect
 	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
 	jp nc, _setEgg
 	cp #TS_SCORE_SIZE + #GAME_SOLD_TL_OFFSET
@@ -4537,6 +4094,9 @@ _setObject :
 	ret
 _setPortal :
 	ld a, #TILE_TYPE_PORTAL
+	ret
+_setCollect :
+	ld a, #TILE_TYPE_COLLECTIBLE
 	ret
 _setBlank :
 	ld a, #TILE_TYPE_BLANK
@@ -4813,8 +4373,8 @@ __endasm;
 }  // void display_animated_tiles()
 
 /* 
-* Find the right special Gate/Wall/Locker (2 tiles) / Interactive (1 tile) / Egg (4 tiles) animated tile in the Tile list and activate it
-* This function is only being called for an Interactive object (ANIMATE_OBJ_INTER) if:
+* Find the right special Gate/Wall/Locker/Collectible (2 tiles) / Interactive (1 tile) / Egg (4 tiles) animated tile in the Tile list and activate it
+* This function is only being called for an Interactive object (ANIMATE_OBJ_INTER or ANIMATE_OBJ_COLLC) if:
 *   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
 *   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
 *   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW (is_player_walking_ok())
@@ -4822,6 +4382,7 @@ __endasm;
 *   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY (is_player_walking_ok())
 *   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_BUTTON_TL_OFFSET (is_player_walking_ok())
 *   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY (is_player_walking_ok())
+*   - player walking colision with Tiletype=TILE_TYPE_COLLECTIBLE (is_player_walking_ok())
 * Returns:	true  (1 - tile found and activated)
 *						false (0 - tile not found, tile found but could not be activated (no key, not enought shots) or already activated)
 */
@@ -4930,10 +4491,13 @@ _anim_egg :
 _chkInteractive :
 	cp #ANIM_CYCLE_INTERACTIVE
 	jr nz, _chkLocker
-	; its an Interactive - check if cEnableType = ANIMATE_OBJ_INTER
+	; its an Interactive - check if cEnableType = ANIMATE_OBJ_INTER or ANIMATE_OBJ_COLLC
 	ld a, c
+	cp #ANIMATE_OBJ_COLLC
+	jr z, _check_if_interactive_already_enabled
 	cp #ANIMATE_OBJ_INTER
 	jr nz, _exit_interactive
+_check_if_interactive_already_enabled :
 	pop hl
 	dec hl ; HL = &_sAnimSpecialTiles->cSpTileStatus
 	ld a, (hl)
@@ -4941,6 +4505,18 @@ _chkInteractive :
 	jp z, _exitFalse
 	ld (hl), #ST_ENABLED; sAnimSpecialTiles->cSpTileStatus = ST_ENABLED
 
+	; if cEnableType = ANIMATE_OBJ_COLLC, no further checks - just add score points and enable animation
+	ld a, c
+	cp #ANIMATE_OBJ_COLLC
+	jp nz, _continue_interactive_not_collectible
+	; Add SCORE_COLLECTBL_POINTS points to the score
+	ld a, #SCORE_COLLECTBL_POINTS
+	push hl
+	call _add_score_points
+	pop hl
+	jp _noKeyReq_ex
+
+_continue_interactive_not_collectible :
 	; if Interactive object = GAME_PWR_LOCK_TL_OFFSET need to decrease access key usage
 	dec hl
 	dec hl
@@ -4958,7 +4534,7 @@ _chkInteractive :
 
 _end_animate :
 	ld hl, #_cGlbSpecialTilesActive
-	inc(hl); _cGlbSpecialTilesActive++
+	inc (hl); _cGlbSpecialTilesActive++
 	; Add SCORE_INTERACTV_POINTS points to the score
 	ld a, #SCORE_INTERACTV_POINTS
 	call _add_score_points
@@ -4981,7 +4557,7 @@ _chkGate :
 	; check if gate is ST_DISABLED to proceed. If gate is already ST_ENABLED, no need to process the colision
 	dec hl; HL = &_sAnimSpecialTiles->cSpTileStatus
 	ld a, (hl)
-	dec a; if A == 1(ST_ENABLED) then its not necessary to enable again
+	dec a; if A == 1 (ST_ENABLED) then its not necessary to enable again
 	jp z, _exitFalse
 
 	; check if player has the right key required to open the gate.
@@ -5052,6 +4628,7 @@ _reset_key :
 
 _noKeyReq :
 	ld (hl), #ST_ENABLED; sAnimSpecialTiles->cSpTileStatus = ST_ENABLED
+_noKeyReq_ex :
 	ld de, #10
 	add hl, de ; next sAnimSpecialTiles record
 	ld (hl), #ST_ENABLED; sAnimSpecialTiles->cSpTileStatus = ST_ENABLED
@@ -5644,7 +5221,7 @@ __endasm;
 }  // bool is_player_cmd_down_ok()
 
 /*
-* When left/right walking, check for player colision with Solid, NextMap/Portal, Interactive and Gates. Also check for distance from Eggs at the same level
+* When left/right walking, check for player colision with Solid, NextMap/Portal, Interactive, Collectible and Gates. Also check for distance from Eggs at the same level
 * Returns:	true (1 - no colision with player)
 *						false (0 - colision(s) with player)
 *							cGlbPlyFlag = 76543210
@@ -5655,14 +5232,14 @@ __endasm;
 *														||||L--- Empty floor
 *														|||L---- Special floor (belt)
 *														||L----- Next map/Portal *
-*														|L------ Object
+*														|L------ Collectible *  (Tiletype=TILE_TYPE_COLLECTIBLE)
 *														L------- Interactive *
 *                                      only if (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW) or
 *                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_BUTTON_TL_OFFSET) or
 *                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY) or
 *                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_BUTTON_TL_OFFSET) or
-*                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY)
-*							cGlbSpObjID = ObjectID when Gate/Interactive colision detected
+*                                              (Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY) or
+*							cGlbSpObjID = ObjectID when Gate/Interactive/Collectible colision detected
 *							cGlbObjData = shift direction + screen destination when Next Map detected
 */
 bool is_player_walking_ok(uint8_t cDirection)
@@ -5860,6 +5437,8 @@ _wlkNextTile :
 	jr z, _wlkInteractiveFound
 	cp #TILE_TYPE_PORTAL
 	jr z, _wlkPortalFound
+	cp #TILE_TYPE_COLLECTIBLE
+	jp z, _wlkCollectibleFound
 	ld de, #32
 	add hl, de; look next tile
 	djnz _wlkNextTile
@@ -5880,6 +5459,15 @@ _wlkEnd :
 _wlkLeftOK :
 	dec (hl); _sThePlayer.x--
 	jr _wlkEnd
+
+_wlkCollectibleFound :
+	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
+	ld de, #MAP_BYTES_SIZE
+	add hl, de
+	ld b, (hl) ; B = cObjID(10aaOOOO)
+	ld hl, #_cGlbPlyFlag
+	set 6, (hl); COLISION_COLLECTIBLE
+	jr _execute_mission_complete
 
 _SetGateFound :
 	; Move HL from _cMap_TileClass[] to _cMap_ObjIndex[]
@@ -5944,6 +5532,7 @@ _found_interactive_tile :
 	jr z, _execute_open_locker
 
 	; execute Mission Complete
+_execute_mission_complete :
 	push bc  ; save B = cObjID(10aaOOOO)
 	ld a, b; A = ObjID(10aaOOOO)
 	and #0b00001111; A = Mission #(0000OOOO)
@@ -6079,8 +5668,8 @@ __endasm;
 * Returns:	true (1 - player is falling)
 *							cGlbPlyFlag = 76543210
 *										        ||||||||
-*														|||||||L Fatal
-*														||||||L- Solid *
+*														|||||||L Fatal * (colision with horizontal forcefield)
+*														||||||L- Solid
 *														|||||L-- Gate
 *														||||L--- Empty floor
 *														|||L---- Special floor (belt)
@@ -6093,7 +5682,6 @@ __endasm;
 */
 bool is_player_falling()
 {
-// TODO: check for solid colision
 __asm
 	ld a, (#_sThePlayer + #03) ; A = _sThePlayer.status
 	ld l, #BOOL_FALSE
@@ -6120,12 +5708,44 @@ _do_nextm_down :
 _do_nextm_up :
 	ld (_cGlbObjData), a	; (sssDDDDD)
 	ld hl, #_cGlbPlyFlag
-	set 5, (hl)
+	set 5, (hl) ; COLISION_NEXTM
 	ld l, #BOOL_TRUE ; continue falling
 	ret
 
+_check_for_horiz_ff_colision :
+	ld c, #0 + #7
+	ld d, #15  ; last vertical player pixel (foot)
+	call _calcTileXYAddr
+
+	ld de, #32
+	ld b, #2
+	; check if Player y position is multiple of 8 - if yes, need to check only 1 top tile (top 2 tiles if not)
+	ld a, (#_sThePlayer + #1)
+	and #0b00000111
+	jr z, _check_for_top_tiles_ex
+	inc b
+	jr _check_for_top_tiles_ex
+
+_check_for_top_tiles :
+	xor a
+	sbc hl, de
+_check_for_top_tiles_ex :
+	ld a, (hl)
+	bit #7, a  ; test if bit 7 (SOLID BIT) is set
+	jp nz, _colision_with_solid_detected  ; solid detected - set COLISION_FATAL flag
+	djnz _check_for_top_tiles
+	ret
+
+_colision_with_solid_detected :
+	ld hl, #_cGlbPlyFlag
+	set 0, (hl) ; COLISION_FATAL
+	ret
+
 _not_NextM :
-	; not Next map - check if player has reached the floor
+	; not Next map - check for solid colision(horizontal ForceField)
+	call _check_for_horiz_ff_colision
+
+	; check if player has reached the floor
 	; based on X foot position, we need to test 1 or 2 tiles below the player to detect empty floor
 	call _chkFootTileQtty  ; B = 1 or 2 horizontal tiles to test
 	ld c, #0 + #6
@@ -6153,11 +5773,11 @@ __endasm;
 }  // bool is_player_falling()
 
 /*
-* Check for player jump status, check for player colision Fatal or Next Map/Portal and then update X,Y
+* Check for player jump status, check for player colision Fatal or Next Map/Portal and then update X,Y. Also check for colision with horizontal forcefield
 * Returns:	true (1 - player is jumping)
 *							cGlbPlyFlag = 76543210
 *										        ||||||||
-*														|||||||L Fatal *
+*														|||||||L Fatal * (fatal tile or hozizontal forcefield)
 *														||||||L- Solid
 *														|||||L-- Gate
 *														||||L--- Empty floor
@@ -6177,6 +5797,28 @@ __asm
 	cp #PLYR_STATUS_JUMPING
 	ret nz ; not jumping
 
+	; reset flags before check for colision with horizontal forcefield
+	xor a
+	ld (#_cJmpFootTileType), a
+	ld (#_cJmpHeadTileType), a
+	ld c, #0 + #7
+	ld a, (#_cGlbPlyJumpStage)
+	cp #PLYR_JUMP_STAGE_UP
+	jr z, _check_head_inside_horiz_forcefield
+	; check if current Player foot position already colide with solid (inside a horizontal FF)
+	ld d, #15  ; last vertical player pixel (foot)
+	call _calcTileXYAddr
+	ld a, (hl)
+	ld (#_cJmpFootTileType), a ; stores if bit 7 (SOLID BIT) is set
+	jr _continue_jump_routine
+_check_head_inside_horiz_forcefield :
+	; check if current Player head position already colide with solid (inside a horizontal FF)
+	ld d, #0 ; first vertical player pixel (head)
+	call _calcTileXYAddr
+	ld a, (hl)
+	ld (#_cJmpHeadTileType), a ; stores if bit 7 (SOLID BIT) is set
+
+_continue_jump_routine :
 	xor a
 	ld (#_cGlbPlyFlag), a; reset _cGlbPlyFlag
 	; calculate the new expected X,Y position for the player
@@ -6191,10 +5833,10 @@ __asm
 	jr _calc_x
 _stage_up :
 	dec (hl)
-_calc_x :
+	_calc_x :
 
 	ld a, #BOOL_TRUE
-	ld (#_bGlbPlyChangedPosition), a; player trying to move DOWN/UP
+	ld (#_bGlbPlyChangedPosition), a ; player trying to move DOWN/UP
 
 	ld d, (hl) ; D = _cPlyNewY
 	ld a, (#_cGlbPlyJumpDirection)
@@ -6221,7 +5863,7 @@ _dir_right :
 	inc (hl)
 	
 	ld a, #BOOL_TRUE
-	ld (#_bGlbPlyChangedPosition), a; player trying to move RIGHT
+	ld (#_bGlbPlyChangedPosition), a ; player trying to move RIGHT
 
 	ld a, #PLYR_JUMP_DIR_RIGHT
 	ld e, a
@@ -6241,14 +5883,16 @@ _dir_left :
 	dec (hl)
 
 	ld a, #BOOL_TRUE
-	ld (#_bGlbPlyChangedPosition), a; player trying to move LEFT
+	ld (#_bGlbPlyChangedPosition), a ; player trying to move LEFT
 
 	ld a, #PLYR_JUMP_DIR_LEFT
 	ld e, a
 	ld (#_cGlbPlyJumpDirection), a
 	ld a, #PLYR_SPRT_DIR_LEFT
 	ld (#_sThePlayer + #2), a; _sThePlayer.dir = PLYR_SPRT_DIR_LEFT
+
 _try_move :
+  ; start trying to move the player - check all possible options
 	ld a, e
 	ld (#_cGlbPlyJumpDirCmd), a
 	; Now we know the new expected X and Y (_cPlyNewX, _cPlyNewY). Check for a valid position and update _cPlyNewX, _cPlyNewY accordly
@@ -6306,7 +5950,7 @@ _jmp_moved_ok_step2 :
 	call _set_moved_ok
 	ld hl, #_sThePlayer + #03; HL = &_sThePlayer.status
 	ld(hl), #PLYR_STATUS_STAND
-	ld l, #00; false - not jumping
+	ld l, #BOOL_FALSE ; false - not jumping anymore
 	ret
 
 _set_moved_ok :
@@ -6316,6 +5960,20 @@ _set_moved_ok :
 	inc hl
 	ld (hl), d ; Y
 	ld hl, #_cGlbPlyFlag
+
+	; if SOLID BIT set for _cJmpFootTileType or _cJmpHeadTileType, then set colision with hozizontal forcefield. If not, check for a new colision that may be starting
+	ld a, (#_cJmpFootTileType)
+	ld b, a
+	ld a, (#_cJmpHeadTileType)
+	or b
+	and #0b10000000
+	jr nz, _set_fatal_found
+	push bc ; protect C (_cGlbPlyJumpStage)
+	push de ; protect D (Y)
+	call _check_for_horiz_ff_colision
+	pop de
+	pop bc
+
 	ld a, (#_cFatalFlag)
 	or a
 	jr nz, _set_fatal_found
@@ -6347,12 +6005,12 @@ _dec_up_cycles :
 	ld hl, #_cGlbPlyJumpCycles
 	dec(hl)
 	jr z, _endUpStage
-	ld l, #01; continue jumping
+	ld l, #BOOL_TRUE ; continue jumping
 	ret
 _endUpStage :
 	ld hl, #_cGlbPlyJumpStage
 	ld(hl), #PLYR_JUMP_STAGE_DOWN
-	ld l, #BOOL_TRUE; continue jumping
+	ld l, #BOOL_TRUE ; continue jumping
 	ret
 
 _do_next_map_left :
@@ -6369,7 +6027,7 @@ _do_next_map :
 	ld(_cGlbObjData), a; (sssDDDDD)
 	ld hl, #_cGlbPlyFlag
 	set 5, (hl)  ; COLISION_NEXTM
-	ld l, #BOOL_TRUE; continue jumping
+	ld l, #BOOL_TRUE ; continue jumping
 	ret
 
 ; Check the horizontal # of tiles to test when detect colision in the player body
@@ -6423,9 +6081,26 @@ _test_solid_up :
 	jp z, _jmpFoundFatal_01
 	cp #TILE_TYPE_PORTAL
 	jp z, _jmpFoundPortal_01
-	; its not fatal nor portal, so test if Solid
+
+	; its not fatal nor portal, so test if Solid...
+	; ...but if PLYR_JUMP_STAGE_UP and original Player head tile inside a horizontal FF, do not check for Solid
+	; ...but if PLYR_JUMP_STAGE_DOWN and original Player foot tile inside a horizontal FF, do not check for Solid
+	ld c, a
+	ld a, (#_cGlbPlyJumpStage)
+	cp #PLYR_JUMP_STAGE_UP
+	jr nz, _check_player_foot_ff
+	ld a, (#_cJmpHeadTileType)
+	jr _check_player_colision_ff
+_check_player_foot_ff :
+	ld a, (#_cJmpFootTileType)
+_check_player_colision_ff :
+	bit 7, a ; SOLID BIT
+	jr nz, _colision_with_ff
+
+	ld a, c
 	bit 7, a ; SOLID BIT
 	jr nz, _up_invalid_01
+_colision_with_ff :
 	; not solid, so check the next tile
 	jr _jmpNextSearch_01
 
@@ -7664,11 +7339,7 @@ __endasm;
 	{
 		if (is_player_jumping())
 		{
-			// TODO: check colision with Solid (horizontal forcefield)
-			//if (cGlbPlyFlag & COLISION_SOLID)
-			//{
-			//	player_hit(HIT_PTS_SMALL);
-			//}
+			// check colision with Fatal or horizontal forcefield
 			if (cGlbPlyFlag & COLISION_FATAL)
 			{
 				//if (!cPlyRemainShield) player_hit(HIT_PTS_SMALL);
@@ -7825,7 +7496,11 @@ __endasm;
 								// cGlbObjData contains shift direction + screen destination (sssDDDDD)
 								return false;
 							}
-							if (cGlbPlyFlag & COLISION_INTER)
+							else if (cGlbPlyFlag & COLISION_COLLECTIBLE)
+							{
+								special_object_animated_ok(ANIMATE_OBJ_COLLC, cGlbSpObjID);  // collect Collectible object
+							}
+							else if (cGlbPlyFlag & COLISION_INTER)
 							{
 								if (special_object_animated_ok(ANIMATE_OBJ_INTER, cGlbSpObjID)) // change Interactive object
 								{
@@ -7853,8 +7528,8 @@ __endasm;
 	}
 	else
 	{
-		// check for solid colision (horizontal forcefield) - act as colision with a Fatal
-		if (cGlbPlyFlag & COLISION_SOLID)
+		// check for colision with horizontal forcefield - act as colision with a Fatal
+		if (cGlbPlyFlag & COLISION_FATAL)
 		{
 			player_hit(HIT_PTS_SMALL);
 		}

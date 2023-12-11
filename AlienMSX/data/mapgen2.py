@@ -13,7 +13,7 @@ import sys
 #import tempfile
 import traceback
 
-__version__ = "1.1"
+__version__ = "2.0"
 
 DEF_ROOM_WIDTH = 32
 DEF_ROOM_HEIGHT = 24
@@ -437,13 +437,16 @@ def main():
 #          tttt = type (12)
 #          XXXXX = tile X (0-31)
 #          YYYYY = tile Y (0-23)
-#          aa = action (0=lights on/off, 1=locker open, 2=mission complete)
+#          aa = action (0=lights on/off, 1=locker open, 2=mission complete, 3=collect & complete mission)
 #          eeee = extra data [Locker ID(0-15), Mission #(0-4)]
             if name == "interactive":
                 XtraBits = int(get_property(obj, "action", 0))
-                if XtraBits > 2:
-                    XtraBits = 2
+                if XtraBits > 3:
+                    XtraBits = 3
                 special = int(get_property(obj, "extra", 0))
+                if XtraBits == 3:
+                    if special > 4:
+                        special = 4
                 if XtraBits == 2:
                     if special > 4:
                         special = 4
