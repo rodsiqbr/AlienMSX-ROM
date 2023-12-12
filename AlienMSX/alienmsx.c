@@ -3975,7 +3975,7 @@ __endasm;
 } // void update_object_history()
 
 /*
-* Load the right game screen map data (Minimap position and Map) based on cLevel and cScreenMap
+* Load the right game screen map data based on cLevel and cScreenMap
 */
 void load_levelmap_data()
 {
@@ -4015,7 +4015,21 @@ _keep_original_tile :
 	ld a, b
 	or c
 	jr nz, _loop_differential_proc
-	; TODO: additional entities
+	ex de, hl
+	; HL = 1st Entity byte from #_cMap_Data. Need to find last one(0xFF)
+	;ld bc, (#MAX_ANIM_TILES + #MAX_ANIM_SPEC_TILES_FULL + #MAX_ENEMIES_PER_SCREEN + #1)* #4
+	ld bc, #260
+	ld a, #0xFF
+	cpir
+	dec hl
+	ex de, hl
+	; DE = Last Entity byte from #_cMap_Data = 0xFF
+	; HL = 1st Entity byte from #_cBuffer. Need to copy from (HL) to (DE) until last byte (0xFF)
+_continue_entity_copy :
+	ld a, (hl)
+	ldi  ; ld (de), (hl) / inc de / inc hl
+	cp #0xFF
+	jr nz, _continue_entity_copy
 
 _not_level_3 :
 	ld hl, #_cMap_Data
@@ -4049,7 +4063,6 @@ _calc_map_address_and_uncompress :
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)
-	; ld hl, #_cMap_Data
 	pop hl
 	ex de, hl
 	; call _zx0_uncompress_asm_direct
