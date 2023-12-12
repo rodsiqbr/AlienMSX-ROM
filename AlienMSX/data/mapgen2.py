@@ -32,7 +32,7 @@ Format:
             "map length" bytes: map data (n-bit per tile) H x W x n (may be compressed)
             "i" bytes: entity data (0xff for end)
 
-Expected layers: Map and Entities
+Expected default layers: Map and Entities
 """
 
 

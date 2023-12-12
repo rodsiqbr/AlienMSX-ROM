@@ -28,6 +28,7 @@ py png2tiles.py -i fatal --zx0 Game_FatalTS_16x2.png >fatalts.h
 --py mapgen2.py -t Game1 --zx0 --max-ents 24 --room-height 21 maplevel2v1.json maplvl2 > maplvl2.h
 py mapgen2.py -t Game0 --zx0 --max-ents 24 --room-height 21 maplevel1v4.json maplvl1 > maplvl1.h
 py mapgen2.py -t Game1 --zx0 --max-ents 24 --room-height 21 maplevel2v2.json maplvl2 > maplvl2.h
+py mapgen2.py -t Game0 -m MapDiff -e EntityDiff --zx0 --max-ents 24 --room-height 21 maplevel1v4.json maplvl3 > maplvl3.h
 
 
 --py txtgen.py --zx0 levels.json levels >levels.h

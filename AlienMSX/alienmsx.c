@@ -6,7 +6,10 @@
 // TODOS: Bugs list:
 // 3. Mission complete SFX
 // 4. Criar SXF_INTERACTIVE sound FX
-// 6. falling e jumping precisam detectar se o player passou através de um FF horizontal
+
+//Known issues:
+// 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
+// 2. Jumping into a Portal still doesn't work. Easy to reproduce.
 
 
 #include <stdio.h>
@@ -47,7 +50,7 @@
 
 #include "data/maplvl1.h"    // Map Level 1
 #include "data/maplvl2.h"    // Map Level 2
-//#include "data/maplvl3.h"    // Map Level 3 (differential map from Level 1)
+#include "data/maplvl3.h"    // Map Level 3 (differential map from Level 1)
 
 
 // ----------------------------------------------------------
@@ -422,6 +425,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define SCORE_PAUSE_TL_OFFSET   38     // PAUSE text offset in 'Score' Tileset
 #define SCORE_ARISE_TL_OFFSET   41     // ARISE text offset in 'Score' Tileset
 #define SCORE_BLACK_TL_OFFSET   44     // BLACK tile offset
+#define SCORE_DIFFNT_TL_OFFSET  45     // DIFFERENTIAL tile offset (Map 3)
 #define SCORE_OBJ_TL_OFFSET     46	   // start tile offset for Object tiles in 'Score' Tileset
 #define SCORE_BATTERY_TL_OFFSET 46     // BATTERY Object offset in 'Score' Tileset
 #define SCORE_AMNO_TL_OFFSET    47     // AMNO Object offset in 'Score' Tileset
@@ -548,7 +552,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define HIT_PTS_SMALL           4
 #define HIT_PTS_MEDIUM          8
 #define HIT_PTS_HIGH           12
-#define HIT_PTS_DEATH          MAX_POWER
+///#define HIT_PTS_DEATH          MAX_POWER
 
 #define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
 #define SCORE_INTERACTV_POINTS 25  //  25 points to the score when activating an interactive
@@ -1292,7 +1296,7 @@ __asm
 	ld a, (hl)
 _player_hit_asm_direct :
 	; if HIT_PTS_SMALL, check for Shield. If Shield active, no hit is set.
-	; if HIT_PTS_FACEHUG, HIT_PTS_MEDIUM, HIT_PTS_HIGH or HIT_PTS_DEATH, hit happens regardless of the Shield.
+	; if HIT_PTS_FACEHUG, HIT_PTS_MEDIUM or HIT_PTS_HIGH hit happens regardless of the Shield.
 	cp #HIT_PTS_SMALL
 	jr nz, _hit_execute
 	ld h, a
@@ -2986,7 +2990,7 @@ _proc_param_sliderfloor :
 	; set SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
 	ld a, (hl)
 	and #0b00000011
-	add a, #50  ; 50 = UP (0), 51 = DOWN (1), 52 = RIGHT (2), 53 = LEFT (3)
+	add a, #ANIM_CYCLE_SLIDER_UP  ; 50 = UP (0), 51 = DOWN (1), 52 = RIGHT (2), 53 = LEFT (3)
 	ld d, a ; temp storage cGlbCyle
 	
 	inc hl
@@ -3977,34 +3981,44 @@ void load_levelmap_data()
 {
 __asm
 	ld a, (#_cLevel)
-	dec a
-	jr nz, _try_lvl_2
-	ld	bc, #_maplvl1
+	cp #2
+	jr z, _try_lvl_2
+	ld	bc, #_maplvl1 ; level 1 and level 3 uses same base level map
 	jr _do_map_loading
 _try_lvl_2 :
-	dec a
-	jr nz, _try_lvl_3
 	ld	bc, #_maplvl2
-	jr _do_map_loading
-_try_lvl_3 :
-	;TODO: Level 3 diffential map processing
-	ld	bc, #_maplvl1;; #_maplvl3
 
 _do_map_loading :
-	ld	a, (#_cScreenMap)
-	ld	l, a
-	ld	h, #0x00
-	add	hl, hl
-	add	hl, bc
-	ld	c, (hl)
-	inc	hl
-	ld	b, (hl)
-	push	bc
-	ld hl, #_cMap_Data	
-	push	hl
-	call	_zx0_uncompress
-	pop	hl
-	pop	bc
+	ld hl, #_cMap_Data
+	call _calc_map_address_and_uncompress
+
+	; Level 3 diffential map processing
+	ld a, (#_cLevel)
+	cp #3
+	jr nz, _not_level_3
+	ld bc, #_maplvl3
+	ld hl, #_cBuffer
+	call _calc_map_address_and_uncompress
+	
+	ld bc, #MAP_BYTES_SIZE
+	ld hl, #_cBuffer
+	ld de, #_cMap_Data
+_loop_differential_proc :
+	ld a, (hl)
+	cp #SCORE_DIFFNT_TL_OFFSET
+	jr z, _keep_original_tile
+	ld (de), a
+_keep_original_tile :
+	inc hl
+	inc de
+	dec bc
+	ld a, b
+	or c
+	jr nz, _loop_differential_proc
+	; TODO: additional entities
+
+_not_level_3 :
+	ld hl, #_cMap_Data
 	ld bc, #MAP_BYTES_SIZE
 	push ix
 	ld ix, #_cMap_TileClass
@@ -4024,6 +4038,23 @@ _setTile :
 	jr nz, _loop_map_data
 	pop ix
   jp _update_object_history
+
+_calc_map_address_and_uncompress :
+	push hl
+	ld	a, (#_cScreenMap)
+	add a, a
+	ld	h, #0x00
+	ld	l, a
+	add	hl, bc
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	; ld hl, #_cMap_Data
+	pop hl
+	ex de, hl
+	; call _zx0_uncompress_asm_direct
+	jp _zx0_uncompress_asm_direct
+	; ret
 
 ; Input:  A = Tile Number
 ; Output: A = Tile Class
@@ -6505,6 +6536,7 @@ _check_power :
 	ld a, (#_cPower)
 	or a
 	ret nz
+_set_player_as_dead :
 	; _cPower = 0. Set PLYR_STATUS_DEAD and start dead animation timer
 	ld hl, #_cPlyDeadTimer
 	ld (hl), #DEAD_ANIM_TIMER
@@ -6592,6 +6624,8 @@ __asm
 	jr z, _sttClbUp
 	cp #PLYR_STATUS_JUMPING
 	jr z, _sttJump
+	cp #PLYR_STATUS_DEAD
+	jp z, _set_player_as_dead
 	jr _setStatus
 
 _sttJump :
@@ -7378,7 +7412,7 @@ __endasm;
 						if (cGlbPlyFlag & COLISION_SOLID)
 						{
 							update_player_status(PLYR_STATUS_DEAD);
-							player_hit(HIT_PTS_DEATH);
+							//player_hit(HIT_PTS_DEATH);
 							return true;
 						}
 						if (cGlbPlyFlag & COLISION_FATAL)
@@ -9013,8 +9047,8 @@ void Run_Game()
 		ubox_enable_screen();
 		cGameStage = GAMESTAGE_LEVEL;
 
-		// Level 2 TEST
-		//cLevel = 2;
+		// Level 3 TEST
+		cLevel = 3;
 
 		draw_game_level_info();
 
