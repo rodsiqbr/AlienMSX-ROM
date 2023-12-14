@@ -426,6 +426,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define SCORE_ARISE_TL_OFFSET   41     // ARISE text offset in 'Score' Tileset
 #define SCORE_BLACK_TL_OFFSET   44     // BLACK tile offset
 #define SCORE_DIFFNT_TL_OFFSET  45     // DIFFERENTIAL tile offset (Map 3)
+#define SCORE_COLON_TL_OFFSET   45     // COLON character offset in 'Score' Tileset
 #define SCORE_OBJ_TL_OFFSET     46	   // start tile offset for Object tiles in 'Score' Tileset
 #define SCORE_BATTERY_TL_OFFSET 46     // BATTERY Object offset in 'Score' Tileset
 #define SCORE_AMNO_TL_OFFSET    47     // AMNO Object offset in 'Score' Tileset
@@ -440,6 +441,8 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 
 
 // Game tile #defines for C & ASM code
+#define GAME_ALARM_TIMER_TL_OFFSET 04     // start tile offset for Timer Alarm tiles - only at Map 1 and 3 tileset
+
 #define GAME_SPEC_TL_OFFSET	       08     // start tile offset for <Special> tiles
 #define GAME_SPECSD_TL_OFFSET	     12 	  // start tile offset for <Special> <Solid> tiles
 #define GAME_SP_BLT_TL_OFFSET      15 	  // start tile offset for <Special> Belt tiles
@@ -535,6 +538,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define INVULNERABILITY_SHIELD 05
 #define MAX_AMNO_SHIELD        99
 #define ONE_SECOND_TIMER       30  // = 1 sec
+#define ONE_THIRD_SECOND_TIMER 10  // = 300 msec
 
 #define EGG_SHOTS_TO_DESTROY    7
 #define ST_EGG_CLOSED           0  // ** must be 0 for animation to work
@@ -614,9 +618,12 @@ uint16_t iScore;
 uint8_t cScoretoAdd;
 uint8_t cMissionStatus[MAX_MISSIONS]; // up to 4 missions per level
 uint8_t cMissionQty, cRemainMission;
-bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 uint8_t cCtrl, cCtrlCmd;
 uint8_t cCodeLenght, cMenuOption;
+uint8_t cMeltdownMinutes, cMeltdownSeconds, cMeltdownTimerCtrl;
+bool bIntroAnim;                      // enable/disable Intro animation with ESC key
+bool bFinalMeltdown;                  // meltdown timer enabled/disabled
+
 
 struct sprite_attr sGlbSpAttr;        // global sprite attribute struct - used by all entities
 
@@ -1346,6 +1353,25 @@ _next_mission :
 	inc hl
 	inc c
 	djnz _check_mission_complete
+
+	; if Level = 3 and Mission_3 = Complete, enable bFinalMeltdown timer flag
+	ld a, (#_cLevel)
+	cp #3
+	ret nz
+	ld a, (#_bFinalMeltdown)
+	cp #BOOL_TRUE
+	ret z
+	ld a, (#_cMissionStatus + #2)
+	cp #MISSION_COMPLETE
+	ret nz
+	ld a, #BOOL_TRUE
+	ld (#_bFinalMeltdown), a
+	; set countdown timer to 10:00
+	ld a, #10
+	ld (#_cMeltdownMinutes), a
+	xor a
+	ld (#_cMeltdownSeconds), a
+  ld (#_cMeltdownTimerCtrl), a
 __endasm;
 }  // void update_mission_status()
 
@@ -3068,9 +3094,36 @@ _end_wall_status :
 
 _proc_param_interactive :
 	; set INTERACTIVE attributes : cGlbWidth(B), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L) and cGlbSpObjID
+	; TODO: INTERACTIVE_ACTION_COLLECT_CPLT
+	; if Interactive is BLANK, no need to animate
+	ld a, (#_cGlbTile)
+	or a
+	jp z, _get_next_entity_2
+	
 	ld a, (hl)
 	and a, #0b00000011
+	cp #INTERACTIVE_ACTION_COLLECT_CPLT
+	jr z, _proceed_with_interactive_entity_ex
+
+	; if Interactive is invalid, no need to animate
+	ld a, (#_cGlbTile)
+	cp #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET
+	jr z, _proceed_with_interactive_entity
+	cp #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET + #1
+	jr z, _proceed_with_interactive_entity
+	cp #TS_SCORE_SIZE + #GAME_PWR_BUTTON_TL_OFFSET
+	jr z, _proceed_with_interactive_entity
+	cp #TS_SCORE_SIZE + #GAME_PWR_LOCK_TL_OFFSET
+	jr z, _proceed_with_interactive_entity
+	; not a valid tile for an Interactive entity
+	jp _get_next_entity_2
+
+_proceed_with_interactive_entity :
+  ld a, (hl)
+	and a, #0b00000011
+_proceed_with_interactive_entity_ex :
 	inc hl
+
 	; check for Action = INTERACTIVE_ACTION_LOCKER_OPEN or INTERACTIVE_ACTION_MISSION_CPLT or INTERACTIVE_ACTION_COLLECT_CPLT, then store the (Locker ID / Mission #) as ObjID
 	cp #INTERACTIVE_ACTION_LIGHT_ONOFF
 	jr nz, _intr_obj_lock_or_mission
@@ -3162,6 +3215,11 @@ _portal_dir_end :
 	jp _insert_new_entity_0
 
 _proc_param_locker :
+	; if Locker is BLANK, no need to animate
+	ld a, (#_cGlbTile)
+	or a
+	jp z, _get_next_entity_2
+		
 	inc hl
 	; cGlbFlag
 	ld e, (hl)
@@ -3174,6 +3232,7 @@ _proc_param_locker :
 	ld a, 0 (iy)
 	or a
 	jr z, _lock_not_opened
+	; Locker was opened before, now need to update screen tiles (this locker is not at ObjectHistory records)
 	; cMap_Data[iGlbPosition - (3 * 32)] = cMap_Data[iGlbPosition + 32 - (3 * 32)] = BLANK_TILE;
 	; cMap_TileClass[iGlbPosition - (3 * 32)] = cMap_TileClass[iGlbPosition + 32 - (3 * 32)] = TILE_TYPE_BLANK;
 	
@@ -9047,6 +9106,96 @@ __endasm;
 }  // void draw_level_up_message()
 
 
+void display_meltdown_counter()
+{
+__asm
+	ld a, (#_bFinalMeltdown)
+	cp #BOOL_TRUE
+	ret nz
+
+	; Display_Text(11, 1, FONT2_TILE_OFFSET, "> 10:00 <");
+
+	; real timer control
+	ld a, (#_cMeltdownTimerCtrl)
+	or a
+	jr z, _set_timer_and_display_md_timer
+	dec a
+	ld (#_cMeltdownTimerCtrl), a
+	ret
+
+_set_timer_and_display_md_timer :
+	ld a, #ONE_THIRD_SECOND_TIMER
+	ld (#_cMeltdownTimerCtrl), a
+
+	; GAME_ALARM_TIMER_TL_OFFSET
+	ld a, (#_cMeltdownSeconds)
+	and #0b00000001
+	; ubox_put_tile(12, 1, GAME_ALARM_TIMER_TL_OFFSET);
+	add a, #TS_SCORE_SIZE + #GAME_ALARM_TIMER_TL_OFFSET
+	ld bc, #0x010C
+	call _put_tile_asm_direct
+
+	ld a, (#_cMeltdownSeconds)
+	and #0b00000001
+	; ubox_put_tile(18, 1, GAME_ALARM_TIMER_TL_OFFSET + 2);
+	add a, #TS_SCORE_SIZE + #GAME_ALARM_TIMER_TL_OFFSET + #2
+	ld bc, #0x0112
+	call _put_tile_asm_direct
+
+	; display_number(13, 1, 2, cMeltdownMinutes);
+	ld	a, (#_cMeltdownMinutes)
+	ld	c, a
+	ld	b, #0x00
+	push	bc
+	ld	de, #0x0201
+	push	de
+	ld	a, #13
+	push	af
+	inc	sp
+	call	_display_number
+	pop	af
+	pop	af
+	inc	sp
+		
+	; display_number(16, 1, 2, cMeltdownSeconds);
+  ld a, (#_cMeltdownSeconds)
+	ld c, a
+	ld b, #0x00
+	push bc
+	ld de, #0x0201
+	push de
+	ld a, #16
+	push af
+	inc sp
+	call _display_number
+	pop	af
+	pop	af
+	inc	sp
+
+	; calculate new timer
+  ld a, (#_cMeltdownSeconds)
+	or a
+	jr z, _reset_md_seconds
+	dec a
+	ld (#_cMeltdownSeconds), a
+	ret
+_reset_md_seconds :
+	; ubox_put_tile(15, 1, SCORE_COLON_TL_OFFSET);
+	ld a, #SCORE_COLON_TL_OFFSET
+	ld bc, #0x010F
+	call _put_tile_asm_direct
+	ld a, (#_cMeltdownMinutes)
+	or a
+	ret z
+	dec a
+	ld (#_cMeltdownMinutes), a
+	ld a, #59
+	ld (#_cMeltdownSeconds), a
+	ret
+__endasm;
+}  // void display_meltdown_counter()
+
+
 /*
 * Game engine loop
 */
@@ -9062,6 +9211,9 @@ void Run_Game()
 
 		// Level 3 TEST
 		cLevel = 3;
+		cMeltdownSeconds = 0;
+		cMeltdownMinutes = 10;
+		bFinalMeltdown = true;
 
 		draw_game_level_info();
 
@@ -9173,6 +9325,9 @@ void Run_Game()
 				// enable or disable Flashlight effect
 				display_flashlight_effect();
 				bGlbPlyChangedPosition = false;
+
+				// display Meltdown counter
+				display_meltdown_counter();
 
 				iGameCycles++;
 
@@ -9287,6 +9442,8 @@ void main(void)
 		cLevel = 1;    // at Level 1
 
 		bIntroAnim = true;
+		bFinalMeltdown = false;
+
 		// intro screen + selection menu (including Level Selection)
 		draw_intro_screen();
 
