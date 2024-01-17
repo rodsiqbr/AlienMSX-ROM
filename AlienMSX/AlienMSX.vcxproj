@@ -57,6 +57,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="applicationsettings.h" />
+    <ClInclude Include="data\alients.h" />
     <ClInclude Include="data\enemies.h" />
     <ClInclude Include="data\fatalts.h" />
     <ClInclude Include="data\font1ts.h" />
@@ -68,6 +69,7 @@
     <ClInclude Include="data\introts.h" />
     <ClInclude Include="data\maplvl1.h" />
     <ClInclude Include="data\maplvl2.h" />
+    <ClInclude Include="data\maplvl3.h" />
     <ClInclude Include="data\objects.h" />
     <ClInclude Include="data\player.h" />
     <ClInclude Include="data\scorets.h" />
@@ -128,6 +130,7 @@
     <ClCompile Include="alienmsx.c" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="data\AlienTS_12x2.png" />
     <Image Include="data\Enemies_12x2.png" />
     <Image Include="data\Font1TS_16x4.png" />
     <Image Include="data\Font1TS_32x2.png" />

@@ -41,6 +41,8 @@
 #include "data/game0ts.h"    // game map level 1 and 3 Tileset
 #include "data/game1ts.h"    // game map level 2 Tileset
 #include "data/fatalts.h"    // game map Fatal Tilesets (same for Level 1, 2 and 3)
+#include "data/alients.h"    // Alien creature Tileset
+
 
 // Include all texts, maps, sprites(player, objects and all the enemies)
 #include "data/gametext.h"   // Intro text, Credits text, GameOver text ...
@@ -90,6 +92,22 @@ typedef struct
 	uint8_t max_x;         //   12 | maximum x position at screen
 	uint8_t floor_y;       //   13 | floor y position
 } EnemyEntity;
+
+typedef struct
+{
+	uint8_t x;             //    0 | entity x position
+	uint8_t y;             //    1 | entity y position
+	uint8_t dir;           //    2 | entity direction
+	uint8_t status;        //    3 | entity status
+	uint8_t frame;         //    4 | entity sprite frame #
+	uint8_t delay;         //    5 | entity sprite frame delay counter
+	uint8_t type;          //    6 | entity type
+	uint8_t min_x;         //    7 | minimum x position at screen
+	uint8_t max_x;         //    8 | maximum x position at screen
+  uint8_t last_x;        //    9 | last x position
+	bool IsActive;         //   10 | is alien active at this screen?
+	uint16_t iPosition;    // 11-12| relative upper-left tile position in VRAM NAME TABLE (values from 0 - 767)
+} AlienEntity;
 
 struct AnimatedTile
 {
@@ -286,6 +304,7 @@ enum pattern_type
 #define SONG_SILENCE   1
 #define SONG_GAME_OVER 2
 #define SONG_INTRO     3
+#define SONG_IN_GAME_2 4
 
 // sound effects matching our Arkos efx song
 // configure the song to use MSX AY
@@ -382,6 +401,8 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ENEMY_STATUS_JUMPING     0x30
 #define ENEMY_STATUS_GRABBED     0x40
 #define ENEMY_STATUS_HURT        0x50
+#define ENEMY_STATUS_ATTACK      0x60  // alien only
+
 
 #define ENEMY_HIT_COUNT          2
 
@@ -455,6 +476,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define GAME_EGG_TL_OFFSET	       70 	  // start tile offset for Egg tiles
 #define GAME_COLLECT_TL_OFFSET	   76 	  // start tile offset for Collectible tiles
 #define GAME_FATL_TL_OFFSET	       80 	  // start tile offset for Fatal (animated) tiles
+#define GAME_ALIEN_TL_OFFSET	    100 	  // start tile offset for Alien (animated) tiles
 
 
 #define BLANK_TILE               0x00                    // BLANK tile position in any Tileset
@@ -470,7 +492,8 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define GAME_TEXT_GAME_WIN_ID        7
 #define GAME_TEXT_INTRO_CONTROL_ID   8
 #define GAME_TEXT_INTRO_MENU_ID      9
-#define GAME_TEXT_XXXX_ID           10
+#define GAME_TEXT_WIN_DEATH_ID       10        // :
+#define GAME_TEXT_WIN_RESCUE_ID      11        // ;
 
 #define TILE_TYPE_BLANK	         0b00000000    // Blank tile
 #define TILE_TYPE_OBJECT         0b00000001    // Object tile
@@ -484,6 +507,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define TILE_TYPE_COLLECTIBLE    0b00000110    // Collectible tile
 #define TILE_TYPE_SOLID          0b10000111    // Solid tile
 #define TILE_TYPE_FATAL	         0b00100111    // Fatal tile
+#define TILE_TYPE_ALIEN          0b00100011    // Alien Creature tile
 #define TILE_TYPE_PORTAL         0b00001111    // Portal tile
 //                                 ||||||||
 //                                 |||||| L 0 - ID
@@ -570,8 +594,9 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define DEAD_ANIM_TIMER        25  // 5 cycles, each cycle = 5 distinct frame
 #define KEY_PRESS_DELAY        16  // delay in cycles before accept a new key press
 
-#define ENEMY_ANIM_DELAY       96
-#define PLAYER_ANIM_DELAY       3
+#define ENEMY_ANIM_DELAY       96  // cycles to change enemy frame
+#define ALIEN_ANIM_DELAY        7  // cycles to change alien frame
+#define PLAYER_ANIM_DELAY       3  // cycles to change player frame
 
 #define CACHE_INVALID           0xFF
 
@@ -600,6 +625,13 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define ANIMATE_OBJ_EGG    5
 #define ANIMATE_OBJ_COLLC  6
 
+#define GM_STATUS_LOOP_CONTINUE 0b00000000
+#define GM_STATUS_CHANGE_MAP    0b00000001
+#define GM_STATUS_TIME_IS_OVER  0b00000010
+#define GM_STATUS_MISSION_CPLT  0b00000100
+#define GM_STATUS_GAME_OVER     0b00001000
+
+
 #define BOOL_FALSE 0
 #define BOOL_TRUE  1
 
@@ -612,7 +644,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 extern uint8_t SONG[];
 extern uint8_t EFFECTS[];
 
-uint8_t cGameStage, cLevel, cScreenMap, cScreenShiftDir, cMapX, cMapY;
+uint8_t cGameStage, cGameStatus, cLevel, cScreenMap, cScreenShiftDir, cMapX, cMapY;
 uint8_t cPower,cLastPower;
 uint16_t iScore;
 uint8_t cScoretoAdd;
@@ -623,7 +655,6 @@ uint8_t cCodeLenght, cMenuOption;
 uint8_t cMeltdownMinutes, cMeltdownSeconds, cMeltdownTimerCtrl;
 bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 bool bFinalMeltdown;                  // meltdown timer enabled/disabled
-
 
 struct sprite_attr sGlbSpAttr;        // global sprite attribute struct - used by all entities
 
@@ -636,7 +667,8 @@ uint8_t cFatalFlag;   // used at is_player_jumping()
 uint8_t cPortalFlag;  // used at is_player_jumping()
 uint8_t cAnimCycleParityFlag;
 bool bGlbSpecialProcessing;
-bool bChangeMap, bGlbMMEnabled;
+//bool bChangeMap;
+bool bGlbMMEnabled;
 
 uint8_t cAuxEntityX;   // used at Load_Entities() + its subroutines
 uint8_t cAuxEntityY;   // used at Load_Entities() + its subroutines
@@ -651,6 +683,7 @@ uint8_t cGlbFLDelay;
 PlyEntity sThePlayer;
 EnemyEntity sEnemies[AVERAGE_ENEMIES_PER_SCREEN * MAPS];  // all the loaded enemy entities in the map
 EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs the player, this is the enemy entity ptr
+AlienEntity sAlien;                                       // alien entity (1 single alien entity)
 
 // Global variables for player control
 uint8_t cGlbPlyFlag; // special global flag to describe player conflict with screen tiles
@@ -719,10 +752,10 @@ bool bCheckPlayerColision;
 bool bCheckShotColision;
 bool bShotColisionWithEnemy;
 
-
 unsigned char cGlbBufNum[10];            // global buffer to support display_number(), display_objects(), display_power() and display_minimap() routines
 unsigned char cBuffer[2048];             // general purpose buffer to unpack Tilesets, Colors, Maps and Sprites
 unsigned char cGameText[GAMETEXT_SIZE];  // buffer to unpack Texts
+unsigned char cAlienTileset[12*8*4];     // buffer to unpack and pre-process Alien animated tileset
 unsigned char cPowerTile[8 * 3];         // copy buffer - Power tile from original Pattern table
 
 // current map tile_map (uncompressed map data + entities)
@@ -746,6 +779,8 @@ struct ObjectScreen sObjScreen[MAX_ANIMATED_OBJECTS + 1];
 
 #define MAX_LOCKERS_PER_LEVEL 16
 bool cLockerOpened[MAX_LOCKERS_PER_LEVEL];
+
+bool cAlienActiveatScreen[MAPS];   // for each screen: TRUE - Yes, activate Alien Creature, FALSE - No, do not activate Alien Creature
 
 struct FlashLightStatusData sFlashLightStatusData;
 struct FlashLightStatusData sFlashLightStatusDataAux;
@@ -873,13 +908,13 @@ _continue_game_ts :
 	; memcpy(cPowerTile, cBuffer + (SCORE_POWER_TILE + 1) * 8, 8 * 3); //copy the original power tile pattern
 	;;ld a, #SCORE_POWER_TL_OFFSET + #01
 	;;ld h, #0
-	ld hl, #SCORE_POWER_TL_OFFSET + #01
+	ld hl, #_cBuffer + (#SCORE_POWER_TL_OFFSET + #01) * #8
 	;;ld l, a
-	add hl, hl
-	add hl, hl
-	add hl, hl
-	ld de, #_cBuffer
-	add hl, de
+	;;;add hl, hl
+	;;;add hl, hl
+	;;;add hl, hl
+	;;;ld de, #_cBuffer
+	;;;add hl, de
 	ld de, #_cPowerTile
 	ld bc, #08* #03
 	ldir  ; ld (DE), (HL), then increments DE, HL, and decrements BC until BC = 0
@@ -944,6 +979,7 @@ _gameover_step_2 :
 _test_finalgs :
 	cp #GAMESTAGE_FINAL
 	ret nz
+	; TODO: load tileset
 __endasm;
 }  // void load_tileset()
 
@@ -973,7 +1009,7 @@ __asm
 	pop ix
 	ret
 
-; Input: A = Text block # to be found (0 - 9 ;)
+; Input: A = Text block # to be found (0 - 9 : ;)
 ; Output: A = BOOL_TRUE, HL = text buffer address
 ;         A = BOOL_FALSE
 ; Changes: A, B, C, E, H, L
@@ -1254,14 +1290,15 @@ _lpFilBuf :
 	cp #4
 	jp nz, _newBlock
 
-	ld a, #SCORE_POWER_TL_OFFSET + #01
-	ld h, #0
-	ld l, a
-	add hl,hl
-	add hl, hl
-	add hl, hl
-	ld bc, #UBOX_MSX_PATTBL_ADDR
-	add hl,bc
+	;;;ld a, #SCORE_POWER_TL_OFFSET + #01
+	;;;ld h, #0
+	;;;ld l, a
+	;;;add hl,hl
+	;;;add hl, hl
+	;;;add hl, hl
+	;;;ld bc, #UBOX_MSX_PATTBL_ADDR
+	;;;add hl,bc
+	ld hl, #UBOX_MSX_PATTBL_ADDR + (#SCORE_POWER_TL_OFFSET + #01) * #8
 	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
 
 	ld hl, #_cPowerTile
@@ -2820,6 +2857,7 @@ __asm
 	ld (#_cAnimSpecialTilesQty), a
 	ld (#_cGlbSpecialTilesActive), a
 	ld (#_cGlbSpObjID), a
+	ld (#_sAlien + #10), a  ; IsActive = BOOL_FALSE
 
 	; pFreeAnimTile = sAnimTiles;
 	; pFreeAnimSpecialTile = sAnimSpecialTiles;
@@ -3389,9 +3427,119 @@ _proc_param_dropper :
 	push hl
 	; cGlbCyle
 	ld h, #ANIM_CYCLE_DROPPER
-	jr _insert_new_entity_0
+	jp _insert_new_entity_0
 
 _proc_enemy :
+	ld a, (hl) ; XYYYYYcd
+	; check if facehug (c=0) or alien (c=1)
+	and #0b00000010
+	jp z, _its_a_facehug
+	; its an alien - check if Alien creature will be activated or not at this screen
+	ld iy, #_cAlienActiveatScreen
+	ld d, #0
+	ld a, (#_cScreenMap)
+	ld e, a
+	add iy, de
+	ld a, 0 (iy)
+	or a
+	jp z, _get_next_entity_2  ; do not activate Alien at this screen - abort processing
+
+	ld a, #BOOL_TRUE
+	ld (#_sAlien + #10), a  ; IsActive
+
+	;;ld iy, #_sAlien
+	ld a, (hl) ; XYYYYYcd
+	and #0b00000001
+	;;ld 2 (iy), a ; dir
+	ld (#_sAlien + #2), a ; dir
+
+	inc hl
+	ld a, (hl) ; 0IIIwwww
+	and #0b00001111
+	rlca
+	ld b, a  ; Width * 2
+
+	ld a, (#_cAuxEntityX)
+	;;ld 7 (iy), a ; min_x
+  ld (#_sAlien + #7), a ; min_x
+	add a, b
+	;;ld 8 (iy), a ; max_x
+	ld (#_sAlien + #8), a ; max_x
+
+	ld a, (#_cAuxEntityY)
+	;;ld 1 (iy), a ; y
+	ld (#_sAlien + #1), a ; y
+
+	push hl
+	ld hl, (#_iGlbPosition)
+
+	;;ld a, 2 (iy)
+	ld a, (#_sAlien + #2)
+	cp #ENEMY_SPRT_DIR_RIGHT
+	ld a, (#_cAuxEntityX)
+	jr nz, _adjust_alien_init_position
+	jr _set_alien_position
+_adjust_alien_init_position :
+	add a, b
+	sub #4
+	; also adjust _iGlbPosition
+	;;ld hl, (#_iGlbPosition)
+	ld d, #0
+	ld e, b
+	dec e
+	dec e
+	dec e
+	dec e
+	add hl, de
+	ld (#_iGlbPosition), hl
+
+_set_alien_position :
+	;;ld 0 (iy), a  ; x
+	;;ld 9 (iy), a; last_x
+	ld (#_sAlien), a ; x
+	ld (#_sAlien + #9), a ; last_x
+	ld (#_sAlien + #11), hl ; iPosition
+
+	ld iy, #_sAlien
+	ld 3 (iy), #ENEMY_STATUS_WALKING
+	ld 6 (iy), #ET_ENEMY
+	ld 4 (iy), #0  ; frame
+	ld 5 (iy), #1  ; delay - force to diplay alien at first cycle
+
+	; insert alien (12 static tiles, 4x3) into cMap_Data[] as it was loaded from the map file
+	ld hl, #_cMap_TileClass - #03 * #32
+	ld bc, (#_iGlbPosition)
+	add hl, bc
+	ex de, hl
+	ld hl, #_cMap_Data - (#03 * #32)
+	add hl, bc
+	ld b, #3
+	ld c, #TS_SCORE_SIZE + #GAME_ALIEN_TL_OFFSET
+_insert_alien_full_at_map :
+	push bc
+	ld b, #4
+	ld a, #TILE_TYPE_ALIEN
+_insert_alien_row_at_map :
+	ld (de), a
+	ld (hl), c
+	inc c
+	inc hl
+	inc de
+	djnz _insert_alien_row_at_map
+	ld a, c
+	ld bc, #28
+	add hl, bc
+	ex de, hl
+	add hl, bc
+	ex de, hl
+	pop bc
+	ld c, a
+	djnz _insert_alien_full_at_map
+
+	pop hl
+	jp _get_next_entity_1
+
+_its_a_facehug :
 	inc hl
 	ld a, (hl) ; 0IIIwwww
 	rra
@@ -3456,7 +3604,7 @@ _insert_new_enemy :
 	ld 10 (iy), c
 
 	dec hl
-	ld a, (hl)  ; XYYYYYrd
+	ld a, (hl)  ; XYYYYYcd
 	and #0b00000001
 	ld 2 (iy), a
 	
@@ -4836,8 +4984,8 @@ _belt_detected :
 	ld hl, #_cGlbPlyFlag
 	set 4, (hl) ; special floor(belt)
 	jp _EndConflicting
-_not_a_belt :
-  
+
+_not_a_belt :  
 	cp #TILE_TYPE_BLANK
 	jr z, _first_empty_floor
 	cp #TILE_TYPE_FATAL
@@ -4885,8 +5033,10 @@ _not_a_gate :
 	set 1, a ; SOLID Flag
 	jr _check_fgo_step_2
 _not_a_solid :
-	cp #TILE_TYPE_FATAL
-	jr nz, _not_a_fatal
+	bit 5, a  ; FATAL BIT
+	jr z, _not_a_fatal
+	;;;cp #TILE_TYPE_FATAL
+	;;;jr nz, _not_a_fatal
 	ld a, (#_cGlbPlyFlag)
 	; fatal was found!
 	set 0, a ; FATAL Flag
@@ -6180,8 +6330,10 @@ _jump_up_validation :
 	push hl
 _test_solid_up :
 	ld a, (hl)
-	cp #TILE_TYPE_FATAL
-	jp z, _jmpFoundFatal_01
+	bit 5, a  ; FATAL BIT
+	jp nz, _jmpFoundFatal_01
+	;;;cp #TILE_TYPE_FATAL
+	;;;jp z, _jmpFoundFatal_01
 	cp #TILE_TYPE_PORTAL
 	jp z, _jmpFoundPortal_01
 
@@ -6265,8 +6417,10 @@ _dec_hl_row :
 	add hl, de
 _vert_validate :
 	ld a, (hl)
-	cp #TILE_TYPE_FATAL
-	jp z, _jmpFoundFatal_02
+	bit 5, a  ; FATAL BIT
+	jp nz, _jmpFoundFatal_02
+	;;;cp #TILE_TYPE_FATAL
+	;;;jp z, _jmpFoundFatal_02
 	cp #TILE_TYPE_PORTAL
 	jp z, _jmpFoundPortal_02
 	; its not fatal nor portal, so test if Solid
@@ -6539,13 +6693,14 @@ __endasm;
 * Returns:	true (1 - player wants to arise with a new life in this same level)
 *						false (0 - continue playing)
 */
-bool arise_player()
+//bool arise_player()
+void check_for_player_arise()
 {
 __asm
 	ld	l, #0x07
 	call	_ubox_read_keys
 	ld	a, l
-	ld l, #BOOL_FALSE; continue playing
+;;	ld l, #BOOL_FALSE; continue playing
 	cp #UBOX_MSX_KEY_ESC
 	ret	nz
 
@@ -6569,7 +6724,7 @@ _wait_for_YN :
 	; Pressed 'N'
 	; erase "ARISE?"
 	call _txt_erase
-	ld l, #BOOL_FALSE; continue playing
+;;	ld l, #BOOL_FALSE; continue playing
 	ret
 
 _do_arise :
@@ -6577,9 +6732,11 @@ _do_arise :
 	call _txt_erase
 	xor a
 	ld (#_cPower), a
-	ld l, #BOOL_TRUE; arise requested
+;;	ld l, #BOOL_TRUE; arise requested
+	jp _set_player_as_dead
 __endasm;
-}  // bool arise_player()
+//}  // bool arise_player()
+}  // void check_for_player_arise()
 
 /*
 * Check for player remaining power and life. Decrease Life when Power = 0
@@ -6587,15 +6744,21 @@ __endasm;
 *						false (0 - player don't have more lives = gameover)
 */
 //bool is_player_life_ok()
-bool continue_game_loop()
+//bool continue_game_loop()
+void update_game_loop_status()
 {
 __asm
 	ld a, (#_cRemainMission)
 	or a
-	ld l, #BOOL_FALSE  ; All missions completed - level UP
-	ret z
+;;	ld l, #BOOL_FALSE  ; All missions completed - level UP
+;;	ret z
+	jr nz, _mission_not_completed
+	ld a, #GM_STATUS_MISSION_CPLT
+	ld (#_cGameStatus), a
+	ret
 
-	ld l, #BOOL_TRUE  ; continue playing
+_mission_not_completed :
+;;	ld l, #BOOL_TRUE  ; continue playing
 	ld a, (#_cPlyDeadTimer)
 	or a
 	jr z, _check_power
@@ -6643,9 +6806,14 @@ _check_lives :
 	ld a, (#_cLives)
 	dec a
 	ld (#_cLives), a
-	ld l, #BOOL_FALSE; no more lives - stop playing
-	ret z
+;;	ld l, #BOOL_FALSE; no more lives - stop playing
+;;  ret z
+	jr nz, _start_with_new_life
+	ld a, #GM_STATUS_GAME_OVER
+	ld (#_cGameStatus), a
+	ret
 	
+_start_with_new_life :
 	; there are still some remaining lives
 	ld a, #MAX_POWER
 	ld (#_cPower), a
@@ -6665,6 +6833,8 @@ _check_lives :
 	ld (hl), a; _sThePlayer.dir = _cPlySafePlaceDir
 	inc hl
 	ld(hl), #PLYR_STATUS_STAND; _sThePlayer.status = PLYR_STATUS_STAND
+
+
 	inc hl
 	inc hl
 	inc hl
@@ -6675,9 +6845,9 @@ _check_lives :
 	ld (hl), #BOOL_FALSE ; grabflag
 	ld a, #BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a
-	ld l, #BOOL_TRUE; continue playing
+;;	ld l, #BOOL_TRUE; continue playing
 __endasm;
-} // bool continue_game_loop()
+}  // void update_game_loop_status()
 
 /*
 * Auxiliary routine to update player status and reset some internal flags
@@ -6991,7 +7161,20 @@ _do_player_display :
 	call	_spman_alloc_sprite
 	pop	af
 __endasm;
-} // display_player()
+} // void display_player()
+
+
+/*
+* Move Alien creature right/left (also check for Flashlight)
+*/
+void display_alien_at_screen()
+{
+__asm
+  ld a, (#_sAlien + #0) ; x
+  ld (#_sAlien + #9), a; last_x
+	ret
+__endasm;
+} // void display_alien_at_screen()
 
 
 /*
@@ -7000,6 +7183,81 @@ __endasm;
 void update_and_display_enemies()
 {
 __asm
+	ld a, (#_sAlien + #10)  ; IsActive
+	or a
+	jp z, _update_facehug
+	; update Alien creature
+
+	ld a, (#_sAlien + #3) ; status
+	cp #ENEMY_STATUS_WALKING
+	jr nz, _try_alien_attack
+	; check if its time to update Alien position and image (each ALIEN_ANIM_DELAY cycles)
+	ld a, (#_sAlien + #5) ; delay
+	dec a
+	jr z, _do_animate_alien
+	ld (#_sAlien + #5), a
+	jr _update_facehug
+_do_animate_alien :
+  ld a, #ALIEN_ANIM_DELAY
+	ld (#_sAlien + #5), a
+
+	; check if need to move Alien position
+	ld a, (#_sAlien + #0) ; x
+	ld b, a
+	ld a, (#_sAlien + #9) ; last_x
+	cp b
+	call nz, _display_alien_at_screen
+	; display Alien at current position, direction and at current frame - then update both
+	call _update_alien_tileset
+
+	ld a, (#_sAlien + #4) ; frame
+	or a
+	; if frame = 0 no need to move Alien at screen
+	jr z, _update_alien_frame
+
+	ld a, (#_sAlien + #2) ; dir
+	cp #ENEMY_SPRT_DIR_LEFT
+	jr z, _move_alien_left
+	; move Alien to the right
+	ld a, (#_sAlien + #0) ; x
+	inc a
+	ld b, a
+	ld a, (#_sAlien + #8) ; max_x
+	cp b
+	jr c, _change_alien_dir
+	ld a, b
+	ld (#_sAlien + #0), a
+	jr _update_alien_frame
+
+_move_alien_left :
+	; move Alien to the left
+	ld a, (#_sAlien + #7) ; min_x
+	ld b, a
+	ld a, (#_sAlien + #0) ; x
+	dec a
+	cp b
+	jr c, _change_alien_dir
+	ld (#_sAlien + #0), a
+	jr _update_alien_frame
+
+_change_alien_dir :
+	ld a, (#_sAlien + #2) ; dir
+	xor #1
+	ld (#_sAlien + #2), a
+
+_update_alien_frame :
+	ld a, (#_sAlien + #4)  ; frame
+	xor #1
+	ld (#_sAlien + #4), a
+
+	jr _update_facehug
+
+_try_alien_attack :
+	cp #ENEMY_STATUS_ATTACK
+	jr nz, _update_facehug
+	; TODO: ATTACK
+
+_update_facehug :
 	ld a, (#_cActiveEnemyQtty)
 	or a
 	ret z   ; no active enemies to update and display
@@ -7412,7 +7670,8 @@ __endasm;
 * Returns:	true (1 - continue playing in the same map)
 *						false (0 - need to change map)
 */
-bool update_player()
+//bool update_player()
+void update_player()
 {
 __asm
   ld a, (#_cGlbPlyJumpTimer)
@@ -7453,8 +7712,10 @@ __endasm;
 			}
 			else if (cGlbPlyFlag & COLISION_NEXTM)  // Next map or Portal
 			{
-        // cGlbObjData contains shift direction + screen destination (sssDDDDD)
-				return false;
+				cGameStatus = GM_STATUS_CHANGE_MAP;
+				// cGlbObjData contains shift direction + screen destination (sssDDDDD)
+				//return false;
+				return;
 			}
 		}
 		else
@@ -7479,13 +7740,15 @@ __endasm;
 						if (cGlbPlyFlag & COLISION_GATE)
 						{
 							player_hit(HIT_PTS_HIGH);
-							return true;
+							//return true;
+							return;
 						}
 						if (cGlbPlyFlag & COLISION_SOLID)
 						{
 							update_player_status(PLYR_STATUS_DEAD);
 							//player_hit(HIT_PTS_DEATH);
-							return true;
+							//return true;
+							return;
 						}
 						if (cGlbPlyFlag & COLISION_FATAL)
 						{
@@ -7511,8 +7774,10 @@ __endasm;
 						{
 							if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
 							{
+								cGameStatus = GM_STATUS_CHANGE_MAP;
 								// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
-								return false;
+								//return false;
+								return;
 							}
 						}
 					}
@@ -7549,8 +7814,10 @@ __endasm;
 						{
 							if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
 							{
+								cGameStatus = GM_STATUS_CHANGE_MAP;
 								// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
-								return false;
+								//return false;
+								return;
 							}
 						}
 					}
@@ -7599,8 +7866,10 @@ __endasm;
 							}
 							else if (cGlbPlyFlag & COLISION_NEXTM)  // Next Map or Portal
 							{
+								cGameStatus = GM_STATUS_CHANGE_MAP;
 								// cGlbObjData contains shift direction + screen destination (sssDDDDD)
-								return false;
+								//return false;
+								return;
 							}
 							else if (cGlbPlyFlag & COLISION_COLLECTIBLE)
 							{
@@ -7641,12 +7910,14 @@ __endasm;
 		}
 		if (cGlbPlyFlag & COLISION_NEXTM)  // Next map only (no horizontal portals)
 		{
+			cGameStatus = GM_STATUS_CHANGE_MAP;
 			// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
-			return false;
+			//return false;
+			return;
 		}
 	}
-	return true;
-}  // bool update_player()
+	//return true;
+}  // void update_player()
 
 /*
 * Update map, shot and shield sprites
@@ -7868,8 +8139,13 @@ _detect_colision :
 	ld a, b
 	ld (#_cShotX), a
 	ld a, (hl)
+	; Alien tile is not SOLID, but works as solid for a shot
+	cp #TILE_TYPE_ALIEN
+	jp z, _kill_shot
+
 	bit 7, a ; SOLID BIT
 	jp z, _no_colision
+
 	cp #TILE_TYPE_WALL
 	jp z, _break_wall
 	
@@ -9113,8 +9389,6 @@ __asm
 	cp #BOOL_TRUE
 	ret nz
 
-	; Display_Text(11, 1, FONT2_TILE_OFFSET, "> 10:00 <");
-
 	; real timer control
 	ld a, (#_cMeltdownTimerCtrl)
 	or a
@@ -9127,7 +9401,6 @@ _set_timer_and_display_md_timer :
 	ld a, #ONE_THIRD_SECOND_TIMER
 	ld (#_cMeltdownTimerCtrl), a
 
-	; GAME_ALARM_TIMER_TL_OFFSET
 	ld a, (#_cMeltdownSeconds)
 	and #0b00000001
 	; ubox_put_tile(12, 1, GAME_ALARM_TIMER_TL_OFFSET);
@@ -9179,19 +9452,25 @@ _set_timer_and_display_md_timer :
 	dec a
 	ld (#_cMeltdownSeconds), a
 	ret
+
 _reset_md_seconds :
 	; ubox_put_tile(15, 1, SCORE_COLON_TL_OFFSET);
 	ld a, #SCORE_COLON_TL_OFFSET
 	ld bc, #0x010F
 	call _put_tile_asm_direct
+
 	ld a, (#_cMeltdownMinutes)
 	or a
-	ret z
+;;	ret z
+	jr nz, _decrement_minutes
+  ld a, #GM_STATUS_TIME_IS_OVER
+  ld (#_cGameStatus), a
+	ret
+_decrement_minutes :
 	dec a
 	ld (#_cMeltdownMinutes), a
 	ld a, #59
 	ld (#_cMeltdownSeconds), a
-	ret
 __endasm;
 }  // void display_meltdown_counter()
 
@@ -9211,8 +9490,8 @@ void Run_Game()
 
 		// Level 3 TEST
 		cLevel = 3;
-		cMeltdownSeconds = 0;
-		cMeltdownMinutes = 10;
+		cMeltdownSeconds = cMeltdownTimerCtrl = 0;
+	  cMeltdownMinutes = 10;
 		bFinalMeltdown = true;
 
 		draw_game_level_info();
@@ -9225,7 +9504,8 @@ void Run_Game()
 
 		// global variable initialization - once per level
 		cLastPower = 0xFF;  // force update on the first display_power() call
-		bGlbMMEnabled = bChangeMap = false;
+		bGlbMMEnabled = false; // bChangeMap = false;
+		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 		cGlbGameSceneLight = LIGHT_SCENE_ON_FL_ANY;
 		cGlbFlashLightAction = GAME_LIGHTS_ACTION_NONE;
 		cPlyObjects = cPlyAddtObjects = HAS_NO_OBJECT;  // Player starts with no objects
@@ -9239,7 +9519,19 @@ void Run_Game()
 		{
 			// Load, uncompress map data and update object history
 			load_levelmap_data();
-			if (!bChangeMap)
+			//if (!bChangeMap)
+			if (cGameStatus == GM_STATUS_CHANGE_MAP)
+			{
+				load_entities();
+				shift_screen_map();
+				update_player_position();
+
+				//update level/screen into score area
+				display_level();
+				//bChangeMap = false;
+				cGameStatus = GM_STATUS_LOOP_CONTINUE;
+			}
+			else
 			{
 				// clear the screen
 				load_entities();
@@ -9249,16 +9541,6 @@ void Run_Game()
 				ubox_enable_screen();
 				mplayer_init(SONG, SONG_IN_GAME);
 			}
-			else
-			{
-				load_entities();
-				shift_screen_map();
-				update_player_position();
-
-				//update level/screen into score area
-				display_level();
-				bChangeMap = false;
-			}
 			cMiniMapX = SCORE_MINIMAP_X_POS * 8 + cMapX * 4 + 3;
 			cMiniMapY = SCORE_MINIMAP_Y_POS * 8 + cMapY * 3 + 7;
 
@@ -9267,14 +9549,15 @@ void Run_Game()
 			cAnimCycleParityFlag = cGlbPlyFlag = cGlbSpObjID = cShotCount = 0;
 			iGameCycles = 0;
 			cGlbPlyFlagCache = CACHE_INVALID;
-			do  // loop until death or change map
+			do  // loop until player is dead (lives=0) or need to change map
 			{			
 				if (sThePlayer.status != PLYR_STATUS_DEAD)
 				{
-					if (arise_player()) continue;  // // scan for 'ESC' key, then Y to confirm
-					check_for_pause();  // scan for 'P' key
-					check_for_flashlight();  // scan for 'F' key
+					check_for_pause();        // scan for 'P' key
+					check_for_flashlight();   // scan for 'F' key
+					check_for_player_arise(); // scan for 'ESC' key, then Y to confirm
 					//check_for_easteregg();
+					//if (arise_player()) continue;  // scan for 'ESC' key, then Y to confirm
 				}
 			
 				//bGlbPlyChangedPosition = false;
@@ -9296,7 +9579,10 @@ void Run_Game()
 					check_for_fire();  // scan for 'ESPACE' key
 
 					// update our player position and status
-					if (!update_player()) break; // need to stop game loop to change to other map
+					//if (!update_player()) break; // need to stop game loop to change to other map
+					update_player();
+					if (cGameStatus == GM_STATUS_CHANGE_MAP) break;
+					//retorna CHANGE_MAP
 				}
 
 				bGlbPlyChangedPosition |= bGlbPlyMoved;
@@ -9326,18 +9612,47 @@ void Run_Game()
 				display_flashlight_effect();
 				bGlbPlyChangedPosition = false;
 
-				// display Meltdown counter
+				// update and display Meltdown counter
 				display_meltdown_counter();
+				//retorna TIMER_OUT
+
+				update_game_loop_status();
+				//retorna MISSION_COMPLETE, NO_MORE_LIVES
 
 				iGameCycles++;
 
 				// ensure we wait to our desired update rate
 				ubox_wait();
-			} while (continue_game_loop());  // loop until death or changed map
+
+			} while (cGameStatus == GM_STATUS_LOOP_CONTINUE);
+			//} while (continue_game_loop());  // loop until player is dead (lives=0) or need to change map
 
 			// hide all the sprites
 			spman_hide_all_sprites();
 
+			if (cGameStatus == GM_STATUS_CHANGE_MAP)
+			{
+				// Set right screen number and shift direction (up, down, right, left, portal) based on cGlbObjData
+				cScreenMap = cGlbObjData & 0b00011111;
+				cScreenShiftDir = cGlbObjData >> 5;
+				if (cScreenShiftDir == SCR_SHIFT_RIGHT || cScreenShiftDir == SCR_SHIFT_LEFT)
+				{
+__asm
+					ld de, #_cTemp_Map_Data
+					ld hl, #_cMap_Data
+					push bc
+					ld bc, #MAP_BYTES_SIZE
+					ldir   ; ld(DE), (HL), then increments DE, HL, and decrements BC until BC = 0
+					pop bc
+__endasm;
+				}
+			}
+			else if (cGameStatus == GM_STATUS_MISSION_CPLT)
+			{
+				cLevel++;
+				iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
+			}
+/*
 			// 'continue_game_loop()=false' OR 'Map Changed'
 			if (cLives) // if cLives != 0 then: 'Next map/Portal processing' OR Level 'Completed processing'
 			{
@@ -9347,13 +9662,14 @@ void Run_Game()
 					///cRemainMission = 0;
 					cLevel++;
 					iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
+					//CONTINUE_GAME_LOOP = FALSE
 				}
 				else
 				{
 					// Set right screen number and shift direction (up, down, right, left, portal) based on cGlbObjData
 					cScreenMap = cGlbObjData & 0b00011111;
 					cScreenShiftDir = cGlbObjData >> 5;
-					bChangeMap = true;
+					//bChangeMap = true;
 					if (cScreenShiftDir == SCR_SHIFT_RIGHT || cScreenShiftDir == SCR_SHIFT_LEFT)
 					{
 __asm
@@ -9365,12 +9681,143 @@ __endasm;
 					}
 				}
 			}
-		} while (cLives && cRemainMission);  // loop at each screen map
+*/
+		} while (cGameStatus == GM_STATUS_CHANGE_MAP);
+		//} while (cLives && cRemainMission);  // loop at each screen map
 		// Level Up message
-		if (cLives) draw_level_up_message();
-	} while (cLives);  // loop for each Level
+		if (cGameStatus == GM_STATUS_MISSION_CPLT)
+		{
+		  draw_level_up_message();
+		}
+		//if (cLives) draw_level_up_message();
+	} while (cGameStatus != GM_STATUS_TIME_IS_OVER && cGameStatus != GM_STATUS_GAME_OVER);
+	//} while (cLives);  // loop for each Level
 }  // void Run_Game()
 
+
+void update_alien_tileset()
+{
+__asm
+	; set the correct tile base address : _cAlienTileset + (dir * (24 * 8)) + (frame * (12 * 8))
+	ld a, (#_sAlien + #2) ; dir(0, 1)
+	dec a ; (255, 0)
+	cpl   ; (0, 255)
+	and #TS_ALIEN_SIZE * #8
+	ld d, #0
+	ld e, a
+	ld a, (#_sAlien + #4) ; frame (0, 1)
+	dec a ; (255, 0)
+	cpl   ; (0, 255)
+	and #TS_ALIEN_SIZE * #4
+	add a, e
+	jr nc, _add_no_carry
+	inc d
+_add_no_carry :
+	ld e, a
+	ld hl, #_cAlienTileset
+	add hl, de
+	ex de, hl
+
+  ld hl, #UBOX_MSX_PATTBL_ADDR + (#TS_SCORE_SIZE + #GAME_ALIEN_TL_OFFSET) * #8
+  call #0x0053  ; SETWRT - Sets the VRAM pointer(HL)
+	call _set_new_alien_tileset
+
+	ld hl, #UBOX_MSX_PATTBL_ADDR + (#TS_SCORE_SIZE + #GAME_ALIEN_TL_OFFSET + #256) * #8
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+	call _set_new_alien_tileset
+
+	ld hl, #UBOX_MSX_PATTBL_ADDR + (#TS_SCORE_SIZE + #GAME_ALIEN_TL_OFFSET + #512) * #8
+	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
+
+_set_new_alien_tileset :
+  ld h, d
+	ld l, e
+	;ld b, #TS_ALIEN_SIZE * #4
+  ;ld c, #0x98
+	ld bc, #0x6098
+_lpOutiAlien :
+  outi  ; write 1 bytes from (HL) to VRAM, decrement B and incremented HL
+  jr nz, _lpOutiAlien
+__endasm;
+}  // void update_alien_tileset()
+
+
+/*
+* Unpack Alien tileset (right orientated) and pre-calculate left oriented tiles
+* Plus unpack Game text
+*/
+void unpack_alien_tileset()
+{
+__asm
+  ; unpack Game Text
+  ld hl, #_gametext
+  ld de, #_cGameText
+  call _zx0_uncompress_asm_direct
+
+	; unpack right oriented tileset (frame 0 & frame 1)
+	ld hl, #_alien
+	ld de, #_cAlienTileset
+	call _zx0_uncompress_asm_direct
+
+	; pre-calculate left oriented tileset (frame 2 & frame 3)
+	ld de, #_cAlienTileset
+	ld hl, #_cAlienTileset + #TS_ALIEN_SIZE * #8 + #3 * #8
+
+	ld b, #3 * #2
+_flip_full_pack :
+	push bc
+	ld b, #4
+_flip_1_row :
+	push bc
+  ld b, #8
+_flip_1_tile :
+	push bc
+	ld b, #8
+	ld a, (de)
+_flip_1_byte :
+	rra
+	rl c
+	djnz _flip_1_byte
+	ld (hl), c
+	inc de
+	inc hl
+	pop bc
+	djnz _flip_1_tile
+	ld bc, #16
+	xor a
+	sbc hl, bc
+	pop bc
+  djnz _flip_1_row
+	ld bc, #64
+	add hl, bc
+	pop bc
+	djnz _flip_full_pack
+
+__endasm;
+}  // void unpack_alien_tileset()
+
+
+void alien_randomize()
+{
+__asm
+	ld b, #MAPS
+	ld hl, #_cAlienActiveatScreen
+_alien_rand_loop :
+	; randomize (0-22: FALSE; 23-255: TRUE)
+	ex de, hl
+	call _randombyte
+	ld a, l
+	ex de, hl
+	ld c, #BOOL_TRUE
+	cp #23
+	jr nc, _set_alien_random
+	ld c, #BOOL_FALSE
+_set_alien_random :
+	ld (hl), c
+	inc hl
+	djnz _alien_rand_loop
+__endasm;
+}  // void alien_randomize()
 
 /*
 * Game over screen
@@ -9398,6 +9845,53 @@ _display_msg_and_wait :
 	jp _wait_fire
 __endasm;
 }  // void draw_game_over()
+
+/*
+* Game win screen
+* cGameStatus == GM_STATUS_TIME_IS_OVER - game win + player dead
+* cGameStatus == GM_STATUS_MISSION_CPLT - game win
+*/
+void draw_game_win()
+{
+__asm
+  call _ubox_disable_screen
+	ld hl, #_cGameStage
+	;;ld(hl), #GAMESTAGE_FINAL
+	ld(hl), #GAMESTAGE_GAMEOVER
+	call _load_tileset
+
+	ld	l, #BLANK_TILE
+	call	_ubox_fill_screen
+	call _ubox_enable_screen
+	ld	hl, #_SONG
+	ld a, #SONG_SILENCE
+	call _mplayer_init_asm_direct
+
+	ld a, #GAME_TEXT_GAME_WIN_ID
+	call _search_text_block
+	ld bc, #0x0B01
+	ld de, #0x0008
+	call _display_format_text_block
+
+	;TODO: NOSTROMO + EXPLOSION ANIMATION
+
+	ld a, (#_cGameStatus)
+	cp #GM_STATUS_TIME_IS_OVER
+	jr z, _rippley_is_dead
+	ld a, #GAME_TEXT_WIN_RESCUE_ID
+	jr _draw_last_message
+_rippley_is_dead :
+	ld a, #GAME_TEXT_WIN_DEATH_ID
+_draw_last_message :
+	call _search_text_block
+	ld bc, #0x1001
+	;;ld de, #0x0008
+	;;call _display_format_text_block
+	jp _display_msg_and_wait
+	;;jp _wait_fire
+__endasm;
+}  // void draw_game_win()
+
 
 /*
 * main()
@@ -9429,9 +9923,9 @@ void main(void)
 
 	cCtrl = UBOX_MSX_CTL_NONE;
 
-	zx0_uncompress(cGameText, gametext);
-	
-	//TODO: uncompress ALIEN tiles and pre-calculate flip tiles
+	// uncompress ALIEN tiles and pre-calculate right/left orientation tiles
+	// also uncompress Game texts
+	unpack_alien_tileset();
 
 	while (true) // continuous loop - do not return to BASIC/BIOS
 	{
@@ -9443,14 +9937,26 @@ void main(void)
 
 		bIntroAnim = true;
 		bFinalMeltdown = false;
+		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 
-		// intro screen + selection menu (including Level Selection)
+		// intro screen + selection menu (including Level selection)
 		draw_intro_screen();
+		
+		// everytime you start a new game, randomize if Alien creature will be activated or not for each of the 15 'level 3' screens
+		alien_randomize();
 
-		// play the game from the selected Level until cLives=0
+		// play the game from the selected Level until player WINS OR DIES
 		Run_Game();
-	
-	// TODO: check for GAME WIN, then do not show Gameover
-		draw_game_over();
+
+		if (cGameStatus == GM_STATUS_GAME_OVER)
+		{
+			draw_game_over();
+		}
+		else
+		{
+			// cGameStatus == GM_STATUS_TIME_IS_OVER - game win + player dead
+			// cGameStatus == GM_STATUS_MISSION_CPLT - game win
+			draw_game_win();
+		}
 	}
 }  // void main()

@@ -305,18 +305,22 @@ def main():
                     param = 1
                 t |= param
 
-# enemy: ttttXXXX|XYYYYYrd|0IIIwwww (3 bytes)
+# enemy: ttttXXXX|XYYYYYcd|0IIIwwww (3 bytes)
 #          tttt = type (3)
 #          XXXXX = tile X (0-31)
 #          YYYYY = tile Y (0-23)
-#          r = reserved (0)
+#          c = enemy Class: facehug (0 - default) /  alien (1) 
 #          d = direction: walk right (0) / walk left (1)
 #          0III = Enemy ID (0-7)
 #          wwww = width / 2 (wwww blocks of 16 pixels wide, 0 - 15)
             if name == "enemy":
+                EnClass = int(get_property(obj, "class", 0))
+                if EnClass > 1:
+                    EnClass = 1
                 XtraBits = int(get_property(obj, "direction", 0))
                 if XtraBits > 1:
                     XtraBits = 1
+                XtraBits |= (EnClass << 1)
                 EnemID = int(get_property(obj, "id", 0))
                 if EnemID > 7:
                     EnemID = 7

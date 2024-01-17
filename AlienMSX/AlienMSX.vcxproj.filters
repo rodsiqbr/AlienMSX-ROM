@@ -110,6 +110,12 @@
     <ClInclude Include="data\maplvl2.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\alients.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data\maplvl3.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">
@@ -290,6 +296,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="data\Game1TSv2_FULL_16x15.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\AlienTS_12x2.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
