@@ -3447,10 +3447,8 @@ _proc_enemy :
 	ld a, #BOOL_TRUE
 	ld (#_sAlien + #10), a  ; IsActive
 
-	;;ld iy, #_sAlien
 	ld a, (hl) ; XYYYYYcd
 	and #0b00000001
-	;;ld 2 (iy), a ; dir
 	ld (#_sAlien + #2), a ; dir
 
 	inc hl
@@ -3460,20 +3458,17 @@ _proc_enemy :
 	ld b, a  ; Width * 2
 
 	ld a, (#_cAuxEntityX)
-	;;ld 7 (iy), a ; min_x
   ld (#_sAlien + #7), a ; min_x
 	add a, b
-	;;ld 8 (iy), a ; max_x
+	dec a
 	ld (#_sAlien + #8), a ; max_x
 
 	ld a, (#_cAuxEntityY)
-	;;ld 1 (iy), a ; y
 	ld (#_sAlien + #1), a ; y
 
 	push hl
 	ld hl, (#_iGlbPosition)
 
-	;;ld a, 2 (iy)
 	ld a, (#_sAlien + #2)
 	cp #ENEMY_SPRT_DIR_RIGHT
 	ld a, (#_cAuxEntityX)
@@ -3483,7 +3478,6 @@ _adjust_alien_init_position :
 	add a, b
 	sub #4
 	; also adjust _iGlbPosition
-	;;ld hl, (#_iGlbPosition)
 	ld d, #0
 	ld e, b
 	dec e
@@ -3494,8 +3488,6 @@ _adjust_alien_init_position :
 	ld (#_iGlbPosition), hl
 
 _set_alien_position :
-	;;ld 0 (iy), a  ; x
-	;;ld 9 (iy), a; last_x
 	ld (#_sAlien), a ; x
 	ld (#_sAlien + #9), a ; last_x
 	ld (#_sAlien + #11), hl ; iPosition
@@ -3505,7 +3497,7 @@ _set_alien_position :
 	ld 6 (iy), #ET_ENEMY
 	ld 4 (iy), #0  ; frame
 	ld 5 (iy), #1  ; delay - force to diplay alien at first cycle
-
+	
 	; insert alien (12 static tiles, 4x3) into cMap_Data[] as it was loaded from the map file
 	ld hl, #_cMap_TileClass - #03 * #32
 	ld bc, (#_iGlbPosition)
@@ -4107,13 +4099,13 @@ __asm
 	ld e, (hl)
 	inc hl
 	ld d, (hl) ; DE = iPosition
-	ld hl, (#_iGlbPosition)
-	push hl
+;;;;	ld hl, (#_iGlbPosition)
+;;;;	push hl
 	ld (#_iGlbPosition), de
 	xor a  ; blank Tile
 	call _insert_new_obj_history
-	pop hl
-	ld (#_iGlbPosition), hl
+;;;;	pop hl
+;;;;	ld (#_iGlbPosition), hl
 __endasm;
 }  // void disable_gate_history(uint16_t iPosition)
 
@@ -4127,12 +4119,12 @@ __asm
 	ld d, (hl); DE = iPosition
 	inc hl
 	ld a, (hl); A = cTile
-	ld hl, (#_iGlbPosition)
-	push hl
-	ld(#_iGlbPosition), de
+;;;;	ld hl, (#_iGlbPosition)
+;;;;	push hl
+	ld (#_iGlbPosition), de
 	call _update_existing_obj_history
-	pop hl
-	ld (#_iGlbPosition), hl
+;;;;	pop hl
+;;;;	ld (#_iGlbPosition), hl
 __endasm;
 }  // void update_wall_history(uint16_t iPosition, uint8_t cTile)
 
@@ -7165,14 +7157,103 @@ __endasm;
 
 
 /*
-* Move Alien creature right/left (also check for Flashlight)
+* Move Alien creature right/left (also check for Flashlight effect)
 */
 void display_alien_at_screen()
 {
 __asm
+  ld b, #3 ; 3 rows to go
+  ld c, #TS_SCORE_SIZE + #GAME_ALIEN_TL_OFFSET - #1 ; first Alien tile
+  ld hl, (#_sAlien + #11); iPosition
+
+  ld a, (#_sAlien + #2) ; dir
+	cp #ENEMY_SPRT_DIR_LEFT
+	jr z, _move_alien_tiles_left
+	; move Alien tiles to the right: 3 x (BLANK + 4 x Alien Tiles)
+	dec hl
+	ld d, #5 ; first tile is blank
+_start_alien_move :
+	ld (#_iGlbPosition), hl
+
+_move_alien_loop_1 :
+	push bc
+	ld b, #5 ; 5 columns to go
+_move_alien_loop_2 :
+	ld a, d
+	cp b
+	jr nz, _not_blank_tile_right
+	; tile is blank
+	push bc
+	; ld b, #TILE_TYPE_BLANK
+	; ld c, #BLANK_TILE
+	ld bc, #0x0000
+	jr _continue_display_alien_tile
+_not_blank_tile_right :
+	inc c
+	push bc
+	ld b, #TILE_TYPE_ALIEN
+_continue_display_alien_tile :
+	push de ; protect D and E
+	call _display_alien_single_tile
+	pop de
+	ld hl, #_iGlbPosition
+	inc (hl)
+	pop bc
+	djnz _move_alien_loop_2
+	ld a, c
+	ld bc, #27
+	ld hl, (#_iGlbPosition)
+	add hl, bc
+	ld (#_iGlbPosition), hl
+	pop bc
+	ld c, a
+	djnz _move_alien_loop_1
+
   ld a, (#_sAlien + #0) ; x
-  ld (#_sAlien + #9), a; last_x
-	ret
+  ld (#_sAlien + #9), a ; last_x
+  ret
+
+_move_alien_tiles_left :
+	; move Alien tiles to the left : 3 x (4 x Alien Tiles + BLANK)
+	ld d, #1 ; last tile is blank
+	jr _start_alien_move
+
+; HL = iPosition
+; C = Tile
+; B = TileType (TILE_TYPE_BLANK / TILE_TYPE_ALIEN)
+_display_alien_single_tile :
+  ; if LIGHT_SCENE_OFF_FL_OFF, no need to display animated tiles (no need to update VRAM)
+  ld a, (#_cGlbGameSceneLight)
+  cp #LIGHT_SCENE_OFF_FL_OFF
+  jr z, _upd_alien_map_data
+
+  ; if LIGHT_SCENE_OFF_FL_ON, need to check if tile at VRAM addreess <> BLACK_TILE before updating
+  ld hl, (#_iGlbPosition)
+  ld de, #UBOX_MSX_NAMTBL_ADDR
+  add hl, de  ; HL = VRAM_NAME_TBL + cY * 32 + cX
+  cp #LIGHT_SCENE_OFF_FL_ON
+  jr nz, _do_update_alien_tile
+  call #0x0050 ; SETRD - Enable VDP to read (HL)
+  in a, (#0x98)
+  cp #BLACK_TILE
+  jr z, _upd_alien_map_data
+
+_do_update_alien_tile :
+  call #0x0053  ; SETWRT - Sets the VRAM pointer (HL)
+	ld a, c
+  out (#0x98), a  ; write to VRAM
+
+_upd_alien_map_data :
+  ld hl, (#_iGlbPosition)
+  ld de, #_cMap_Data - (#03 * #32)
+  add hl, de
+  ld (hl), c  ; cMap_Data[HL] = Tile
+
+  ; update cMap_TileClass[]
+  ld hl, (#_iGlbPosition)
+  ld de, #_cMap_TileClass - (#03 * #32)
+  add hl, de
+  ld (hl), b  ; cMap_TileClass[HL] = TILE_TYPE_xxxx
 __endasm;
 } // void display_alien_at_screen()
 
@@ -7222,11 +7303,15 @@ _do_animate_alien :
 	ld a, (#_sAlien + #0) ; x
 	inc a
 	ld b, a
+	add a, #3 ; rightmost tile
+	ld c, a
 	ld a, (#_sAlien + #8) ; max_x
-	cp b
+	cp c
 	jr c, _change_alien_dir
 	ld a, b
 	ld (#_sAlien + #0), a
+	ld hl, #_sAlien + #11 ; iPosition
+	inc (hl)
 	jr _update_alien_frame
 
 _move_alien_left :
@@ -7238,6 +7323,8 @@ _move_alien_left :
 	cp b
 	jr c, _change_alien_dir
 	ld (#_sAlien + #0), a
+	ld hl, #_sAlien + #11 ; iPosition
+	dec (hl)
 	jr _update_alien_frame
 
 _change_alien_dir :
