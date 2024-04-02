@@ -10,6 +10,7 @@
 //Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
 // 2. Jumping into a Portal still doesn't work. Easy to reproduce.
+// 3. Bug na rotina de win/death (trigger nao funciona)
 
 
 #include <stdio.h>
@@ -42,6 +43,7 @@
 #include "data/game1ts.h"    // game map level 2 Tileset
 #include "data/fatalts.h"    // game map Fatal Tilesets (same for Level 1, 2 and 3)
 #include "data/alients.h"    // Alien creature Tileset
+#include "data/nostrots.h"   // final screen Nostromo ship Tileset
 
 
 // Include all texts, maps, sprites(player, objects and all the enemies)
@@ -95,16 +97,16 @@ typedef struct
 
 typedef struct
 {
-	uint8_t x;             //    0 | entity x position
-	uint8_t y;             //    1 | entity y position
+	uint8_t X;             //    0 | entity X position
+	uint8_t Y;             //    1 | entity Y position
 	uint8_t dir;           //    2 | entity direction
 	uint8_t status;        //    3 | entity status
 	uint8_t frame;         //    4 | entity sprite frame #
 	uint8_t delay;         //    5 | entity sprite frame delay counter
 	uint8_t type;          //    6 | entity type
-	uint8_t min_x;         //    7 | minimum x position at screen
-	uint8_t max_x;         //    8 | maximum x position at screen
-  uint8_t last_x;        //    9 | last x position
+	uint8_t min_X;         //    7 | minimum X position at screen
+	uint8_t max_X;         //    8 | maximum X position at screen
+  uint8_t last_X;        //    9 | last X position
 	bool IsActive;         //   10 | is alien active at this screen?
 	uint16_t iPosition;    // 11-12| relative upper-left tile position in VRAM NAME TABLE (values from 0 - 767)
 } AlienEntity;
@@ -221,6 +223,23 @@ cCtrl_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE;
 cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + DATA_INTRO_CTRL_CYCLE_SIZE;
 */
 
+// Nostromo ship tileset map RLEncoded
+const uint8_t cNostromo_img_guide[] = { 6, 1, 3, 2,              // Line 1: 6 zeros then 1 tile, 3 zeros then 2 tiles
+                                        14, 2, 3, 2,             // Line 2: 14 zeros then 2 tile2, 3 zeros then 2 tiles
+																				13, 4, 2, 2,             // Line 3: you got it, right?!
+																				13, 4, 1, 4,             // Line 4:
+																				12, 3, 2, 5, 2, 2,       // Line 5:
+																				7, 9, 3, 2,              // Line 6:
+																				7, 9, 2, 4,              // Line 7:
+																				4, 17,                   // Line 8:
+																				5, 16,                   // Line 9:
+																				2, 20,                   // Line 10:
+																				1, 20,                   // Line 11:
+																				1, 20,                   // Line 12:
+																				5, 3, 2, 5, 1, 3, 0xFF,  // Line 13: 0xFF = EOF
+};
+
+
 #define ANIM_CYCLE_STEP_BLANK   0xFF
 #define ANIM_CYCLE_STEP_STOP    0xFE
 
@@ -296,6 +315,8 @@ enum pattern_type
 	PAT_MINIMAP,
 	PAT_ENEMY_BASE,
 	PAT_ENEMY_BASE_FLIP,
+	PAT_ALIEN_TONGUE,
+	PAT_ALIEN_TONGUE_FLIP
 };
 
 // sub-songs matching our Arkos song
@@ -333,6 +354,9 @@ enum pattern_type
 #define MAP_H 21
 #define MAP_BYTES_SIZE (MAP_W * MAP_H)
 
+#define NOSTROMO_IMG_WIDTH       21  // 20 nostromo tiles + 1 right blank tile for animations
+#define NOSTROMO_IMG_HEIGHT      13
+
 #define INITIAL_LIVES 3
 #define MAX_LIVES     5
 #define MAX_POWER     100   // 100% = full power
@@ -365,7 +389,7 @@ enum pattern_type
 #define PLYR_UP_JUMP_CYCLES    20  // # of cycles (Y offset) for a jump (8 + 8 + 4)
 
 #define PLYR_SPRITE_L1_COLOR_NORMAL 0xDF  // Magenta(13) and White(15)
-#define PLYR_SPRITE_L1_COLOR_HIT    0x8A  // Red(08) and Yellow(10)
+#define PLYR_SPRITE_L1_COLOR_HIT    0x8B  // Red(08) and Light Yellow(11)
 #define PLYR_SPRITE_L1_COLOR_DEAD   0x9E  // Light Red(09) and Gray(14)
 #define PLYR_SPRITE_L1_COLOR_DARK   0xFE  // White(15) and Gray(14)
 
@@ -379,6 +403,9 @@ uint8_t PLYR_PAT_JUMP_IDX;
 
 uint8_t ENEMY_PAT_BASE_IDX;
 uint8_t ENEMY_PAT_BASE_FLIP_IDX;
+
+uint8_t ALIEN_PAT_TONGUE_IDX;
+uint8_t ALIEN_PAT_TONGUE_FLIP_IDX;
 
 
 #define PLYR_WALK_CYCLE        4
@@ -401,16 +428,17 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ENEMY_STATUS_JUMPING     0x30
 #define ENEMY_STATUS_GRABBED     0x40
 #define ENEMY_STATUS_HURT        0x50
-#define ENEMY_STATUS_ATTACK      0x60  // alien only
+#define ENEMY_STATUS_CHASE       0x60  // alien only
+#define ENEMY_STATUS_ATTACK      0x70  // alien only
 
 
 #define ENEMY_HIT_COUNT          2
 
-const uint8_t enemy_awake_frames[] = { 0, 2, 2, 2, 2, 1, 1, 0, 0xFC };  // frame 0, 2, 2, 2, 2, 1, 1, 0 then keep at 0
-const uint8_t enemy_walk_frames[]  = { 0, 1, 0xFD };        // frame 0, 1 then restart
-const uint8_t enemy_jump_frames[]  = { 2, 0xFC };           // frame 2 then keep at 2
-const uint8_t enemy_grab_frames[]  = { 3, 0xFC };           // frame 3 then keep at 3
-const uint8_t enemy_hurt_frames[]  = { 3, 3, 3, 3, 4, 4, 4, 4, 4, 0xFC };  // frame 2, 4 then keep at 4
+const uint8_t enemy_awake_frames[] = { 0, 2, 2, 2, 2, 1, 1, 0, 0xFC };     // use frame 0, 2, 2, 2, 2, 1, 1, 0 then keep at 0
+const uint8_t enemy_walk_frames[]  = { 0, 1, 0xFD };                       // use frame 0, 1 then restart
+const uint8_t enemy_jump_frames[]  = { 2, 0xFC };                          // useframe 2 then keep at 2
+const uint8_t enemy_grab_frames[]  = { 3, 0xFC };                          // use frame 3 then keep at 3
+const uint8_t enemy_hurt_frames[]  = { 3, 3, 3, 3, 4, 4, 4, 4, 4, 0xFC };  // use frame 2, 4 then keep at 4
 
 #define SPRITE_ANIM_FRAME_RESTART 0xFD
 #define SPRITE_ANIM_FRAME_KEEP    0xFC
@@ -580,6 +608,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define HIT_PTS_SMALL           4
 #define HIT_PTS_MEDIUM          8
 #define HIT_PTS_HIGH           12
+#define HIT_PTS_TONGUE         50
 ///#define HIT_PTS_DEATH          MAX_POWER
 
 #define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
@@ -595,7 +624,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define KEY_PRESS_DELAY        16  // delay in cycles before accept a new key press
 
 #define ENEMY_ANIM_DELAY       96  // cycles to change enemy frame
-#define ALIEN_ANIM_DELAY        7  // cycles to change alien frame
+#define ALIEN_ANIM_DELAY        6  // cycles to change alien frame
 #define PLAYER_ANIM_DELAY       3  // cycles to change player frame
 
 #define CACHE_INVALID           0xFF
@@ -812,39 +841,44 @@ __asm
 
   ; INTRO STAGE
 _intro_stage :
-	call _gameover_step_1
+	xor a
+	ld (#_FONT1_TILE_OFFSET), a
 	ld a, #TS_FONT1_SIZE + #TS_INTRO_SIZE
 	ld (#_FONT2_TILE_OFFSET), a
 
 	; upload font1 + intro + font 2 tileset
-	; zx0_uncompress(cBuffer + TS_FONT1_SIZE * 8, intro);
-	ld hl, #TS_FONT1_SIZE
-	ld bc, #_intro
-	call _do_uncompress
-	; zx0_uncompress(cBuffer + FONT2_TILE_OFFSET * 8, font2);
-	ld hl, (#_FONT2_TILE_OFFSET)
-	ld h, #00
-	ld bc, #_font2
-	call _do_uncompress
-	; ubox_set_tiles(cBuffer);
+	ld hl, #_font1
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_intro
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_font2
+	ld de, #_cBuffer + #TS_FONT1_SIZE *#8 + #TS_INTRO_SIZE * #8
+	call _zx0_uncompress_asm_direct
+
 	ld hl, #_cBuffer
 	call _ubox_set_tiles
 
-	; and the color information
-	call _gameover_step_2
-	; zx0_uncompress(cBuffer + TS_FONT1_SIZE * 8, intro_colors);
-	ld hl, #TS_FONT1_SIZE
-	ld bc, #_intro_colors
-	call _do_uncompress
-	; zx0_uncompress(cBuffer + FONT2_TILE_OFFSET * 8, font2_colors);
-	ld hl, (#_FONT2_TILE_OFFSET)
-	ld h, #00
-	ld bc, #_font2_colors
-	call _do_uncompress
-	; ubox_set_tiles_colors(cBuffer);
+	; now upload font1 color + intro color + font 2 color
+	ld hl, #_font1_colors
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_intro_colors
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_font2_colors
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_INTRO_SIZE * #8
+	call _zx0_uncompress_asm_direct
+
 	ld hl, #_cBuffer
 	call _ubox_set_tiles_colors
 	ret
+
 
 _test_levelgs :
 	cp #GAMESTAGE_LEVEL
@@ -854,17 +888,6 @@ _test_levelgs :
 	; lets use same tiles from INTRO - FONT1 and FONT2
 	jp _intro_stage
 
-_do_uncompress :
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	ld de, #_cBuffer
-	add hl, de
-	ex de, hl
-	ld h, b
-	ld l, c
-	call _zx0_uncompress_asm_direct
-	ret
 
 _test_gamegs :
 	cp #GAMESTAGE_GAME
@@ -875,78 +898,62 @@ _test_gamegs :
 	ld (#_FONT1_TILE_OFFSET), a
 
 	; upload score + gameX + fatal + font1 tileset
-	; zx0_uncompress(cBuffer, score);
 	ld hl, #_score
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
 
-	ld hl, #TS_SCORE_SIZE
 	ld a, (#_cLevel)
 	cp #2
 	jr z, _ts_Level2
-	ld bc, #_game0
+	ld hl, #_game0
 	jr _continue_game_ts
 _ts_Level2 :
-	ld bc, #_game1
+	ld hl, #_game1
 _continue_game_ts :
-	call _do_uncompress
+	ld de, #_cBuffer + #TS_SCORE_SIZE * #8
+	call _zx0_uncompress_asm_direct
 
-	ld hl, #TS_SCORE_SIZE + #TS_GAME0_SIZE
-	ld bc, #_fatal
-	call _do_uncompress
+	ld hl, #_fatal
+	ld de, #_cBuffer + #TS_SCORE_SIZE * #8 + #TS_GAME0_SIZE * #8
+	call _zx0_uncompress_asm_direct
 
-	; zx0_uncompress(cBuffer + FONT1_TILE_OFFSET * 8, font1);
-	ld hl, (#_FONT1_TILE_OFFSET)
-	ld h, #00
-	ld bc, #_font1
-	call _do_uncompress
+	ld hl, #_font1
+	ld de, #_cBuffer + #TS_SCORE_SIZE * #8 + #TS_GAME0_SIZE * #8 + #TS_FATAL_SIZE * #8
+	call _zx0_uncompress_asm_direct
 
-	; ubox_set_tiles(cBuffer);
 	ld hl, #_cBuffer
 	call _ubox_set_tiles
 
 	; memcpy(cPowerTile, cBuffer + (SCORE_POWER_TILE + 1) * 8, 8 * 3); //copy the original power tile pattern
-	;;ld a, #SCORE_POWER_TL_OFFSET + #01
-	;;ld h, #0
 	ld hl, #_cBuffer + (#SCORE_POWER_TL_OFFSET + #01) * #8
-	;;ld l, a
-	;;;add hl, hl
-	;;;add hl, hl
-	;;;add hl, hl
-	;;;ld de, #_cBuffer
-	;;;add hl, de
 	ld de, #_cPowerTile
-	ld bc, #08* #03
+	ld bc, #08 * #03
 	ldir  ; ld (DE), (HL), then increments DE, HL, and decrements BC until BC = 0
 
-	; and the color information
-	; zx0_uncompress(cBuffer, score_colors);
+	; now upload score colors + gameX colors + fatal colors + font1 colors
 	ld hl, #_score_colors
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
 
-	ld hl, #TS_SCORE_SIZE
 	ld a, (#_cLevel)
 	cp #2
 	jr z, _colorts_Level2
-	ld bc, #_game0_colors
+	ld hl, #_game0_colors
 	jr _continue_game_colorts
 _colorts_Level2 :
-	ld bc, #_game1_colors
+	ld hl, #_game1_colors
 _continue_game_colorts :
-	call _do_uncompress
+	ld de, #_cBuffer + #TS_SCORE_SIZE * #8
+	call _zx0_uncompress_asm_direct
 
-	ld hl, #TS_SCORE_SIZE + #TS_GAME0_SIZE
-	ld bc, #_fatal_colors
-	call _do_uncompress
+	ld hl, #_fatal_colors
+	ld de, #_cBuffer + #TS_SCORE_SIZE * #8 + #TS_GAME0_SIZE * #8
+	call _zx0_uncompress_asm_direct
 
-	; zx0_uncompress(cBuffer + FONT1_TILE_OFFSET * 8, font1_colors);
-	ld hl, (#_FONT1_TILE_OFFSET)
-	ld h, #00
-	ld bc, #_font1_colors
-	call _do_uncompress
-
-	; ubox_set_tiles_colors(cBuffer);
+	ld hl, #_font1_colors
+	ld de, #_cBuffer + #TS_SCORE_SIZE * #8 + #TS_GAME0_SIZE * #8 + #TS_FATAL_SIZE * #8
+	call _zx0_uncompress_asm_direct
+		
 	ld hl, #_cBuffer
 	call _ubox_set_tiles_colors
 	ret
@@ -958,30 +965,58 @@ _test_gameovergs :
 	; GAME OVER STAGE
 	jp _intro_stage
 
-_gameover_step_1 :
-	xor a
-	ld (#_FONT1_TILE_OFFSET), a
-
-	; upload font1 tileset
-	; zx0_uncompress(cBuffer, font1);
-	ld hl, #_font1
-_gameover_step_1_ex :
-	ld de, #_cBuffer
-	call _zx0_uncompress_asm_direct
-	ret
-
-_gameover_step_2 :
-	;and the color information
-	; zx0_uncompress(cBuffer, font1_colors);
-	ld hl, #_font1_colors
-	jr _gameover_step_1_ex
 
 _test_finalgs :
 	cp #GAMESTAGE_FINAL
 	ret nz
-	; TODO: load tileset
+
+	; due to Nostromo tileset size, its necessary to overide Font2 and Font1
+	xor a
+	ld (#_FONT1_TILE_OFFSET), a
+	ld a, #TS_FONT1_SIZE / #2
+	ld (#_FONT2_TILE_OFFSET), a
+
+	; upload font1 + font 2 + nostromo tileset
+	ld hl, #_font2
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #4
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_font1
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+	
+	ld hl, #_nostromo
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #4
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_cBuffer
+	call _ubox_set_tiles
+
+	; upload font1 colors + font 2 colors + nostromo colors
+	ld hl, #_font2_colors
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #4
+	call _zx0_uncompress_asm_direct
+
+	ld hl, #_font1_colors
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+
+	ld bc, #TS_NOSTROMO_SIZE * #8
+	ld hl, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #4
+	ld e, #0xF0
+_set_nostromo_color_loop :
+	ld (hl), e
+	inc hl
+	dec bc
+	ld a, b
+	or c
+	jr nz, _set_nostromo_color_loop
+
+	ld hl, #_cBuffer
+	call _ubox_set_tiles_colors
 __endasm;
 }  // void load_tileset()
+
 
 /*
  * Put a zero terminated string on the screen using tiles.
@@ -1063,16 +1098,22 @@ _startText :
 	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
 
 	ld l, 3 (ix)
-	ld h, 4 (ix); HL = sMsg
-	ld d, 2 (ix); D = cOffset
+	ld h, 4 (ix)  ; HL = sMsg
+	ld d, 2 (ix)  ; D = cOffset
 	ld b, #0			; B = # of printed chars
 _nextChar :
-	ld a,(hl)
+	ld a, (hl)
 	or a
 	jr z, _endText
+	cp #' '
+	jr z, _prt_blank 
 	add	a, #0xe0; A = A - ' '
 	add a, d	; A = A + cOffset
-	out (#0x98), a; write to VRAM
+	jr _prt_char
+_prt_blank :
+	xor a
+_prt_char :
+  out (#0x98), a; write to VRAM
 	inc b
 	inc hl
 	jr _nextChar
@@ -1340,7 +1381,7 @@ __asm
 	ld a, (hl)
 _player_hit_asm_direct :
 	; if HIT_PTS_SMALL, check for Shield. If Shield active, no hit is set.
-	; if HIT_PTS_FACEHUG, HIT_PTS_MEDIUM or HIT_PTS_HIGH hit happens regardless of the Shield.
+	; if HIT_PTS_FACEHUG, HIT_PTS_MEDIUM, HIT_PTS_HIGH or HIT_PTS_TONGUE hit happens regardless of the Shield.
 	cp #HIT_PTS_SMALL
 	jr nz, _hit_execute
 	ld h, a
@@ -2799,7 +2840,6 @@ unsigned int iBuffOffset;
 	// Climbing Player: 2 frames x 2 sprites per frame = 4 sprites (16 x 16 each sprite)
 	PLYR_PAT_CLIMB_IDX = spman_alloc_pat(PAT_PLAYER_CLIMB, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8) + (1 * 2 * 4 * 8), 4, 0);
 
-	//TODO: verificar se a compressão é melhor juntando player com objects
 	//uncompress "object_sprite"
 	zx0_uncompress(cBuffer, object_sprite);
 	// Shield: 2 frames x 1 sprite per frame = 2 sprites (16 x 16 each sprite)
@@ -2814,11 +2854,18 @@ unsigned int iBuffOffset;
 	// Minimap: 1 frame x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
 	cMiniMapPattern = spman_alloc_pat(PAT_MINIMAP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
 
+	// No need to load enemy sprites at level 1
+	if (cLevel == 1) return;
+
 	//uncompress "enemy_sprite"
 	zx0_uncompress(cBuffer, enemy_sprite);
 	// Enemy 5 frames x 1 sprite per frame = 5 sprites (16 x 16 each sprite)
 	ENEMY_PAT_BASE_IDX = spman_alloc_pat(PAT_ENEMY_BASE, cBuffer, 5, 0);
 	ENEMY_PAT_BASE_FLIP_IDX = spman_alloc_pat(PAT_ENEMY_BASE_FLIP, cBuffer, 5, 1);
+
+	// Alien tongue 1 frame x 1 sprite per frame = 1 sprites (16 x 16 each sprite)
+	ALIEN_PAT_TONGUE_IDX = spman_alloc_pat(PAT_ALIEN_TONGUE, cBuffer + (5 * 1 * 4 * 8), 1, 0);
+	ALIEN_PAT_TONGUE_FLIP_IDX = spman_alloc_pat(PAT_ALIEN_TONGUE_FLIP, cBuffer + (5 * 1 * 4 * 8), 1, 1);
 } // void Load_Sprites()
 
 
@@ -3458,13 +3505,13 @@ _proc_enemy :
 	ld b, a  ; Width * 2
 
 	ld a, (#_cAuxEntityX)
-  ld (#_sAlien + #7), a ; min_x
+  ld (#_sAlien + #7), a ; min_X
 	add a, b
 	dec a
-	ld (#_sAlien + #8), a ; max_x
+	ld (#_sAlien + #8), a ; max_X
 
 	ld a, (#_cAuxEntityY)
-	ld (#_sAlien + #1), a ; y
+	ld (#_sAlien + #1), a ; Y
 
 	push hl
 	ld hl, (#_iGlbPosition)
@@ -3488,8 +3535,8 @@ _adjust_alien_init_position :
 	ld (#_iGlbPosition), hl
 
 _set_alien_position :
-	ld (#_sAlien), a ; x
-	ld (#_sAlien + #9), a ; last_x
+	ld (#_sAlien), a ; X
+	ld (#_sAlien + #9), a ; last_X
 	ld (#_sAlien + #11), hl ; iPosition
 
 	ld iy, #_sAlien
@@ -7259,7 +7306,7 @@ __endasm;
 
 
 /*
-* Update and display the active enemy sprites
+* Update and display the active enemy sprites + Alien
 */
 void update_and_display_enemies()
 {
@@ -7269,23 +7316,26 @@ __asm
 	jp z, _update_facehug
 	; update Alien creature
 
-	ld a, (#_sAlien + #3) ; status
-	cp #ENEMY_STATUS_WALKING
-	jr nz, _try_alien_attack
-	; check if its time to update Alien position and image (each ALIEN_ANIM_DELAY cycles)
+	; check if its time to update Alien position and image (each ALIEN_ANIM_DELAY cycles), unless status = ENEMY_STATUS_ATTACK
 	ld a, (#_sAlien + #5) ; delay
 	dec a
 	jr z, _do_animate_alien
 	ld (#_sAlien + #5), a
-	jr _update_facehug
+	ld a, (#_sAlien + #3) ; status
+	cp #ENEMY_STATUS_ATTACK
+	jp z, _do_alien_attack
+	jp _update_facehug
 _do_animate_alien :
   ld a, #ALIEN_ANIM_DELAY
 	ld (#_sAlien + #5), a
 
+	ld a, (#_sAlien + #3) ; status
+	cp #ENEMY_STATUS_WALKING
+	jp nz, _try_alien_chase
 	; check if need to move Alien position
-	ld a, (#_sAlien + #0) ; x
+	ld a, (#_sAlien + #0) ; X
 	ld b, a
-	ld a, (#_sAlien + #9) ; last_x
+	ld a, (#_sAlien + #9) ; last_X
 	cp b
 	call nz, _display_alien_at_screen
 	; display Alien at current position, direction and at current frame - then update both
@@ -7296,16 +7346,27 @@ _do_animate_alien :
 	; if frame = 0 no need to move Alien at screen
 	jr z, _update_alien_frame
 
+	; detect player proximity from Alien
+	call _check_player_Y_aligned_with_alien
+	ld a, d
+	cp #BOOL_TRUE
+	jr nz, _not_vertical_aligned
+	; change status to ENEMY_STATUS_CHASE
+	ld a, #ENEMY_STATUS_CHASE
+	ld (#_sAlien + #3), a ; status
+	jp _do_alien_chase
+
+_not_vertical_aligned :
 	ld a, (#_sAlien + #2) ; dir
 	cp #ENEMY_SPRT_DIR_LEFT
 	jr z, _move_alien_left
 	; move Alien to the right
-	ld a, (#_sAlien + #0) ; x
+	ld a, (#_sAlien + #0) ; X
 	inc a
 	ld b, a
 	add a, #3 ; rightmost tile
 	ld c, a
-	ld a, (#_sAlien + #8) ; max_x
+	ld a, (#_sAlien + #8) ; max_X
 	cp c
 	jr c, _change_alien_dir
 	ld a, b
@@ -7316,9 +7377,9 @@ _do_animate_alien :
 
 _move_alien_left :
 	; move Alien to the left
-	ld a, (#_sAlien + #7) ; min_x
+	ld a, (#_sAlien + #7) ; min_X
 	ld b, a
-	ld a, (#_sAlien + #0) ; x
+	ld a, (#_sAlien + #0) ; X
 	dec a
 	cp b
 	jr c, _change_alien_dir
@@ -7337,12 +7398,278 @@ _update_alien_frame :
 	xor #1
 	ld (#_sAlien + #4), a
 
-	jr _update_facehug
+	jp _update_facehug
+
+_check_player_Y_aligned_with_alien :
+	; if (yp >= (Ya + 3) * 8) and (yp + 16 <= (Ya + 3) * 8 + 24) then "Vertical Aligned"
+	ld d, #BOOL_FALSE
+	ld a, (#_sAlien + #1) ; Ya
+	add a, #3
+	add a, a
+	add a, a
+	add a, a
+	ld b, a ; B = (Ya + 3) * 8
+	ld a, (#_sThePlayer + #1) ; yp
+	cp b
+	ret c  ; not_vertical_aligned
+	add #16
+	ld c, a ; C = yp + 16
+	ld a, b
+	add #24
+	cp c
+	ret c  ; not_vertical_aligned
+	ld d, #BOOL_TRUE
+	ret
+
+_try_alien_chase :
+	cp #ENEMY_STATUS_CHASE
+	jp nz, _try_alien_attack
+	; check if player continues to be vertical aligned
+	call _check_player_Y_aligned_with_alien
+	ld a, d
+	cp #BOOL_TRUE
+	jr z, _do_alien_chase
+	ld a, #ENEMY_STATUS_WALKING
+	ld (#_sAlien + #3), a ; status
+	jp _update_facehug
+
+_do_alien_chase :
+	; check for horizontal player proximity
+	; if (Xa*8 + 16 >= xp + 8) then "Player is at left" else "Player is at right"
+	ld a, (#_sThePlayer) ; xp
+	add a, #8
+	ld b, a ; B = Xa * 8 + 16
+	ld a, (#_sAlien) ; Xa
+	add a, a
+	add a, a
+	add a, a
+	add a, #16
+	ld c, a ; C = xp + 8
+	cp b
+	jr nc, _set_alien_dir_left
+	ld a, #ENEMY_SPRT_DIR_RIGHT
+	jr _set_new_alien_dir
+_set_alien_dir_left :
+	ld a, #ENEMY_SPRT_DIR_LEFT
+_set_new_alien_dir :
+	ld (#_sAlien + #2), a  ; dir
+	; calculate distance from player to alien
+	ld a, c
+	sub b
+	jr nc, _positive_distance
+	neg
+_positive_distance :
+	push af
+	; check if need to move Alien position
+	ld a, (#_sAlien + #0) ; X
+	ld b, a
+	ld a, (#_sAlien + #9) ; last_X
+	cp b
+	call nz, _display_alien_at_screen
+	; display Alien at current position, direction and at current frame - then update both
+	call _update_alien_tileset
+
+	pop af
+	; if distance >= 28 then chase the player else
+	; if distance >= 20 then attack the player else do nothing
+	cp #28
+	jr c, _check_alien_attack
+	; start chasing the player
+
+	ld a, (#_sAlien + #4) ; frame
+	or a
+	; if frame = 0 no need to move Alien at screen
+	jp z, _update_alien_frame
+
+	ld a, (#_sAlien + #2); dir
+	cp #ENEMY_SPRT_DIR_LEFT
+	jr z, _chase_alien_left
+	; move Alien to the right
+	ld a, (#_sAlien + #0) ; X
+	inc a
+	ld b, a
+	add a, #3 ; rightmost tile
+	ld c, a
+	ld a, (#_sAlien + #8) ; max_X
+	cp c
+	jp c, _update_alien_frame
+	ld a, b
+	ld (#_sAlien + #0), a
+	ld hl, #_sAlien + #11 ; iPosition
+	inc (hl)
+	jp _update_alien_frame
+
+_chase_alien_left :
+	; move Alien to the left
+	ld a, (#_sAlien + #7) ; min_X
+	ld b, a
+	ld a, (#_sAlien + #0) ; X
+	dec a
+	cp b
+	jp c, _update_alien_frame
+	ld (#_sAlien + #0), a
+	ld hl, #_sAlien + #11 ; iPosition
+	dec (hl)
+	jp _update_alien_frame
+
+_check_alien_attack :
+	cp #20
+	jr c, _do_nothing_alien
+	ld a, #ENEMY_STATUS_ATTACK
+	ld (#_sAlien + #3), a ; status
+	ld a, #1
+	ld (#_sAlien + #4), a ; frame
+	call _update_alien_tileset
+	jr _do_alien_attack
+
+_do_nothing_alien :
+	call _update_alien_tileset
+	jp _update_facehug
 
 _try_alien_attack :
 	cp #ENEMY_STATUS_ATTACK
-	jr nz, _update_facehug
-	; TODO: ATTACK
+	jp nz, _update_facehug
+	; check if player continues to be vertical aligned
+	call _check_player_Y_aligned_with_alien
+	ld a, d
+	cp #BOOL_TRUE
+	jr z, _do_alien_attack_ex
+	ld a, #ENEMY_STATUS_WALKING
+	jr _end_alien_attack_status
+	;ld (#_sAlien + #3), a ; status
+	;jr _update_facehug
+
+_do_alien_attack_ex :
+	; calculate distance from player to alien: (Xa * 8 + 16) - (xp + 8)
+	ld a, (#_sThePlayer) ; xp
+	ld b, a
+	ld a, (#_sAlien) ; Xa
+	add a, a
+	add a, a
+	add a, a
+	add a, #8
+	sub b
+	jr nc, _positive_distance_2
+	neg
+_positive_distance_2 :
+	; if distance >= 28 then chase the player else
+	; if distance >= 20 then attack the player else do nothing
+	cp #28
+	jr c, _check_alien_attack_2
+_back_chase_player :
+	; back chasing the player
+	ld a, #ENEMY_STATUS_CHASE
+_end_alien_attack_status :
+	ld (#_sAlien + #3), a ; status
+	; need to set alien frame back to 1
+	ld a, #1
+	ld (#_sAlien + #4), a; frame
+	jp _update_facehug
+
+_check_alien_attack_2 :
+	cp #20
+	jr c, _back_chase_player
+_do_alien_attack :
+	; if frame=0, tongue is hidden (no sprite to display)
+	ld a, (#_sAlien + #4) ; frame
+	or a
+	jr z, _tongue_is_hidden
+	ld c, a
+
+	; show alien tongue sprite
+	ld hl, #_sGlbSpAttr
+	push hl ; used at _spman_alloc_fixed_sprite() calls
+
+	ld a, (#_sAlien + #1) ; Alien Y
+	add a, #3
+	rlca
+	rlca
+	rlca ; A = Alien y
+	add a, #8 - #1
+	;dec a ; y on the screen starts in 255
+	ld (hl), a ; _sGlbSpAttr.y
+	
+	ld a, (#_sAlien) ; Alien X
+	ld d, a
+	; pattern = ALIEN_PAT_TONGUE_IDX or ALIEN_PAT_TONGUE_FLIP_IDX
+	ld a, (#_sAlien + #2) ; dir
+	cp #ENEMY_SPRT_DIR_LEFT
+	jr z, _alien_dir_left
+	ld a, (#_ALIEN_PAT_TONGUE_IDX)
+	ld b, #4 * #8 - #9
+	jr _cont_alien_tongue_dir
+_alien_dir_left :
+	ld a, c
+	neg
+	ld c, a
+	ld a, (#_ALIEN_PAT_TONGUE_FLIP_IDX)
+	ld b, #256 - #7
+_cont_alien_tongue_dir :
+	ld (#_sGlbSpAttr + #02), a  ; _sGlbSpAttr.pattern
+	ld a, d
+	rlca
+	rlca
+	rlca ; A = Alien x
+	add a, b ; position offset Dir/Left
+	add a, c ; frame offset
+	ld (#_sGlbSpAttr + #01), a ; _sGlbSpAttr.x
+
+  ld a, #0x0F  ; white
+	ld (#_sGlbSpAttr + #03), a  ; _sGlbSpAttr.attr
+
+	call	_spman_alloc_fixed_sprite
+	pop af
+
+	; check if alien tongue has hit the player
+	; if (Ax2 < Px1) or (Ax1 > Px2) then "NO HORIZONTAL CONFLICT"
+	; if (Ay2 < Py1) or (Ay1 > Py2) then "NO VERTICAL CONFLICT"
+	; else "COLISION DETECTED"
+	; where Ax1=Ax+4, Ax2=Ax+11, Ay1=Ay+8, Ay2=Ay+12
+	;       Px1=Px+5, Px2=Px+10, Py1=Py+1, Py2=Py+15
+	ld a, (#_sThePlayer)
+	add a, #5
+	ld b, a ; B=Px1
+	add a, #5
+	ld c, a ; C=Px2
+	ld a, (#_sGlbSpAttr + #1)
+	add a, #4 ; A=Ax1
+
+	; check for horizontal colision
+	cp c
+	jr nc, _no_tongue_hit
+	add a, #7 ; A=Ax2
+	cp b
+	jr c, _no_tongue_hit
+
+	; now check for vertical colision
+	ld a, (#_sThePlayer + #1)
+	inc a
+	ld b, a ; B = Py1
+	add a, #14
+	ld c, a ; C = Py2
+	ld a, (#_sGlbSpAttr)
+	add a, #8 + #1 ; A = Ay1
+
+	cp c
+	jr nc, _no_tongue_hit
+	add a, #4 ; A = Ay2
+	cp b
+	jr c, _no_tongue_hit
+
+	; colision detected - player was hit
+	ld a, #HIT_PTS_TONGUE
+	call _player_hit_asm_direct
+
+_no_tongue_hit :
+	; when status = ENEMY_STATUS_ATTACK, frame controls the alien tongue { 0 = hiden, 1..5 = intermediary position, 6 = final position }
+_tongue_is_hidden :
+	ld a, (#_sAlien + #4) ; frame
+	inc a
+	cp #7
+	jr nz, _set_tongue_frame
+	xor a
+_set_tongue_frame :
+	ld (#_sAlien + #4), a
 
 _update_facehug :
 	ld a, (#_cActiveEnemyQtty)
@@ -7749,6 +8076,7 @@ _no_sprite_flip_ex :
 	add a, (hl)
 	ld (#_sGlbSpAttr + #02), a; _sGlbSpAttr.pattern
 	jp	_spman_alloc_fixed_sprite
+	; no need to pop hl - it will be done after this routine returns
 __endasm;
 }  // update_and_display_enemies()
 
@@ -8013,7 +8341,7 @@ void update_and_display_objects()
 {
 __asm
 	ld hl, #_sGlbSpAttr
-	push hl; used at _spman_alloc_fixed_sprite() call
+	push hl ; used at _spman_alloc_fixed_sprite() call
 
 	;check if MiniMap is enabled
 	ld a, (#_bGlbMMEnabled)
@@ -9578,8 +9906,8 @@ void Run_Game()
 		// Level 3 TEST
 		cLevel = 3;
 		cMeltdownSeconds = cMeltdownTimerCtrl = 0;
-	  cMeltdownMinutes = 10;
-		bFinalMeltdown = true;
+	  cMeltdownMinutes = 1;
+		//bFinalMeltdown = true;
 
 		draw_game_level_info();
 
@@ -9674,7 +10002,7 @@ void Run_Game()
 
 				bGlbPlyChangedPosition |= bGlbPlyMoved;
 
-				// update and display all the enemies (first so the facehug stays in front of the player sprite)
+				// update and display all the enemies (first so the facehug stays in front of the player sprite) + Alien
 				update_and_display_enemies();
 
 				// display updated player sprite
@@ -9785,7 +10113,7 @@ __endasm;
 void update_alien_tileset()
 {
 __asm
-	; set the correct tile base address : _cAlienTileset + (dir * (24 * 8)) + (frame * (12 * 8))
+	; set the correct tile base address : _cAlienTileset + (dir * (12 * 2 * 8)) + (frame * (12 * 8))
 	ld a, (#_sAlien + #2) ; dir(0, 1)
 	dec a ; (255, 0)
 	cpl   ; (0, 255)
@@ -9890,13 +10218,13 @@ __asm
 	ld b, #MAPS
 	ld hl, #_cAlienActiveatScreen
 _alien_rand_loop :
-	; randomize (0-22: FALSE; 23-255: TRUE)
+	; randomize (0-30: FALSE; 31-255: TRUE)
 	ex de, hl
 	call _randombyte
 	ld a, l
 	ex de, hl
 	ld c, #BOOL_TRUE
-	cp #23
+	cp #31
 	jr nc, _set_alien_random
 	ld c, #BOOL_FALSE
 _set_alien_random :
@@ -9941,14 +10269,32 @@ __endasm;
 void draw_game_win()
 {
 __asm
+  ; ubox_set_colors(uint8_t fg, uint8_t bg, uint8_t border);
+	call	_ubox_wait
+	ld	de, #0x060D
+	push	de
+	ld	a, #0x01
+	push	af
+	inc	sp
+	call	_ubox_set_colors
+	pop	af
+	inc	sp
+	call	_ubox_wait
   call _ubox_disable_screen
 	ld hl, #_cGameStage
-	;;ld(hl), #GAMESTAGE_FINAL
-	ld(hl), #GAMESTAGE_GAMEOVER
+	ld (hl), #GAMESTAGE_FINAL
 	call _load_tileset
 
 	ld	l, #BLANK_TILE
 	call	_ubox_fill_screen
+
+	ld	de, #0x0101
+	push	de
+	push	de
+	call	_ubox_set_colors
+	pop	af
+	inc	sp
+
 	call _ubox_enable_screen
 	ld	hl, #_SONG
 	ld a, #SONG_SILENCE
@@ -9956,11 +10302,85 @@ __asm
 
 	ld a, #GAME_TEXT_GAME_WIN_ID
 	call _search_text_block
-	ld bc, #0x0B01
-	ld de, #0x0008
+	ld bc, #0x0E01 ; Y and X
+	ld de, #0x0008 ; SFX and Cycles
 	call _display_format_text_block
 
-	;TODO: NOSTROMO + EXPLOSION ANIMATION
+	; rebuild Nostromo ship Tile map
+	ld bc, #NOSTROMO_IMG_WIDTH * #NOSTROMO_IMG_HEIGHT
+	ld hl, #_cBuffer
+_reset_nostromo_map :
+	; need to reset with a special BLANK tile???
+	xor a
+	ld (hl), a
+	inc hl
+	dec bc
+	ld a, b
+	or c
+	jr nz, _reset_nostromo_map
+
+  push ix
+	ld e, #TS_FONT1_SIZE + #TS_FONT1_SIZE / #2
+	ld hl, #_cBuffer
+  ld ix, #_cNostromo_img_guide
+_built_nostromo_loop :
+	ld a, 0 (ix)
+	cp #0xFF ; end of processing
+	jr z, _end_rebuild_nostromo
+	ld c, a
+	ld b, #0
+	add hl, bc
+	inc ix
+	ld b, 0 (ix)
+_build_nostromo_tiles :
+	ld (hl), e
+	inc e
+	inc hl
+	djnz _build_nostromo_tiles
+	inc ix
+	jr _built_nostromo_loop
+
+_end_rebuild_nostromo :
+	pop ix
+
+	ld b, #21 + #6 - #1 ; 21 tiles to move + 6 left blank tiles - 1st tile
+	ld de, #UBOX_MSX_NAMTBL_ADDR + #32 ; X = 31, 30, 29, ..., Y = 0
+	ld c, #0
+_nostromo_animation_loop :
+	dec de
+	push de
+	ld a, c
+	cp #NOSTROMO_IMG_WIDTH
+	jr nc, _cont_nostromo_loop
+	inc c
+_cont_nostromo_loop :
+	push bc
+
+	ld b, #13
+	ld hl, #_cBuffer
+_nostromo_display_loop :
+	push bc
+	push hl
+	push de
+	ld b, #0
+	call #0x005C ; LDIRVM - Block transfer to VRAM from memory
+	pop hl
+	ld bc, #32
+	add hl, bc
+	ex de, hl
+	pop hl
+	ld bc, #NOSTROMO_IMG_WIDTH
+	add hl, bc
+	pop bc
+	djnz _nostromo_display_loop
+
+	call	_ubox_wait
+	call	_ubox_wait
+	pop bc
+	pop de
+  djnz _nostromo_animation_loop
+
+	;TODO: EXPLOSION ANIMATION
 
 	ld a, (#_cGameStatus)
 	cp #GM_STATUS_TIME_IS_OVER
@@ -9971,11 +10391,10 @@ _rippley_is_dead :
 	ld a, #GAME_TEXT_WIN_DEATH_ID
 _draw_last_message :
 	call _search_text_block
-	ld bc, #0x1001
+	ld bc, #0x1301 ; YY/XX
 	;;ld de, #0x0008
 	;;call _display_format_text_block
 	jp _display_msg_and_wait
-	;;jp _wait_fire
 __endasm;
 }  // void draw_game_win()
 

@@ -116,6 +116,9 @@
     <ClInclude Include="data\maplvl3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\nostrots.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">

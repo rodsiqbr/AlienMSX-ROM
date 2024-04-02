@@ -70,6 +70,7 @@
     <ClInclude Include="data\maplvl1.h" />
     <ClInclude Include="data\maplvl2.h" />
     <ClInclude Include="data\maplvl3.h" />
+    <ClInclude Include="data\nostrots.h" />
     <ClInclude Include="data\objects.h" />
     <ClInclude Include="data\player.h" />
     <ClInclude Include="data\scorets.h" />

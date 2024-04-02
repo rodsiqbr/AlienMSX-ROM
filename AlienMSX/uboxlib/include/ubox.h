@@ -89,7 +89,7 @@ void ubox_disable_screen();
  *
  * Example:
  *
- * ```c
+ * 
  * // sets all three colours to black
  * ubox_set_colors(1, 1, 1);
  * ```
