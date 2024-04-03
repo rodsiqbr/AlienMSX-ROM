@@ -4,13 +4,9 @@
 
 
 // TODOS: Bugs list:
-// 3. Mission complete SFX
-// 4. Criar SXF_INTERACTIVE sound FX
-
-//Known issues:
+// Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
 // 2. Jumping into a Portal still doesn't work. Easy to reproduce.
-// 3. Bug na rotina de win/death (trigger nao funciona)
 
 
 #include <stdio.h>
@@ -329,17 +325,23 @@ enum pattern_type
 
 // sound effects matching our Arkos efx song
 // configure the song to use MSX AY
-#define SFX_NONE       0
-#define SFX_SELECT     1
-#define SFX_GET_OBJECT 2
-#define SFX_GATE       3
-#define SFX_HIT        4
-#define SFX_HURT       5
-#define SFX_SHOOT      6
-#define SFX_EXPLODE    7
-#define SFX_TIMEOFF    8
-#define SFX_PORTAL     9
-#define SFX_TYPING     10
+#define SFX_NONE         0
+#define SFX_SELECT       1
+#define SFX_GET_OBJECT   2
+#define SFX_GATE         3
+#define SFX_HIT          4
+#define SFX_HURT         5
+#define SFX_SHOOT        6
+#define SFX_EXPLODE      7
+#define SFX_TIMEOFF      8
+#define SFX_PORTAL       9
+#define SFX_TYPING      10
+
+#define SXF_INTERACTIVE SFX_SELECT //11
+#define SFX_ALIENATTACK SFX_HURT   //12
+#define SFX_MISSIONCPLT SFX_SELECT //13
+#define SFX_DEADPLAYER  SFX_HURT   //14
+
 
 #define SFX_CHAN_NO    1
 
@@ -430,7 +432,6 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ENEMY_STATUS_HURT        0x50
 #define ENEMY_STATUS_CHASE       0x60  // alien only
 #define ENEMY_STATUS_ATTACK      0x70  // alien only
-
 
 #define ENEMY_HIT_COUNT          2
 
@@ -654,11 +655,12 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define ANIMATE_OBJ_EGG    5
 #define ANIMATE_OBJ_COLLC  6
 
-#define GM_STATUS_LOOP_CONTINUE 0b00000000
-#define GM_STATUS_CHANGE_MAP    0b00000001
-#define GM_STATUS_TIME_IS_OVER  0b00000010
-#define GM_STATUS_MISSION_CPLT  0b00000100
-#define GM_STATUS_GAME_OVER     0b00001000
+#define GM_STATUS_LOOP_CONTINUE  0
+#define GM_STATUS_CHANGE_MAP     1
+#define GM_STATUS_TIME_IS_OVER   2
+#define GM_STATUS_MISSION_CPLT   3
+#define GM_STATUS_GAME_OVER      4
+#define GM_STATUS_PLAYER_WIN     5
 
 
 #define BOOL_FALSE 0
@@ -696,7 +698,6 @@ uint8_t cFatalFlag;   // used at is_player_jumping()
 uint8_t cPortalFlag;  // used at is_player_jumping()
 uint8_t cAnimCycleParityFlag;
 bool bGlbSpecialProcessing;
-//bool bChangeMap;
 bool bGlbMMEnabled;
 
 uint8_t cAuxEntityX;   // used at Load_Entities() + its subroutines
@@ -1331,14 +1332,6 @@ _lpFilBuf :
 	cp #4
 	jp nz, _newBlock
 
-	;;;ld a, #SCORE_POWER_TL_OFFSET + #01
-	;;;ld h, #0
-	;;;ld l, a
-	;;;add hl,hl
-	;;;add hl, hl
-	;;;add hl, hl
-	;;;ld bc, #UBOX_MSX_PATTBL_ADDR
-	;;;add hl,bc
 	ld hl, #UBOX_MSX_PATTBL_ADDR + (#SCORE_POWER_TL_OFFSET + #01) * #8
 	call #0x0053; SETWRT - Sets the VRAM pointer(HL)
 
@@ -2250,13 +2243,10 @@ _do_sub_and_rotate :
 	rlca
 	rlca
 	rlca
-	;and #0b00001111
-	;;and #0b11110000
 	ret
 
 _do_sub_and_merge :
 	sub #'A'
-	;and #0b11110000
 	or b
 	ld (hl), a
 	inc hl
@@ -3630,7 +3620,6 @@ _insert_new_enemy :
 	rlca
 	rlca
 	rlca
-	;;add a, #16
 	ld 13 (iy), a
 
 	ld 3 (iy), #ENEMY_STATUS_INACTIVE
@@ -3809,7 +3798,6 @@ _proc_et_interactive :
 	rlca
 	rlca
 	rlca
-	;and a, #0b00110000
 	or e
 	or #0b10000000
 	ld 9 (ix), a
@@ -3822,7 +3810,6 @@ _proc_et_interactive :
 
 	; iGlbPosition += 32; /* 2 vertical tiles if INTERACTIVE_ACTION_COLLECT_CPLT */
 	jp _gate_obj_vert
-	;;jp _upd_animtile_ptr_ex
 
 _proc_et_portal :
 	; store the screen destination (0000DDDD) in cMap_ObjIndex[] map
@@ -4415,6 +4402,7 @@ __asm
 	; its a teletransport portal - stop jumping
 	ld a, #PLYR_STATUS_STAND
 	ld (#_sThePlayer + #03), a  ; &_sThePlayer.status
+
 	;; TODO: verificar se quando usa portal com FL aceso acontece o update
 	;;ld a, #BOOL_TRUE
 	;;ld (#_bGlbPlyChangedPosition), a
@@ -4464,7 +4452,7 @@ __asm
 	jr z, _shiftLeft
 	cp #SCR_SHIFT_RIGHT ; 0
 	jp z, _shiftRight
-	; TODO: up and down animation
+	; NO animation for up and down screen shift
 	cp #SCR_SHIFT_UP; 2
 	jr z, _shiftUp
 	cp #SCR_SHIFT_DOWN ; 3
@@ -5074,8 +5062,6 @@ _not_a_gate :
 _not_a_solid :
 	bit 5, a  ; FATAL BIT
 	jr z, _not_a_fatal
-	;;;cp #TILE_TYPE_FATAL
-	;;;jr nz, _not_a_fatal
 	ld a, (#_cGlbPlyFlag)
 	; fatal was found!
 	set 0, a ; FATAL Flag
@@ -5265,7 +5251,6 @@ _not_NextM_3 :
 _upper_tile_not_solid :
 	; not solid, so check if player has reached the top floor
 	;ld c, #7  ; C=7 already
-	;;;;ld d, #12
 	ld d, #8
 	call _calcTileXYAddr
 	ld a, (hl)
@@ -5276,7 +5261,6 @@ _upper_tile_not_solid :
 	; blank tile found. adjust Y position, set avoid_jump counter and stop climbing
 	ld hl, #_sThePlayer + #01 ; HL = &_sThePlayer.y
 	ld a, (hl)
-	;;;;sub #3
 	and a, #0b11111000 ; round y to be multiple of 8
 	ld (hl), a
 
@@ -5291,7 +5275,7 @@ _upper_tile_not_solid :
 _upper_tile_is_solid_so_dont_climb_up :
 	ld hl, #_sThePlayer + #01 ; HL = &_sThePlayer.y
 	inc (hl) ; rollback y position
-	; TODO: SFX HERE
+	; TODO: SFX HERE?
 	ld l, #BOOL_TRUE; everything ok
 __endasm;
 }  // bool is_player_climb_up()
@@ -5334,7 +5318,6 @@ __asm
 	ld l, #BOOL_TRUE; everything ok
 	cp #22 * #8
 	jr c, _not_NextM_2
-	;;;;cp #24 * #8 - #2
 	cp #24 * #8 - #4
 	ret c
 	; Next map detected
@@ -5408,7 +5391,6 @@ _chk_head_sld :
 	ld a, (hl)
 	; lets check the tile above player head for a solid one (exception for Special Solid Tiles)
 	bit #7, a; test if bit 7 (SOLID BIT) is set
-	; jr nz, _solid_up
 	jr z, _cont_chk_head
 	; Solid tile - check if also Special Solid
 	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
@@ -5843,7 +5825,7 @@ _execute_mission_complete :
 	ld a, #SCORE_MISSION_POINTS
   call _add_score_points
 
-; TODO: Mission complete SFX
+; TODO: Mission complete SFX SFX_MISSIONCPLT
 	call _update_mission_status
 _mission_already_completed :
 	pop af  ; recover A = cObjID(10aaOOOO)
@@ -6729,17 +6711,13 @@ __endasm;
 
 /*
 * Check for player request to die and arise in a safe place. Set Power = 0 when user confirms
-* Returns:	true (1 - player wants to arise with a new life in this same level)
-*						false (0 - continue playing)
 */
-//bool arise_player()
 void check_for_player_arise()
 {
 __asm
 	ld	l, #0x07
 	call	_ubox_read_keys
 	ld	a, l
-;;	ld l, #BOOL_FALSE; continue playing
 	cp #UBOX_MSX_KEY_ESC
 	ret	nz
 
@@ -6763,7 +6741,6 @@ _wait_for_YN :
 	; Pressed 'N'
 	; erase "ARISE?"
 	call _txt_erase
-;;	ld l, #BOOL_FALSE; continue playing
 	ret
 
 _do_arise :
@@ -6771,33 +6748,34 @@ _do_arise :
 	call _txt_erase
 	xor a
 	ld (#_cPower), a
-;;	ld l, #BOOL_TRUE; arise requested
 	jp _set_player_as_dead
 __endasm;
-//}  // bool arise_player()
 }  // void check_for_player_arise()
 
 /*
 * Check for player remaining power and life. Decrease Life when Power = 0
-* Returns:	true (1 - player still have life/power)
-*						false (0 - player don't have more lives = gameover)
+* Set cGameStatus = GM_STATUS_LOOP_CONTINUE (default) or GM_STATUS_MISSION_CPLT, GM_STATUS_PLAYER_WIN or GM_STATUS_GAME_OVER
 */
-//bool is_player_life_ok()
-//bool continue_game_loop()
 void update_game_loop_status()
 {
 __asm
 	ld a, (#_cRemainMission)
 	or a
-;;	ld l, #BOOL_FALSE  ; All missions completed - level UP
-;;	ret z
 	jr nz, _mission_not_completed
+	; all missions completed - level UP -OR- game win
+	ld a, (#_cLevel)
+	cp #3
+	jr nz, _do_complete_mission
+	; cLevel=3 and cRemainMission=0 - GAME WIN
+	ld a, #GM_STATUS_PLAYER_WIN
+	jr _do_game_win
+_do_complete_mission :
 	ld a, #GM_STATUS_MISSION_CPLT
+_do_game_win :
 	ld (#_cGameStatus), a
 	ret
 
 _mission_not_completed :
-;;	ld l, #BOOL_TRUE  ; continue playing
 	ld a, (#_cPlyDeadTimer)
 	or a
 	jr z, _check_power
@@ -6820,14 +6798,12 @@ _set_player_as_dead :
 	ld (hl), #0
 	ld a, (#_sThePlayer + #09) ; grabflag
 	cp #BOOL_TRUE
-	;jr nz, _cont_dead_player
 	call z, _set_grabbed_enemy_as_dead
 
 _cont_dead_player :
-	;TODO: right SFX here (dead player)
-	; mplayer_play_effect_p(SFX_HURT, SFX_CHAN_NO, 0);
+	; mplayer_play_effect_p(SFX_DEADPLAYER, SFX_CHAN_NO, 0);
 	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
-	ld de, #0x0005; 00 + SFX_HURT
+	ld de, #0x0005; 00 + SFX_DEADPLAYER
 	call	_mplayer_play_effect_p_asm_direct
 	ret
 
@@ -6845,8 +6821,6 @@ _check_lives :
 	ld a, (#_cLives)
 	dec a
 	ld (#_cLives), a
-;;	ld l, #BOOL_FALSE; no more lives - stop playing
-;;  ret z
 	jr nz, _start_with_new_life
 	ld a, #GM_STATUS_GAME_OVER
 	ld (#_cGameStatus), a
@@ -6858,7 +6832,7 @@ _start_with_new_life :
 	ld (#_cPower), a
 	call _display_power
 	call _display_lives
-	; TODO: set player status and position
+	; set player status and position
 	ld hl, #_cGlbPlyFlagCache
 	ld(hl), #CACHE_INVALID
 	ld hl, #_sThePlayer
@@ -6871,20 +6845,25 @@ _start_with_new_life :
 	ld a, (#_cPlySafePlaceDir)
 	ld (hl), a; _sThePlayer.dir = _cPlySafePlaceDir
 	inc hl
-	ld(hl), #PLYR_STATUS_STAND; _sThePlayer.status = PLYR_STATUS_STAND
+	ld (hl), #PLYR_STATUS_STAND; _sThePlayer.status = PLYR_STATUS_STAND
 
+	xor a
+	ld (#_sThePlayer + #6), a ; frame = 0
+	; A already set to 0
+	;ld a, #BOOL_FALSE
+	ld (#_sThePlayer + #9), a ; grabflag = false
 
-	inc hl
-	inc hl
-	inc hl
-	ld (hl), #00; _sThePlayer.frame = 0
-	inc hl
-	inc hl
-	inc hl
-	ld (hl), #BOOL_FALSE ; grabflag
+;;	inc hl
+;;	inc hl
+;;	inc hl
+;;	ld (hl), #00; _sThePlayer.frame = 0
+;;	inc hl
+;;	inc hl
+;;	inc hl
+;;	ld (hl), #BOOL_FALSE ; grabflag
+
 	ld a, #BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a
-;;	ld l, #BOOL_TRUE; continue playing
 __endasm;
 }  // void update_game_loop_status()
 
@@ -6926,14 +6905,11 @@ _sttJump :
 	xor #1
 	inc a ; HUGE workaroud to convert player dir => jump dir
 _set_jmp_none :
-  ;ld (hl), #PLYR_JUMP_DIR_NONE
   ld (hl), a
-	;jr _setStatus
 	jr _setStatus2
 
 _sttClbDown :
 	ld a, (#_sThePlayer + #01)
-	;;;;add a, #04
 	add a, #8
 	jr _sttClimb
 _sttClbUp :
@@ -7314,8 +7290,8 @@ __asm
 	ld a, (#_sAlien + #10)  ; IsActive
 	or a
 	jp z, _update_facehug
-	; update Alien creature
 
+	; update Alien creature
 	; check if its time to update Alien position and image (each ALIEN_ANIM_DELAY cycles), unless status = ENEMY_STATUS_ATTACK
 	ld a, (#_sAlien + #5) ; delay
 	dec a
@@ -7536,8 +7512,6 @@ _try_alien_attack :
 	jr z, _do_alien_attack_ex
 	ld a, #ENEMY_STATUS_WALKING
 	jr _end_alien_attack_status
-	;ld (#_sAlien + #3), a ; status
-	;jr _update_facehug
 
 _do_alien_attack_ex :
 	; calculate distance from player to alien: (Xa * 8 + 16) - (xp + 8)
@@ -7663,10 +7637,18 @@ _cont_alien_tongue_dir :
 _no_tongue_hit :
 	; when status = ENEMY_STATUS_ATTACK, frame controls the alien tongue { 0 = hiden, 1..5 = intermediary position, 6 = final position }
 _tongue_is_hidden :
+	; add some delay to update frame - only update at odd cycles
+	ld a, (#_sAlien + #5) ; delay
+	and #0b00000001
+	jr nz, _update_facehug
 	ld a, (#_sAlien + #4) ; frame
 	inc a
 	cp #7
 	jr nz, _set_tongue_frame
+	; mplayer_play_effect_p(SFX_ALIENATTACK, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0005; 00 + SFX_HURT
+	call	_mplayer_play_effect_p_asm_direct
 	xor a
 _set_tongue_frame :
 	ld (#_sAlien + #4), a
@@ -7751,7 +7733,6 @@ _anim_enemy_jump :
 	push hl ; used at _spman_alloc_fixed_sprite() calls
 
 	ld a, (#_sThePlayer + #1) ; yp
-	;ld a, 1 (ix)
 	ld 1 (ix), a
 	dec a ; y on the screen starts in 255
 	ld (hl), a ; _sGlbSpAttr.y
@@ -7821,8 +7802,6 @@ _anim_enemy_grab_ex :
 	ld a, (#_sThePlayer + #2) ; dir
 	ld 2 (ix), a ; dir
 
-	; TODO: player.grabtimer(10)
-
 	; pattern = ENEMY_PAT_BASE_IDX + (enemy_grab_frames[Frame] + Dir * 5) * 8
 	ld de, #_enemy_grab_frames
 	ld hl, #_enemy_grab_frames
@@ -7889,7 +7868,6 @@ _anim_enemy_walk :
 	ld 3 (ix), #ENEMY_STATUS_JUMPING  ; status
 	ld 6 (ix), #0
 	ld 7 (ix), #ENEMY_ANIM_DELAY
-	;;jp _anim_enemy_jump_ex
   jp _do_display_enemy_end
 
 
@@ -7936,11 +7914,11 @@ _no_enemy_colision :
 	ld a, #BOOL_TRUE
 	ld (#_bShotColisionWithEnemy), a
 	dec 4 (ix) ; hitcounter
-	; TODO: SFX here
+	; TODO: SFX here SFX_HIT
 	jr nz, _not_killed_enemy
 _shot_killed_enemy :
 	; enemy killed
-	; TODO: SFX here
+	; TODO: SFX here SFX_HURT
 	ld 3 (ix), #ENEMY_STATUS_HURT ; status
 	ld 6 (ix), #0
 	ld 7 (ix), #ENEMY_ANIM_DELAY
@@ -8082,10 +8060,7 @@ __endasm;
 
 /*
 * Update player position and player status
-* Returns:	true (1 - continue playing in the same map)
-*						false (0 - need to change map)
 */
-//bool update_player()
 void update_player()
 {
 __asm
@@ -8109,12 +8084,6 @@ __asm
 00101$:
 __endasm;
 
-	////bGlbPlyMoved = false;
-	//if (sThePlayer.status == PLYR_STATUS_DEAD) return true;  nao necessario, ja filtrado no run_game()
-
-	//display_number(15, 0, 3, cGlbPlyFlag);
-	////if (sThePlayer.grabflag) player_hit(HIT_PTS_FACEHUG);
-
 	if (!is_player_falling())
 	{
 		if (is_player_jumping())
@@ -8122,14 +8091,12 @@ __endasm;
 			// check colision with Fatal or horizontal forcefield
 			if (cGlbPlyFlag & COLISION_FATAL)
 			{
-				//if (!cPlyRemainShield) player_hit(HIT_PTS_SMALL);
 				player_hit(HIT_PTS_SMALL);
 			}
 			else if (cGlbPlyFlag & COLISION_NEXTM)  // Next map or Portal
 			{
 				cGameStatus = GM_STATUS_CHANGE_MAP;
 				// cGlbObjData contains shift direction + screen destination (sssDDDDD)
-				//return false;
 				return;
 			}
 		}
@@ -8148,26 +8115,21 @@ __endasm;
 					{
 						if (cGlbPlyFlag & COLISION_OBJCT)
 						{
-							//mplayer_play_effect_p(SFX_GET_OBJECT, SFX_CHAN_NO, 0);
 							player_get_object();
 							cScoretoAdd += SCORE_OBJECT_POINTS;
 						}
 						if (cGlbPlyFlag & COLISION_GATE)
 						{
 							player_hit(HIT_PTS_HIGH);
-							//return true;
 							return;
 						}
 						if (cGlbPlyFlag & COLISION_SOLID)
 						{
 							update_player_status(PLYR_STATUS_DEAD);
-							//player_hit(HIT_PTS_DEATH);
-							//return true;
 							return;
 						}
 						if (cGlbPlyFlag & COLISION_FATAL)
 						{
-							//if (!cPlyRemainShield) player_hit(HIT_PTS_SMALL);
 							player_hit(HIT_PTS_SMALL);
 						}
 						if (cGlbPlyFlag & COLISION_FLOOR)
@@ -8191,7 +8153,6 @@ __endasm;
 							{
 								cGameStatus = GM_STATUS_CHANGE_MAP;
 								// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
-								//return false;
 								return;
 							}
 						}
@@ -8207,10 +8168,6 @@ __endasm;
 								{
 									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
 								}
-								//else
-								//{
-									//TODO: sound effect
-								//}
 							}
 							else if (cGlbPlyFlag & COLISION_FLOOR) // check for a stair below the player
 							{
@@ -8231,7 +8188,6 @@ __endasm;
 							{
 								cGameStatus = GM_STATUS_CHANGE_MAP;
 								// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
-								//return false;
 								return;
 							}
 						}
@@ -8246,10 +8202,6 @@ __endasm;
 								//cGlbObjData = 1(single stair tile) or 2(2 stair tiles) - adjust Player X position when start to climb (center player at the stair tiles)
 								update_player_status(PLYR_STATUS_CLIMB_UP);
 							}
-							//else // there is a solid block above player head
-							//{
-								//TODO: sound effect
-							//}
 						}
 						else
 						{
@@ -8274,16 +8226,11 @@ __endasm;
 								{
 									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
 								}
-								//else
-								//{
-									//TODO: sound effect
-								//}
 							}
 							else if (cGlbPlyFlag & COLISION_NEXTM)  // Next Map or Portal
 							{
 								cGameStatus = GM_STATUS_CHANGE_MAP;
 								// cGlbObjData contains shift direction + screen destination (sssDDDDD)
-								//return false;
 								return;
 							}
 							else if (cGlbPlyFlag & COLISION_COLLECTIBLE)
@@ -8301,10 +8248,6 @@ __endasm;
 									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY
 									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
 								}
-								//else
-								//{
-									//TODO: sound effect
-								//}
 							}
 						}
 					}
@@ -8327,11 +8270,9 @@ __endasm;
 		{
 			cGameStatus = GM_STATUS_CHANGE_MAP;
 			// cGlbObjData contains shift direction + screen destination (ss0DDDDD)
-			//return false;
 			return;
 		}
 	}
-	//return true;
 }  // void update_player()
 
 /*
@@ -8377,7 +8318,7 @@ _useMapFrame :
 	call _update_Frame_Color
 	ld(#_cLastMMColor), a
 _useCacheColor :
-	ld(hl), a; _sGlbSpAttr.attr
+	ld (hl), a; _sGlbSpAttr.attr
 	; allocate the MiniMap sprites; not fixed so they can flicker
 	call	_spman_alloc_sprite
 
@@ -8443,7 +8384,7 @@ _chkforFlashLight :
 	; Control delay for Flashlight decrement
 	ld a, (#_cFlashLUpdateTimer)
 	inc a
-	ld(#_cFlashLUpdateTimer), a
+	ld (#_cFlashLUpdateTimer), a
 	cp #ONE_SECOND_TIMER
 	jr nz, _chkforShot
 	xor a
@@ -8611,7 +8552,7 @@ _detect_colision :
 	ld hl, #_cRemainMission
 	dec(hl)
 
-	; TODO: Mission complete SFX
+	; TODO: Mission complete SFX SFX_MISSIONCPLT
 	call _update_mission_status
 	; Add SCORE_MISSION_POINTS points to the score
 	ld a, #SCORE_MISSION_POINTS
@@ -9654,8 +9595,6 @@ __asm
 	ld a, #SONG_SILENCE
 	call _mplayer_init_asm_direct
 
-	; TODO: check for GAME WIN instead of LEVEL UP
-
 	; Fill_Box(6, 6, 20, 11, BLANK_TILE);
 	xor a
 	ld bc, #0x0606
@@ -9666,14 +9605,15 @@ _encode_lvl_code :
 	; step 1: compute iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
 	ld hl, (#_iScore)
 	
-	;;;ld hl, #300
-
+	; set HL (Score) here to hack a new level code
+	;;ld hl, #300
 	ld (#_cBuffer), hl
 
 	ld a, (#_cLevel)
 	inc a ; next level required [2 or 3]
 
-	;;;ld a, #2
+	; set A (Level) here to hack a new level code
+	;;ld a, #2
 
 	rlca
 	rlca
@@ -9682,7 +9622,8 @@ _encode_lvl_code :
 	ld b, a ; cLevel + SALT_1
 	ld a, (#_cLives)
 
-	;;;ld a, #3
+	; set A (Lives) here to hack a new level code
+	;;ld a, #3
 
 	rrca
 	rrca
@@ -9792,7 +9733,6 @@ _nextbit8b :
 	or e
 	ld a, b ; restore a
 	jr nz, _byteloop8b
-	;ret
 __endasm;
 }  // void draw_level_up_message()
 
@@ -9876,7 +9816,6 @@ _reset_md_seconds :
 
 	ld a, (#_cMeltdownMinutes)
 	or a
-;;	ret z
 	jr nz, _decrement_minutes
   ld a, #GM_STATUS_TIME_IS_OVER
   ld (#_cGameStatus), a
@@ -9905,9 +9844,10 @@ void Run_Game()
 
 		// Level 3 TEST
 		cLevel = 3;
-		cMeltdownSeconds = cMeltdownTimerCtrl = 0;
-	  cMeltdownMinutes = 1;
-		//bFinalMeltdown = true;
+		cMeltdownSeconds = 20;
+		cMeltdownTimerCtrl = 0;
+	  cMeltdownMinutes = 0;
+		bFinalMeltdown = true;
 
 		draw_game_level_info();
 
@@ -9919,7 +9859,7 @@ void Run_Game()
 
 		// global variable initialization - once per level
 		cLastPower = 0xFF;  // force update on the first display_power() call
-		bGlbMMEnabled = false; // bChangeMap = false;
+		bGlbMMEnabled = false;
 		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 		cGlbGameSceneLight = LIGHT_SCENE_ON_FL_ANY;
 		cGlbFlashLightAction = GAME_LIGHTS_ACTION_NONE;
@@ -9934,7 +9874,6 @@ void Run_Game()
 		{
 			// Load, uncompress map data and update object history
 			load_levelmap_data();
-			//if (!bChangeMap)
 			if (cGameStatus == GM_STATUS_CHANGE_MAP)
 			{
 				load_entities();
@@ -9943,7 +9882,6 @@ void Run_Game()
 
 				//update level/screen into score area
 				display_level();
-				//bChangeMap = false;
 				cGameStatus = GM_STATUS_LOOP_CONTINUE;
 			}
 			else
@@ -9971,12 +9909,9 @@ void Run_Game()
 					check_for_pause();        // scan for 'P' key
 					check_for_flashlight();   // scan for 'F' key
 					check_for_player_arise(); // scan for 'ESC' key, then Y to confirm
-					//check_for_easteregg();
-					//if (arise_player()) continue;  // scan for 'ESC' key, then Y to confirm
+					//check_for_easteregg();  // not implemented
 				}
 			
-				//bGlbPlyChangedPosition = false;
-
 				// update the animated tiles each 7 cycles
 				if ((iGameCycles & 0b00000111) == 0x07) // 7 cycles
 				{
@@ -9994,10 +9929,8 @@ void Run_Game()
 					check_for_fire();  // scan for 'ESPACE' key
 
 					// update our player position and status
-					//if (!update_player()) break; // need to stop game loop to change to other map
 					update_player();
 					if (cGameStatus == GM_STATUS_CHANGE_MAP) break;
-					//retorna CHANGE_MAP
 				}
 
 				bGlbPlyChangedPosition |= bGlbPlyMoved;
@@ -10029,10 +9962,8 @@ void Run_Game()
 
 				// update and display Meltdown counter
 				display_meltdown_counter();
-				//retorna TIMER_OUT
 
 				update_game_loop_status();
-				//retorna MISSION_COMPLETE, NO_MORE_LIVES
 
 				iGameCycles++;
 
@@ -10040,7 +9971,6 @@ void Run_Game()
 				ubox_wait();
 
 			} while (cGameStatus == GM_STATUS_LOOP_CONTINUE);
-			//} while (continue_game_loop());  // loop until player is dead (lives=0) or need to change map
 
 			// hide all the sprites
 			spman_hide_all_sprites();
@@ -10057,7 +9987,7 @@ __asm
 					ld hl, #_cMap_Data
 					push bc
 					ld bc, #MAP_BYTES_SIZE
-					ldir   ; ld(DE), (HL), then increments DE, HL, and decrements BC until BC = 0
+					ldir   ; ld (DE), (HL), then increments DE, HL, and decrements BC until BC = 0
 					pop bc
 __endasm;
 				}
@@ -10067,46 +9997,14 @@ __endasm;
 				cLevel++;
 				iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
 			}
-/*
-			// 'continue_game_loop()=false' OR 'Map Changed'
-			if (cLives) // if cLives != 0 then: 'Next map/Portal processing' OR Level 'Completed processing'
-			{
-				if (!cRemainMission)
-				///if (iScore > 10)
-				{
-					///cRemainMission = 0;
-					cLevel++;
-					iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
-					//CONTINUE_GAME_LOOP = FALSE
-				}
-				else
-				{
-					// Set right screen number and shift direction (up, down, right, left, portal) based on cGlbObjData
-					cScreenMap = cGlbObjData & 0b00011111;
-					cScreenShiftDir = cGlbObjData >> 5;
-					//bChangeMap = true;
-					if (cScreenShiftDir == SCR_SHIFT_RIGHT || cScreenShiftDir == SCR_SHIFT_LEFT)
-					{
-__asm
-						ld de, #_cTemp_Map_Data
-						ld hl, #_cMap_Data
-						ld bc, #MAP_BYTES_SIZE
-						ldir  ; ld(DE), (HL), then increments DE, HL, and decrements BC until BC = 0
-__endasm;
-					}
-				}
-			}
-*/
 		} while (cGameStatus == GM_STATUS_CHANGE_MAP);
-		//} while (cLives && cRemainMission);  // loop at each screen map
+
 		// Level Up message
 		if (cGameStatus == GM_STATUS_MISSION_CPLT)
 		{
 		  draw_level_up_message();
 		}
-		//if (cLives) draw_level_up_message();
-	} while (cGameStatus != GM_STATUS_TIME_IS_OVER && cGameStatus != GM_STATUS_GAME_OVER);
-	//} while (cLives);  // loop for each Level
+	} while (cGameStatus != GM_STATUS_TIME_IS_OVER && cGameStatus != GM_STATUS_GAME_OVER && cGameStatus != GM_STATUS_PLAYER_WIN);
 }  // void Run_Game()
 
 
@@ -10264,7 +10162,7 @@ __endasm;
 /*
 * Game win screen
 * cGameStatus == GM_STATUS_TIME_IS_OVER - game win + player dead
-* cGameStatus == GM_STATUS_MISSION_CPLT - game win
+* cGameStatus == GM_STATUS_PLAYER_WIN - game win
 */
 void draw_game_win()
 {
@@ -10291,6 +10189,7 @@ __asm
 	ld	de, #0x0101
 	push	de
 	push	de
+	inc sp
 	call	_ubox_set_colors
 	pop	af
 	inc	sp
@@ -10382,18 +10281,19 @@ _nostromo_display_loop :
 
 	;TODO: EXPLOSION ANIMATION
 
+
 	ld a, (#_cGameStatus)
 	cp #GM_STATUS_TIME_IS_OVER
 	jr z, _rippley_is_dead
+	; win message asking for rescue
 	ld a, #GAME_TEXT_WIN_RESCUE_ID
 	jr _draw_last_message
 _rippley_is_dead :
+  ; win message but rippley has died
 	ld a, #GAME_TEXT_WIN_DEATH_ID
 _draw_last_message :
 	call _search_text_block
 	ld bc, #0x1301 ; YY/XX
-	;;ld de, #0x0008
-	;;call _display_format_text_block
 	jp _display_msg_and_wait
 __endasm;
 }  // void draw_game_win()
@@ -10416,9 +10316,6 @@ void main(void)
 	
 	// reg 1: activate sprites, v-blank int on, 16x16 sprites
 	ubox_wvdp(1, 0b11100010); //0xe2
-
-	// init sprite and patterns
-	//spman_init();
 
 	// init the music/fx player
 	mplayer_init(SONG, SONG_SILENCE);
@@ -10461,7 +10358,7 @@ void main(void)
 		else
 		{
 			// cGameStatus == GM_STATUS_TIME_IS_OVER - game win + player dead
-			// cGameStatus == GM_STATUS_MISSION_CPLT - game win
+			// cGameStatus == GM_STATUS_PLAYER_WIN   - game win
 			draw_game_win();
 		}
 	}
