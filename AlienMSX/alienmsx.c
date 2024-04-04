@@ -389,6 +389,9 @@ enum pattern_type
 #define PLYR_JUMP_DIR_RIGHT    2     // should be 2 to jump to work
 
 #define PLYR_UP_JUMP_CYCLES    20  // # of cycles (Y offset) for a jump (8 + 8 + 4)
+//{1, 1, 1, 1, 1, 1, 1, 1, 
+// 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+// 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1}
 
 #define PLYR_SPRITE_L1_COLOR_NORMAL 0xDF  // Magenta(13) and White(15)
 #define PLYR_SPRITE_L1_COLOR_HIT    0x8B  // Red(08) and Light Yellow(11)
@@ -430,8 +433,8 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ENEMY_STATUS_JUMPING     0x30
 #define ENEMY_STATUS_GRABBED     0x40
 #define ENEMY_STATUS_HURT        0x50
-#define ENEMY_STATUS_CHASE       0x60  // alien only
-#define ENEMY_STATUS_ATTACK      0x70  // alien only
+#define ALIEN_STATUS_CHASE       0x60  // alien only
+#define ALIEN_STATUS_ATTACK      0x70  // alien only
 
 #define ENEMY_HIT_COUNT          2
 
@@ -6277,7 +6280,7 @@ _jmp_moved_ok :
 
 _dec_up_cycles :
 	ld hl, #_cGlbPlyJumpCycles
-	dec(hl)
+	dec (hl)
 	jr z, _endUpStage
 	ld l, #BOOL_TRUE ; continue jumping
 	ret
@@ -7292,13 +7295,13 @@ __asm
 	jp z, _update_facehug
 
 	; update Alien creature
-	; check if its time to update Alien position and image (each ALIEN_ANIM_DELAY cycles), unless status = ENEMY_STATUS_ATTACK
+	; check if its time to update Alien position and image (each ALIEN_ANIM_DELAY cycles), unless status = ALIEN_STATUS_ATTACK
 	ld a, (#_sAlien + #5) ; delay
 	dec a
 	jr z, _do_animate_alien
 	ld (#_sAlien + #5), a
 	ld a, (#_sAlien + #3) ; status
-	cp #ENEMY_STATUS_ATTACK
+	cp #ALIEN_STATUS_ATTACK
 	jp z, _do_alien_attack
 	jp _update_facehug
 _do_animate_alien :
@@ -7327,8 +7330,8 @@ _do_animate_alien :
 	ld a, d
 	cp #BOOL_TRUE
 	jr nz, _not_vertical_aligned
-	; change status to ENEMY_STATUS_CHASE
-	ld a, #ENEMY_STATUS_CHASE
+	; change status to ALIEN_STATUS_CHASE
+	ld a, #ALIEN_STATUS_CHASE
 	ld (#_sAlien + #3), a ; status
 	jp _do_alien_chase
 
@@ -7398,7 +7401,7 @@ _check_player_Y_aligned_with_alien :
 	ret
 
 _try_alien_chase :
-	cp #ENEMY_STATUS_CHASE
+	cp #ALIEN_STATUS_CHASE
 	jp nz, _try_alien_attack
 	; check if player continues to be vertical aligned
 	call _check_player_Y_aligned_with_alien
@@ -7491,7 +7494,7 @@ _chase_alien_left :
 _check_alien_attack :
 	cp #20
 	jr c, _do_nothing_alien
-	ld a, #ENEMY_STATUS_ATTACK
+	ld a, #ALIEN_STATUS_ATTACK
 	ld (#_sAlien + #3), a ; status
 	ld a, #1
 	ld (#_sAlien + #4), a ; frame
@@ -7503,7 +7506,7 @@ _do_nothing_alien :
 	jp _update_facehug
 
 _try_alien_attack :
-	cp #ENEMY_STATUS_ATTACK
+	cp #ALIEN_STATUS_ATTACK
 	jp nz, _update_facehug
 	; check if player continues to be vertical aligned
 	call _check_player_Y_aligned_with_alien
@@ -7532,7 +7535,7 @@ _positive_distance_2 :
 	jr c, _check_alien_attack_2
 _back_chase_player :
 	; back chasing the player
-	ld a, #ENEMY_STATUS_CHASE
+	ld a, #ALIEN_STATUS_CHASE
 _end_alien_attack_status :
 	ld (#_sAlien + #3), a ; status
 	; need to set alien frame back to 1
@@ -7635,7 +7638,7 @@ _cont_alien_tongue_dir :
 	call _player_hit_asm_direct
 
 _no_tongue_hit :
-	; when status = ENEMY_STATUS_ATTACK, frame controls the alien tongue { 0 = hiden, 1..5 = intermediary position, 6 = final position }
+	; when status = ALIEN_STATUS_ATTACK, frame controls the alien tongue { 0 = hiden, 1..5 = intermediary position, 6 = final position }
 _tongue_is_hidden :
 	; add some delay to update frame - only update at odd cycles
 	ld a, (#_sAlien + #5) ; delay
@@ -7658,10 +7661,19 @@ _update_facehug :
 	or a
 	ret z   ; no active enemies to update and display
   ld b, a
+	; if sThePlayer.grabflag=TRUE, bCheckPlayerColision=FALSE
 	ld a, (#_sThePlayer + #9) ; grabflag
   xor #1
-  ld (#_bCheckPlayerColision), a
-  ld a, (#_cShotCount) ; 0 = NO SHOT ACTIVE, 1 = SHOT ACTIVE
+	jr _cont_upd_facehug
+	; if sThePlayer.status = PLYR_STATUS_DEAD, bCheckPlayerColision = FALSE
+	ld a, (#_sThePlayer + #03) ; status
+	cp #PLYR_STATUS_DEAD
+	jr nz, _cont_upd_facehug_2
+	ld a, #BOOL_FALSE
+_cont_upd_facehug :
+	ld (#_bCheckPlayerColision), a
+_cont_upd_facehug_2 :
+	ld a, (#_cShotCount) ; 0 = NO SHOT ACTIVE, 1 = SHOT ACTIVE
   ld (#_bCheckShotColision), a
 	ld a, #BOOL_FALSE
 	ld (#_bShotColisionWithEnemy), a
@@ -7727,6 +7739,16 @@ _continue_awake :
 	jp _do_display_enemy
 
 _anim_enemy_jump :
+	; if sThePlayer.status = PLYR_STATUS_DEAD, need to cancel the jump (cannot grab at the player, return to ENEMY_STATUS_WALKING)
+	ld a, (#_sThePlayer + #03); status
+	cp #PLYR_STATUS_DEAD
+	jr nz, _anim_enemy_jump_ex
+	ld 3 (ix), #ENEMY_STATUS_WALKING; status
+	ld 6 (ix), #0
+	ld 7 (ix), #ENEMY_ANIM_DELAY
+  jp _next_enemy_to_check
+
+_anim_enemy_jump_ex :
 	; need to protect B
 	ld hl, #_sGlbSpAttr
 	push bc
@@ -7737,8 +7759,7 @@ _anim_enemy_jump :
 	dec a ; y on the screen starts in 255
 	ld (hl), a ; _sGlbSpAttr.y
 
-_anim_enemy_jump_ex :
-  ; need to approximate enemy to the player
+	; need to approximate enemy to the player
 	ld a, (#_sThePlayer) ; xp
 	ld b, a
 	sub 0 (ix) ; xe
@@ -7819,7 +7840,8 @@ _anim_enemy_walk :
 
 	; check for player colision (then change to ENEMY_STATUS_JUMPING)
 	; if _bCheckPlayerColision is FALSE = no colision detection
-	; if sThePlayer.grabflag is TRUE = no colision detection
+	; if sThePlayer.grabflag is TRUE = no colision detection (already set at bCheckPlayerColision)
+	; if sThePlayer.status = PLYR_STATUS_DEAD no colision detection (already set at bCheckPlayerColision)
 	ld a, (#_bCheckPlayerColision)
 	cp #BOOL_FALSE
 	jr z, _no_enemy_colision
@@ -9843,11 +9865,11 @@ void Run_Game()
 		cGameStage = GAMESTAGE_LEVEL;
 
 		// Level 3 TEST
-		cLevel = 3;
+		cLevel = 2;
 		cMeltdownSeconds = 20;
 		cMeltdownTimerCtrl = 0;
 	  cMeltdownMinutes = 0;
-		bFinalMeltdown = true;
+		//bFinalMeltdown = true;
 
 		draw_game_level_info();
 
