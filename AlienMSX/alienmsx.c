@@ -6,8 +6,7 @@
 // TODOS: Bugs list:
 // Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
-// 2. Jumping into a Portal still doesn't work. Easy to reproduce.
-
+// 2. Sprite color = 0 for enemies if Flashlight = true
 
 #include <stdio.h>
 #include <string.h>
@@ -22,17 +21,16 @@
 #include "uboxlib/include/mplayer.h"
 #include "uboxlib/include/ubox_ext.h"
 
-// Disable "z80instructionSize() failed to parse line node" SDCC error with ASM inline labels
-#pragma disable_warning 218
-#pragma disable_warning 85	// because some variables not used in C context
-#pragma disable_warning 59	// because asm code inside C functions doesn´t return a value
+#pragma disable_warning 218 // disable "z80instructionSize() failed to parse line node" SDCC error with ASM inline labels
+#pragma disable_warning 85	// some variables not used in C context
+#pragma disable_warning 59	// asm code inside C functions doesn´t return a value
 
 #define LOCAL
 
 // Include all Tilesets
-#include "data/font1ts.h"    // font 1 Tileset
-#include "data/font2ts.h"    // font 2 Tileset
-//#include "data/font3ts.h"  // font 3 Tileset - NOT USED
+#include "data/font1ts.h"    // font 1 Tileset (blue)
+#include "data/font2ts.h"    // font 2 Tileset (white)
+//#include "data/font3ts.h"  // font 3 Tileset (green) - NOT USED
 #include "data/introts.h"    // intro Tileset
 #include "data/scorets.h"    // score Tileset
 #include "data/game0ts.h"    // game map level 1 and 3 Tileset
@@ -40,6 +38,7 @@
 #include "data/fatalts.h"    // game map Fatal Tilesets (same for Level 1, 2 and 3)
 #include "data/alients.h"    // Alien creature Tileset
 #include "data/nostrots.h"   // final screen Nostromo ship Tileset
+#include "data/explosts.h"   // final screen Nostromo Explosion Tileset
 
 
 // Include all texts, maps, sprites(player, objects and all the enemies)
@@ -470,7 +469,7 @@ uint8_t FONT2_TILE_OFFSET;
 #define INTRO_CTRL_CYCLE        8
 const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2, 4 << 2, 3 << 2, 2 << 2, 1 << 2 };
 
-// score tile #defines for C & ASM code
+// Score tile #defines for C & ASM code
 #define SCORE_POWER_TL_OFFSET   11
 #define SCORE_SLASH_TL_OFFSET   17     // SLASH character offset in 'Score' Tileset
 #define SCORE_MISSION_TL_OFFSET 18
@@ -505,10 +504,18 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define GAME_PWR_BUTTON_TL_OFFSET  42 	  // Power Button <Interactive> tile offset
 #define GAME_PWR_LOCK_TL_OFFSET    44 	  // Lock Device <Interactive> tile offset
 #define GAME_SOLD_TL_OFFSET	       46 	  // start tile offset for Solid tiles
+#define GAME_HORIZ_FF_TL_OFFSET    67 	  // start tile offset for Horizontal ForceField tiles
 #define GAME_EGG_TL_OFFSET	       70 	  // start tile offset for Egg tiles
 #define GAME_COLLECT_TL_OFFSET	   76 	  // start tile offset for Collectible tiles
 #define GAME_FATL_TL_OFFSET	       80 	  // start tile offset for Fatal (animated) tiles
 #define GAME_ALIEN_TL_OFFSET	    100 	  // start tile offset for Alien (animated) tiles
+
+// Nostromo explosion tile #defines for C & ASM code
+#define EXPLO_STEP1_TL_OFFSET   16
+#define EXPLO_STEP2_TL_OFFSET   19
+#define EXPLO_STEP3_TL_OFFSET   20
+#define EXPLO_STEP4_TL_OFFSET   21
+#define EXPLO_STEP5_TL_OFFSET   29
 
 
 #define BLANK_TILE               0x00                    // BLANK tile position in any Tileset
@@ -527,6 +534,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define GAME_TEXT_WIN_DEATH_ID       10        // :
 #define GAME_TEXT_WIN_RESCUE_ID      11        // ;
 
+// Tile Class attributes
 #define TILE_TYPE_BLANK	         0b00000000    // Blank tile
 #define TILE_TYPE_OBJECT         0b00000001    // Object tile
 #define TILE_TYPE_SPECIAL        0b01000010    // Special tile (stair, cable)
@@ -538,6 +546,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define TILE_TYPE_EGG            0b10000101    // Alien Egg tile
 #define TILE_TYPE_COLLECTIBLE    0b00000110    // Collectible tile
 #define TILE_TYPE_SOLID          0b10000111    // Solid tile
+#define TILE_TYPE_FATAL_OR_SOLID 0b10000001    // Horizontal ForceField - Solid if walking on it, Fatal if passing thought it 
 #define TILE_TYPE_FATAL	         0b00100111    // Fatal tile
 #define TILE_TYPE_ALIEN          0b00100011    // Alien Creature tile
 #define TILE_TYPE_PORTAL         0b00001111    // Portal tile
@@ -720,8 +729,9 @@ AlienEntity sAlien;                                       // alien entity (1 sin
 
 // Global variables for player control
 uint8_t cGlbPlyFlag; // special global flag to describe player conflict with screen tiles
-uint8_t cJmpHeadTileType;
-uint8_t cJmpFootTileType;
+
+uint8_t cFFFlagColision;
+
 uint8_t cGlbPlyJumpCycles;
 uint8_t cGlbPlyJumpStage;
 uint8_t cGlbPlyJumpDirection;
@@ -788,7 +798,8 @@ bool bShotColisionWithEnemy;
 unsigned char cGlbBufNum[10];            // global buffer to support display_number(), display_objects(), display_power() and display_minimap() routines
 unsigned char cBuffer[2048];             // general purpose buffer to unpack Tilesets, Colors, Maps and Sprites
 unsigned char cGameText[GAMETEXT_SIZE];  // buffer to unpack Texts
-unsigned char cAlienTileset[12*8*4];     // buffer to unpack and pre-process Alien animated tileset
+unsigned char cAlienTileset[12 * 8 * 4]; // buffer to unpack and pre-process Alien animated tileset
+unsigned char cTileClassLUT[256];        // tile class LookUp Table
 unsigned char cPowerTile[8 * 3];         // copy buffer - Power tile from original Pattern table
 
 // current map tile_map (uncompressed map data + entities)
@@ -974,13 +985,13 @@ _test_finalgs :
 	cp #GAMESTAGE_FINAL
 	ret nz
 
-	; due to Nostromo tileset size, its necessary to overide Font2 and Font1
+	; due to Nostromo tileset size, its necessary to overide Font2, Font1 and Explosion
 	xor a
 	ld (#_FONT1_TILE_OFFSET), a
 	ld a, #TS_FONT1_SIZE / #2
 	ld (#_FONT2_TILE_OFFSET), a
 
-	; upload font1 + font 2 + nostromo tileset
+	; upload font1 + font 2 + explosion + nostromo tileset
 	ld hl, #_font2
 	ld de, #_cBuffer + #TS_FONT1_SIZE * #4
 	call _zx0_uncompress_asm_direct
@@ -989,6 +1000,10 @@ _test_finalgs :
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
 	
+	ld hl, #_explosion
+	ld de, #_cBuffer + #16 * #8
+	call _zx0_uncompress_asm_direct
+
 	ld hl, #_nostromo
 	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #4
 	call _zx0_uncompress_asm_direct
@@ -996,7 +1011,7 @@ _test_finalgs :
 	ld hl, #_cBuffer
 	call _ubox_set_tiles
 
-	; upload font1 colors + font 2 colors + nostromo colors
+	; upload font1 colors + font 2 colors + explosion colors + nostromo colors
 	ld hl, #_font2_colors
 	ld de, #_cBuffer + #TS_FONT1_SIZE * #4
 	call _zx0_uncompress_asm_direct
@@ -1005,6 +1020,10 @@ _test_finalgs :
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
 
+	ld hl, #_explosion_colors
+	ld de, #_cBuffer + #16 * #8
+	call _zx0_uncompress_asm_direct
+		
 	ld bc, #TS_NOSTROMO_SIZE * #8
 	ld hl, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #4
 	ld e, #0xF0
@@ -4344,6 +4363,18 @@ _setEgg :
 	ld a, #TILE_TYPE_EGG
 	ret
 _setSolid :
+  ; temporary implementation for Jump + Horizontal ForceField detection
+  cp #TS_SCORE_SIZE + #GAME_HORIZ_FF_TL_OFFSET
+	jr nz, _test_next_ff_tile
+	ld a, #TILE_TYPE_FATAL_OR_SOLID
+	ret
+_test_next_ff_tile :
+	cp #TS_SCORE_SIZE + #GAME_HORIZ_FF_TL_OFFSET + #1
+	jr nz, _setSolid_2
+	ld a, #TILE_TYPE_FATAL_OR_SOLID
+	ret
+	; end temporary implementation
+_setSolid_2 :
 	ld a, #TILE_TYPE_SOLID
 	ret
 _setGate :
@@ -4384,6 +4415,7 @@ _setBlank :
 __endasm;
 }  // void load_levelmap_data()
 
+
 /*
 * Update player X and Y position after a shift screen map (left, right, up, down or teletransport.
 * cScreenShiftDir = 0(right), 1(left), 2(up), 3(down) and 4(portal teletransport)
@@ -4402,13 +4434,29 @@ __asm
 	jr z, _upd_shiftDown
 	; should be SCR_SHIFT_PORTAL
 	; cp #SCR_SHIFT_PORTAL; 4
-	; its a teletransport portal - stop jumping
+	; its a teletransport portal - if jumping then update player position or stop jumping
+	ld a, (#_sThePlayer + #03) ; A = _sThePlayer.status
+	cp #PLYR_STATUS_JUMPING
+	jr nz, _end_portal_shift
+	; player is still jumping
+	ld a, (#_cGlbPlyJumpStage)
+	cp #PLYR_JUMP_STAGE_UP
+	jr nz, _end_portal_shift
+	; jump stage is UP - update Player Y coordinate accordly
+	ld a, (#_cPlyPortalDestinyX)
+	ld (#_sThePlayer), a
+
+	ld a, (#_cGlbPlyJumpCycles)
+	ld b, a
+	ld a, (#_cPlyPortalDestinyY)
+	sub #PLYR_UP_JUMP_CYCLES
+	add a, b  ; Y = cPlyPortalDestinyY - (PLYR_UP_JUMP_CYCLES - cGlbPlyJumpCycles)
+	jr _upd_endShift_vert
+
+_end_portal_shift :
+	; its a teletransport portal at STAGE DOWN - stop jumping
 	ld a, #PLYR_STATUS_STAND
 	ld (#_sThePlayer + #03), a  ; &_sThePlayer.status
-
-	;; TODO: verificar se quando usa portal com FL aceso acontece o update
-	;;ld a, #BOOL_TRUE
-	;;ld (#_bGlbPlyChangedPosition), a
 	ld a, (#_cPlyPortalDestinyX)
 	ld (#_sThePlayer), a
 	ld a, (#_cPlyPortalDestinyY)
@@ -4989,7 +5037,7 @@ _adjust_player_X :
 	add e
 	ld (#_sThePlayer), a
 	ld a, #CACHE_INVALID
-	ld (#_cGlbPlyFlagCache), a; invalidate _cGlbPlyFlagCache
+	ld (#_cGlbPlyFlagCache), a  ; invalidate _cGlbPlyFlagCache
 	ld (#_bGlbPlyChangedPosition), a
 	jp _EndConflicting1
 
@@ -5693,7 +5741,7 @@ _wlkPortalFound :
 	or #SCR_SHIFT_PORTAL << #5
 	jr _wlkNextM
 
-	; Calculate the next up tile position for solid/belt / gate / portal / interactive / wall / egg
+	; Calculate the next up tile position for solid / belt / gate / portal / interactive / wall / egg
 _wlkCheckSolid :
 	ld d, #0
 	call _calcTileXYAddrInt
@@ -5966,8 +6014,9 @@ __asm
 	ret nz ; not falling
 
 	xor a
-	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	ld (#_cGlbPlyFlag), a; reset _cGlbPlyFlag
 	ld hl, #_sThePlayer + #01; HL = &_sThePlayer.y
+	;; change here to implement fall LUT
 	inc (hl)
 	ld a, (hl); A = _sThePlayer.y + 1
 
@@ -5990,38 +6039,46 @@ _do_nextm_up :
 	ret
 
 _check_for_horiz_ff_colision :
+  ld a, #BOOL_FALSE
+	ld (#_cFFFlagColision), a
+	; first lets check if the current player position conflicts with a Horizontal Forcefield
+	; 1st check : Player head
 	ld c, #0 + #7
-	ld d, #15  ; last vertical player pixel (foot)
+	ld d, #0; first vertical player pixel(head)
 	call _calcTileXYAddr
-
-	ld de, #32
-	ld b, #2
-	; check if Player y position is multiple of 8 - if yes, need to check only 1 top tile (top 2 tiles if not)
-	ld a, (#_sThePlayer + #1)
-	and #0b00000111
-	jr z, _check_for_top_tiles_ex
-	inc b
-	jr _check_for_top_tiles_ex
-
-_check_for_top_tiles :
-	xor a
-	sbc hl, de
-_check_for_top_tiles_ex :
 	ld a, (hl)
-	bit #7, a  ; test if bit 7 (SOLID BIT) is set
-	jp nz, _colision_with_solid_detected  ; solid detected - set COLISION_FATAL flag
-	djnz _check_for_top_tiles
-	ret
+	cp #TILE_TYPE_FATAL_OR_SOLID
+	jr z, _horiz_ff_colision_detected
+	; 2nd check : Player body
+	ld de, #32
+	add hl, de
+	ld a, (hl)
+	cp #TILE_TYPE_FATAL_OR_SOLID
+	jr z, _horiz_ff_colision_detected
+	; 3rd check(optional) : Player foot (if Player.y % 8 = 0, then no need to test this additional tile)
+	ld a, (#_sThePlayer + #01)
+	and #0b00000111
+	ret z  ; horiz_ff_colision_NOT_detected
+	add hl, de
+	ld a, (hl)
+	cp #TILE_TYPE_FATAL_OR_SOLID
+	ret nz ; horiz_ff_colision_NOT_detected
 
-_colision_with_solid_detected :
-	ld hl, #_cGlbPlyFlag
-	set 0, (hl) ; COLISION_FATAL
+_horiz_ff_colision_detected :
+  ld a, #BOOL_TRUE
+	ld (#_cFFFlagColision), a
 	ret
 
 _not_NextM :
-	; not Next map - check for solid colision(horizontal ForceField)
+	; not Next map - check for solid colision (horizontal ForceField)
 	call _check_for_horiz_ff_colision
+	ld a, (#_cFFFlagColision)
+	cp #BOOL_FALSE
+	jr z, _continue_no_ff_colision
+	ld hl, #_cGlbPlyFlag
+	set 0, (hl); COLISION_FATAL
 
+_continue_no_ff_colision :
 	; check if player has reached the floor
 	; based on X foot position, we need to test 1 or 2 tiles below the player to detect empty floor
 	call _chkFootTileQtty  ; B = 1 or 2 horizontal tiles to test
@@ -6054,7 +6111,7 @@ __endasm;
 * Returns:	true (1 - player is jumping)
 *							cGlbPlyFlag = 76543210
 *										        ||||||||
-*														|||||||L Fatal * (fatal tile or hozizontal forcefield)
+*														|||||||L Fatal * (fatal tile or horizontal forcefield colision)
 *														||||||L- Solid
 *														|||||L-- Gate
 *														||||L--- Empty floor
@@ -6074,28 +6131,8 @@ __asm
 	cp #PLYR_STATUS_JUMPING
 	ret nz ; not jumping
 
-	; reset flags before check for colision with horizontal forcefield
-	xor a
-	ld (#_cJmpFootTileType), a
-	ld (#_cJmpHeadTileType), a
-	ld c, #0 + #7
-	ld a, (#_cGlbPlyJumpStage)
-	cp #PLYR_JUMP_STAGE_UP
-	jr z, _check_head_inside_horiz_forcefield
-	; check if current Player foot position already colide with solid (inside a horizontal FF)
-	ld d, #15  ; last vertical player pixel (foot)
-	call _calcTileXYAddr
-	ld a, (hl)
-	ld (#_cJmpFootTileType), a ; stores if bit 7 (SOLID BIT) is set
-	jr _continue_jump_routine
-_check_head_inside_horiz_forcefield :
-	; check if current Player head position already colide with solid (inside a horizontal FF)
-	ld d, #0 ; first vertical player pixel (head)
-	call _calcTileXYAddr
-	ld a, (hl)
-	ld (#_cJmpHeadTileType), a ; stores if bit 7 (SOLID BIT) is set
+	call _check_for_horiz_ff_colision
 
-_continue_jump_routine :
 	xor a
 	ld (#_cGlbPlyFlag), a; reset _cGlbPlyFlag
 	; calculate the new expected X,Y position for the player
@@ -6106,11 +6143,16 @@ _continue_jump_routine :
 	ld c, a
 	cp #PLYR_JUMP_STAGE_UP
 	jr z, _stage_up
+	;;change here to implement jump LUT
 	inc (hl)
 	jr _calc_x
 _stage_up :
+	;; change here to implement jump LUT
 	dec (hl)
-	_calc_x :
+_calc_x :
+
+	;; change here to implement jump LUT
+	; to be implemented - if not moved, no need to check new position (but need to check for fatal)
 
 	ld a, #BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a ; player trying to move DOWN/UP
@@ -6139,8 +6181,9 @@ _dir_right :
 	; not moving to next map
 	inc (hl)
 	
-	ld a, #BOOL_TRUE
-	ld (#_bGlbPlyChangedPosition), a ; player trying to move RIGHT
+	;;preciso disso aqui mesmo??? já faz acima
+	;;;ld a, #BOOL_TRUE
+	;;;ld (#_bGlbPlyChangedPosition), a ; player trying to move RIGHT
 
 	ld a, #PLYR_JUMP_DIR_RIGHT
 	ld e, a
@@ -6159,8 +6202,9 @@ _dir_left :
 	; not moving to next map
 	dec (hl)
 
-	ld a, #BOOL_TRUE
-	ld (#_bGlbPlyChangedPosition), a ; player trying to move LEFT
+	;;precisa disso????
+	;;;ld a, #BOOL_TRUE
+	;;;ld (#_bGlbPlyChangedPosition), a ; player trying to move LEFT
 
 	ld a, #PLYR_JUMP_DIR_LEFT
 	ld e, a
@@ -6177,7 +6221,7 @@ _try_move :
 	push de ; _cPlyNewY / _cPlyNewX
 	push bc ; # tiles to test / _cGlbPlyJumpStage
 	xor a
-	ld (#_cFatalFlag), a
+  ld (#_cFatalFlag), a
 	ld (#_cPortalFlag), a
 	call _test_jump_position
 	pop bc
@@ -6238,20 +6282,10 @@ _set_moved_ok :
 	ld (hl), d ; Y
 	ld hl, #_cGlbPlyFlag
 
-	; if SOLID BIT set for _cJmpFootTileType or _cJmpHeadTileType, then set colision with hozizontal forcefield. If not, check for a new colision that may be starting
-	ld a, (#_cJmpFootTileType)
+	ld a, (#_cFFFlagColision)
 	ld b, a
-	ld a, (#_cJmpHeadTileType)
-	or b
-	and #0b10000000
-	jr nz, _set_fatal_found
-	push bc ; protect C (_cGlbPlyJumpStage)
-	push de ; protect D (Y)
-	call _check_for_horiz_ff_colision
-	pop de
-	pop bc
-
 	ld a, (#_cFatalFlag)
+	or b
 	or a
 	jr nz, _set_fatal_found
 	ld a, (#_cPortalFlag)
@@ -6301,7 +6335,7 @@ _do_next_map_right :
 	or #SCR_SHIFT_LEFT << #5
 _do_next_map :
 	; need to return cGlbObjData
-	ld(_cGlbObjData), a; (sssDDDDD)
+	ld (_cGlbObjData), a; (sssDDDDD)
 	ld hl, #_cGlbPlyFlag
 	set 5, (hl)  ; COLISION_NEXTM
 	ld l, #BOOL_TRUE ; continue jumping
@@ -6356,32 +6390,25 @@ _test_solid_up :
 	ld a, (hl)
 	bit 5, a  ; FATAL BIT
 	jp nz, _jmpFoundFatal_01
-	;;;cp #TILE_TYPE_FATAL
-	;;;jp z, _jmpFoundFatal_01
 	cp #TILE_TYPE_PORTAL
 	jp z, _jmpFoundPortal_01
 
 	; its not fatal nor portal, so test if Solid...
-	; ...but if PLYR_JUMP_STAGE_UP and original Player head tile inside a horizontal FF, do not check for Solid
-	; ...but if PLYR_JUMP_STAGE_DOWN and original Player foot tile inside a horizontal FF, do not check for Solid
-	ld c, a
-	ld a, (#_cGlbPlyJumpStage)
-	cp #PLYR_JUMP_STAGE_UP
-	jr nz, _check_player_foot_ff
-	ld a, (#_cJmpHeadTileType)
-	jr _check_player_colision_ff
-_check_player_foot_ff :
-	ld a, (#_cJmpFootTileType)
-_check_player_colision_ff :
-	bit 7, a ; SOLID BIT
-	jr nz, _colision_with_ff
+	; ...but if cFFFlagColision = true, check for a SOLID_COLISION <> TILE_TYPE_FATAL_OR_SOLID. If found then do not move
+	bit 7, a; SOLID BIT
+	; no solid colision detected, check next tile
+	jr z, _jmpNextSearch_01
+	; there is a solid colision, need to check if real or not
+	ld a, (#_cFFFlagColision)
+	cp #BOOL_TRUE
+	jp nz, _up_invalid_01
+	ld a, (hl)
+	cp #TILE_TYPE_FATAL_OR_SOLID
+	; no real solid colision detected, check next tile
+	jr z, _jmpNextSearch_01
 
-	ld a, c
-	bit 7, a ; SOLID BIT
-	jr nz, _up_invalid_01
-_colision_with_ff :
-	; not solid, so check the next tile
-	jr _jmpNextSearch_01
+	; solid colision - cannot move
+	jr _up_invalid_01
 
 _jmpFoundPortal_01 :
 	; cGlbObjData = shift direction + screen destination
@@ -6404,7 +6431,7 @@ _jmpFoundFatal_01 :
 _jmpNextSearch_01 :
 	inc hl; next tile
 	djnz _test_solid_up
-	; up or down tiles are valid. check for lateral tiles
+	; top or bottom tiles are valid. Now check for the lateral tiles
 	pop hl
 	pop bc
 	ld a, #BOOL_TRUE
@@ -6447,11 +6474,23 @@ _vert_validate :
 	;;;jp z, _jmpFoundFatal_02
 	cp #TILE_TYPE_PORTAL
 	jp z, _jmpFoundPortal_02
-	; its not fatal nor portal, so test if Solid
+
+	; its not fatal nor portal, so test if Solid...
+	; ...but if cFFFlagColision = true, check for a SOLID_COLISION <> TILE_TYPE_FATAL_OR_SOLID.If found then do not move
 	bit 7, a; SOLID BIT
+	; no solid colision detected, check next tile
+	jr z, _jmpNextSearch_02
+	; there is a solid colision, need to check if real or not
+	ld a, (#_cFFFlagColision)
+	cp #BOOL_TRUE
 	jr nz, _up_invalid_02
-	; not solid, so test next tile
-	jr _jmpNextSearch_02
+	ld a, (hl)
+	cp #TILE_TYPE_FATAL_OR_SOLID
+	; no real solid colision detected, check next tile
+	jr z, _jmpNextSearch_02
+
+	; solid colision - cannot move
+	jr _up_invalid_02
 
 _jmpFoundPortal_02 :
 	; cGlbObjData = shift direction + screen destination
@@ -7661,18 +7700,21 @@ _update_facehug :
 	or a
 	ret z   ; no active enemies to update and display
   ld b, a
-	; if sThePlayer.grabflag=TRUE, bCheckPlayerColision=FALSE
-	ld a, (#_sThePlayer + #9) ; grabflag
-  xor #1
-	jr _cont_upd_facehug
+
 	; if sThePlayer.status = PLYR_STATUS_DEAD, bCheckPlayerColision = FALSE
 	ld a, (#_sThePlayer + #03) ; status
 	cp #PLYR_STATUS_DEAD
-	jr nz, _cont_upd_facehug_2
+	jr nz, _cont_upd_facehug
 	ld a, #BOOL_FALSE
+	jr _cont_upd_facehug_2
+
 _cont_upd_facehug :
-	ld (#_bCheckPlayerColision), a
+	; if sThePlayer.grabflag=TRUE, bCheckPlayerColision = FALSE
+	ld a, (#_sThePlayer + #9) ; grabflag
+  xor #1
 _cont_upd_facehug_2 :
+	ld (#_bCheckPlayerColision), a
+
 	ld a, (#_cShotCount) ; 0 = NO SHOT ACTIVE, 1 = SHOT ACTIVE
   ld (#_bCheckShotColision), a
 	ld a, #BOOL_FALSE
@@ -7740,7 +7782,7 @@ _continue_awake :
 
 _anim_enemy_jump :
 	; if sThePlayer.status = PLYR_STATUS_DEAD, need to cancel the jump (cannot grab at the player, return to ENEMY_STATUS_WALKING)
-	ld a, (#_sThePlayer + #03); status
+	ld a, (#_sThePlayer + #03) ; status
 	cp #PLYR_STATUS_DEAD
 	jr nz, _anim_enemy_jump_ex
 	ld 3 (ix), #ENEMY_STATUS_WALKING; status
@@ -7838,7 +7880,7 @@ _anim_enemy_walk :
 	dec a ; y on the screen starts in 255
 	ld (hl), a ; _sGlbSpAttr.y
 
-	; check for player colision (then change to ENEMY_STATUS_JUMPING)
+	; check for player colision (if TRUE then change to ENEMY_STATUS_JUMPING)
 	; if _bCheckPlayerColision is FALSE = no colision detection
 	; if sThePlayer.grabflag is TRUE = no colision detection (already set at bCheckPlayerColision)
 	; if sThePlayer.status = PLYR_STATUS_DEAD no colision detection (already set at bCheckPlayerColision)
@@ -8690,6 +8732,7 @@ __asm
 	cp #UBOX_MSX_KEY_P
 	ret nz
 
+_force_pause :
 	; pressed P key - enable Pause
 	; print "PAUSE"
 	; put_tile_block(16, 0, SCORE_POWER_TILE, 3, 1);
@@ -9865,7 +9908,7 @@ void Run_Game()
 		cGameStage = GAMESTAGE_LEVEL;
 
 		// Level 3 TEST
-		cLevel = 2;
+		cLevel = 3;
 		cMeltdownSeconds = 20;
 		cMeltdownTimerCtrl = 0;
 	  cMeltdownMinutes = 0;
@@ -10231,7 +10274,6 @@ __asm
 	ld bc, #NOSTROMO_IMG_WIDTH * #NOSTROMO_IMG_HEIGHT
 	ld hl, #_cBuffer
 _reset_nostromo_map :
-	; need to reset with a special BLANK tile???
 	xor a
 	ld (hl), a
 	inc hl
@@ -10277,6 +10319,69 @@ _nostromo_animation_loop :
 _cont_nostromo_loop :
 	push bc
 
+	call _display_full_nostromo_image
+
+	call _ubox_wait
+	call _ubox_wait
+	pop bc
+	pop de
+  djnz _nostromo_animation_loop
+
+	;TODO: EXPLOSION ANIMATION
+	; cBuffer contains Nostromo image (20 + 1[blank] x 13) tileset
+	; Explosion step 1
+
+	; ld b, #8
+	; ld c, #2
+	ld bc, #0x0802
+_explosion_step1_loop1 :
+	ld hl, #_cBuffer + #6 * #NOSTROMO_IMG_WIDTH ; 7th line
+	ld d, #0
+	ld e, b
+	add hl, de
+	ld (hl), #EXPLO_STEP1_TL_OFFSET
+	inc hl
+
+	push bc
+	ld b, c
+_explosion_step1_loop2 :
+	ld (hl), #EXPLO_STEP1_TL_OFFSET + #1
+	inc hl
+	djnz _explosion_step1_loop2
+
+	ld (hl), #EXPLO_STEP1_TL_OFFSET + #2
+	pop bc
+	inc c
+	inc c
+	
+	;;push bc
+	;;ld de, #UBOX_MSX_NAMTBL_ADDR + #6
+	;;call _display_full_nostromo_image
+	;;call _ubox_wait
+	;;call _ubox_wait
+	;;pop bc
+
+	djnz _explosion_step1_loop1
+
+		ld de, #UBOX_MSX_NAMTBL_ADDR + #6
+		call _display_full_nostromo_image
+
+
+	ld a, (#_cGameStatus)
+	cp #GM_STATUS_TIME_IS_OVER
+	jr z, _rippley_is_dead
+	; win message asking for rescue
+	ld a, #GAME_TEXT_WIN_RESCUE_ID
+	jr _draw_last_message
+_rippley_is_dead :
+  ; win message but rippley has died
+	ld a, #GAME_TEXT_WIN_DEATH_ID
+_draw_last_message :
+	call _search_text_block
+	ld bc, #0x1301 ; YY/XX
+	jp _display_msg_and_wait
+
+_display_full_nostromo_image :
 	ld b, #13
 	ld hl, #_cBuffer
 _nostromo_display_loop :
@@ -10294,29 +10399,6 @@ _nostromo_display_loop :
 	add hl, bc
 	pop bc
 	djnz _nostromo_display_loop
-
-	call	_ubox_wait
-	call	_ubox_wait
-	pop bc
-	pop de
-  djnz _nostromo_animation_loop
-
-	;TODO: EXPLOSION ANIMATION
-
-
-	ld a, (#_cGameStatus)
-	cp #GM_STATUS_TIME_IS_OVER
-	jr z, _rippley_is_dead
-	; win message asking for rescue
-	ld a, #GAME_TEXT_WIN_RESCUE_ID
-	jr _draw_last_message
-_rippley_is_dead :
-  ; win message but rippley has died
-	ld a, #GAME_TEXT_WIN_DEATH_ID
-_draw_last_message :
-	call _search_text_block
-	ld bc, #0x1301 ; YY/XX
-	jp _display_msg_and_wait
 __endasm;
 }  // void draw_game_win()
 
@@ -10351,6 +10433,9 @@ void main(void)
 	// uncompress ALIEN tiles and pre-calculate right/left orientation tiles
 	// also uncompress Game texts
 	unpack_alien_tileset();
+
+	// fill cTileClassLUT[] array with the correct Tile Class info
+	//setupTileClassLUT();
 
 	while (true) // continuous loop - do not return to BASIC/BIOS
 	{

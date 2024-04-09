@@ -119,6 +119,9 @@
     <ClInclude Include="data\nostrots.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\explosts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">
@@ -302,6 +305,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="data\AlienTS_12x2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\ExplosionTSv1_16x1.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

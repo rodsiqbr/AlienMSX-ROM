@@ -23,6 +23,7 @@ py png2tiles.py -i game1 --zx0 Game1TSv2_16x5.png >game1ts.h
 py png2tiles.py -i fatal --zx0 Game_FatalTS_16x2.png >fatalts.h
 py png2tiles.py -i alien --zx0 --no-colors AlienTS_12x2.png >alients.h
 py png2tiles.py -i nostromo --zx0 --no-colors NostromoTS_16x10.png >nostrots.h
+py png2tiles.py -i explosion --zx0 ExplosionTSv1_16x1.png >explosts.h
 
 --py mapgen.py -t Game0 --zx0 --max-ents 24 --room-height 21 alienmap.json alienmap > alienmap.h
 --py mapgen.py -t Game0 --zx0 --max-ents 24 --room-height 21 maplevel1.json maplvl1 > maplvl1.h
