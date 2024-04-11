@@ -7,6 +7,8 @@
 // Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
 // 2. Sprite color = 0 for enemies if Flashlight = true
+// 3. Jump and Fall with gravity simulation?
+// 4. Music for Level 2
 
 #include <stdio.h>
 #include <string.h>
@@ -4363,7 +4365,6 @@ _setEgg :
 	ld a, #TILE_TYPE_EGG
 	ret
 _setSolid :
-  ; temporary implementation for Jump + Horizontal ForceField detection
   cp #TS_SCORE_SIZE + #GAME_HORIZ_FF_TL_OFFSET
 	jr nz, _test_next_ff_tile
 	ld a, #TILE_TYPE_FATAL_OR_SOLID
@@ -4373,7 +4374,6 @@ _test_next_ff_tile :
 	jr nz, _setSolid_2
 	ld a, #TILE_TYPE_FATAL_OR_SOLID
 	ret
-	; end temporary implementation
 _setSolid_2 :
 	ld a, #TILE_TYPE_SOLID
 	ret
@@ -9912,7 +9912,7 @@ void Run_Game()
 		cMeltdownSeconds = 20;
 		cMeltdownTimerCtrl = 0;
 	  cMeltdownMinutes = 0;
-		//bFinalMeltdown = true;
+		bFinalMeltdown = true;
 
 		draw_game_level_info();
 
@@ -10327,45 +10327,27 @@ _cont_nostromo_loop :
 	pop de
   djnz _nostromo_animation_loop
 
-	;TODO: EXPLOSION ANIMATION
 	; cBuffer contains Nostromo image (20 + 1[blank] x 13) tileset
 	; Explosion step 1
-
-	; ld b, #8
-	; ld c, #2
-	ld bc, #0x0802
-_explosion_step1_loop1 :
-	ld hl, #_cBuffer + #6 * #NOSTROMO_IMG_WIDTH ; 7th line
-	ld d, #0
-	ld e, b
-	add hl, de
-	ld (hl), #EXPLO_STEP1_TL_OFFSET
-	inc hl
-
-	push bc
-	ld b, c
-_explosion_step1_loop2 :
-	ld (hl), #EXPLO_STEP1_TL_OFFSET + #1
-	inc hl
-	djnz _explosion_step1_loop2
-
-	ld (hl), #EXPLO_STEP1_TL_OFFSET + #2
-	pop bc
-	inc c
-	inc c
-	
-	;;push bc
-	;;ld de, #UBOX_MSX_NAMTBL_ADDR + #6
-	;;call _display_full_nostromo_image
-	;;call _ubox_wait
-	;;call _ubox_wait
-	;;pop bc
-
-	djnz _explosion_step1_loop1
-
-		ld de, #UBOX_MSX_NAMTBL_ADDR + #6
-		call _display_full_nostromo_image
-
+	call _explosion_step_1
+	call _ubox_wait
+	call _ubox_wait
+	ld a, #EXPLO_STEP2_TL_OFFSET
+	call _explosion_step_2_3
+	call _ubox_wait
+	call _ubox_wait
+	ld a, #EXPLO_STEP3_TL_OFFSET
+	call _explosion_step_2_3
+	call _ubox_wait
+	call _ubox_wait
+	ld a, #EXPLO_STEP4_TL_OFFSET
+	ld hl, #_cBuffer + #5 * #NOSTROMO_IMG_WIDTH ; 6th line
+	call _explosion_step_4
+	ld a, #EXPLO_STEP4_TL_OFFSET + #4
+	ld hl, #_cBuffer + #7 * #NOSTROMO_IMG_WIDTH ; 8th line
+	call _explosion_step_4
+	call _ubox_wait
+	call _explosion_step_5
 
 	ld a, (#_cGameStatus)
 	cp #GM_STATUS_TIME_IS_OVER
@@ -10380,6 +10362,176 @@ _draw_last_message :
 	call _search_text_block
 	ld bc, #0x1301 ; YY/XX
 	jp _display_msg_and_wait
+
+	;;call _display_msg_and_wait
+	;;jp _draw_game_win
+
+_explosion_step_1 :
+	; ld b, #9
+	; ld c, #2
+	ld bc, #0x0902
+_explosion_step1_loop1 :
+  ld hl, #_cBuffer + #6 * #NOSTROMO_IMG_WIDTH ; 7th line
+	ld d, #0
+	ld e, b
+	dec e
+	add hl, de
+	ld (hl), #EXPLO_STEP1_TL_OFFSET
+	inc hl
+
+	push bc
+	ld b, c
+_explosion_step1_loop2 :
+  ld (hl), #EXPLO_STEP1_TL_OFFSET + #1
+	inc hl
+	djnz _explosion_step1_loop2
+
+	ld (hl), #EXPLO_STEP1_TL_OFFSET + #2
+	pop bc
+	inc c
+	inc c
+
+	call _update_nostromo_explosion
+	djnz _explosion_step1_loop1
+	ret
+
+_explosion_step_2_3 :
+	; Explosion step 2 and step 3
+	; ld b, #10
+	; ld c, #2
+	ld bc, #0x0A02
+_explosion_step2_loop1 :
+  ld hl, #_cBuffer + #6 * #NOSTROMO_IMG_WIDTH ; 7th line
+	ld d, #0
+	ld e, b
+	dec e
+	add hl, de
+
+	push bc
+	ld b, c
+_explosion_step2_loop2 :
+  ld (hl), a
+	inc hl
+	djnz _explosion_step2_loop2
+
+	pop bc
+	inc c
+	inc c
+
+	push af
+	call _update_nostromo_explosion
+	pop af
+	djnz _explosion_step2_loop1
+	ret
+
+_explosion_step_4 :
+	; Explosion step 4
+	; ld b, #8
+	; ld c, #2
+	ld bc, #0x0802
+_explosion_step4_loop1 :
+	push hl
+	push af
+	ld d, #0
+	ld e, b
+	dec e
+	add hl, de
+	ld (hl), a
+	inc hl
+	inc a
+	ld (hl), a
+	inc hl
+	inc a
+
+	push bc
+	ld b, c
+_explosion_step4_loop2 :
+  ld (hl), a
+	inc hl
+	djnz _explosion_step4_loop2
+
+	inc a
+	ld (hl), a
+	inc hl
+	sub a, #3
+	ld (hl), a
+	pop bc
+	inc c
+  inc c
+
+	call _update_nostromo_explosion
+	pop af
+	pop hl
+	djnz _explosion_step4_loop1
+	ret
+
+_explosion_step_5 :
+	; Explosion step 5
+  ; sub-step 5.1
+	ld a, #EXPLO_STEP5_TL_OFFSET
+	ld (#_cPowerTile), a
+	inc a
+	ld (#_cPowerTile + #1), a
+	inc a
+	ld (#_cPowerTile + #2), a
+	call _explosion_anim
+
+	; sub-step 5.2
+  xor a ; BLANK_TILE
+	ld (#_cPowerTile), a
+	ld (#_cPowerTile + #1), a
+	ld (#_cPowerTile + #2), a
+	call _explosion_anim
+  ret
+
+_explosion_anim :
+	ld hl, #_cBuffer + #6 * #NOSTROMO_IMG_WIDTH ; 7th line
+	ld a, (#_cPowerTile + #1)
+	call _fill_explosion_line
+
+	ld b, #6
+	ld de, #0x0000
+_explosion_step5_loop :
+	push bc
+	push de
+	push de
+
+	ld hl, #_cBuffer + #5 * #NOSTROMO_IMG_WIDTH ; 6th line (base)
+	xor a
+	sbc hl, de
+	ld a, (#_cPowerTile)
+	call _fill_explosion_line
+
+	ld hl, #_cBuffer + #7 * #NOSTROMO_IMG_WIDTH ; 8th line (base)
+	pop de
+	add hl, de
+	ld a, (#_cPowerTile + #2)
+	call _fill_explosion_line
+ 
+  pop de
+	ld a, #21
+	add a, e
+	ld e, a
+  pop bc
+	djnz _explosion_step5_loop
+	ret
+
+_fill_explosion_line :
+	ld b, #20
+_fill_explosion_line_loop :
+	ld (hl), a
+	inc hl
+	djnz _fill_explosion_line_loop
+	;ret
+
+_update_nostromo_explosion :
+	push bc
+	ld de, #UBOX_MSX_NAMTBL_ADDR + #6
+	ld c, #NOSTROMO_IMG_WIDTH - #1
+	call _display_full_nostromo_image
+	call _ubox_wait
+	pop bc
+	ret
 
 _display_full_nostromo_image :
 	ld b, #13
