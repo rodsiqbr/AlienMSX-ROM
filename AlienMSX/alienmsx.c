@@ -6,7 +6,7 @@
 // TODOS: Bugs list:
 // Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
-// 2. Sprite color = 0 for enemies if Flashlight = true
+// 2. Sprite color for Ash and Rippley
 // 3. Jump and Fall with gravity simulation?
 // 4. Music for Level 2
 
@@ -394,13 +394,16 @@ enum pattern_type
 // 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
 // 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1}
 
-#define PLYR_SPRITE_L1_COLOR_NORMAL 0xDF  // Magenta(13) and White(15)
+#define PLYR_SPRITE_L1_COLOR_NORMAL 0xDF  // Magenta(13) and White(15) - Ash
 #define PLYR_SPRITE_L1_COLOR_HIT    0x8B  // Red(08) and Light Yellow(11)
 #define PLYR_SPRITE_L1_COLOR_DEAD   0x9E  // Light Red(09) and Gray(14)
 #define PLYR_SPRITE_L1_COLOR_DARK   0xFE  // White(15) and Gray(14)
+#define PLYR_SPRITE_L2_COLOR_NORMAL 0xCB  // Green(12) and Light Yellow(11) - Rippley
 
-#define SHIELD_SPRITE_COLOR_1       07    // Cyan(07) and Gray(14)
-#define SHIELD_SPRITE_COLOR_2       14
+#define SHIELD_SPRITE_COLORS        0x7E  // Cyan(07) and Gray(14)
+#define FACEHUG_SPRITE_COLORS       0xA9  // Yellow(10) and Light Red(09)
+#define FACEHUG_SPRITE_COLOR_DARK   0x07  // Cyan(07)
+
 
 uint8_t PLYR_PAT_WALK_IDX;
 uint8_t PLYR_PAT_FALL_IDX;
@@ -4295,10 +4298,7 @@ _not_level_3 :
 	ld ix, #_cMap_TileClass
 _loop_map_data :
 	ld a, (hl)
-	or a
-	jr z, _setTile
-	call	_getTileClass_ex
-_setTile :
+  call _getTileClass
 	; update cMap_TileClass
 	ld 0 (ix), a
 	inc ix
@@ -4331,90 +4331,111 @@ _calc_map_address_and_uncompress :
 ;         E = Original Tile Number
 ; Changes: A, D, E
 _getTileClass :
-	or a
-	ret z
-_getTileClass_ex :
+  push hl
+	ld hl, #_cTileClassLUT
 	ld e, a
-	cp #TS_SCORE_SIZE + #GAME_FATL_TL_OFFSET
-	jp nc, _setFatal
-  cp #TS_SCORE_SIZE + #GAME_COLLECT_TL_OFFSET
-  jp nc, _setCollect
-	cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
-	jp nc, _setEgg
-	cp #TS_SCORE_SIZE + #GAME_SOLD_TL_OFFSET
-	jp nc, _setSolid
-	cp #TS_SCORE_SIZE + #GAME_SP_GAT_TL_OFFSET
-	jp nc, _setGate
-	cp #TS_SCORE_SIZE + #GAME_SP_BLT_TL_OFFSET
-	jp nc, _setBelt
-	cp #TS_SCORE_SIZE + #GAME_SPECSD_TL_OFFSET
-	jp nc, _setSpecialSolid
-	cp #TS_SCORE_SIZE + #GAME_SPEC_TL_OFFSET
-	jr nc, _setSpecialTile
-	cp #TS_SCORE_SIZE + #0
-	jr nc, _setBlank
-	cp #SCORE_PORTAL_TL_OFFSET
-	jr nc, _setPortal
-	cp #SCORE_OBJ_TL_OFFSET
-	jr nc, _setObject
-	jr _setBlank
-_setFatal :
-	ld a, #TILE_TYPE_FATAL
-	ret
-_setEgg :
-	ld a, #TILE_TYPE_EGG
-	ret
-_setSolid :
-  cp #TS_SCORE_SIZE + #GAME_HORIZ_FF_TL_OFFSET
-	jr nz, _test_next_ff_tile
-	ld a, #TILE_TYPE_FATAL_OR_SOLID
-	ret
-_test_next_ff_tile :
-	cp #TS_SCORE_SIZE + #GAME_HORIZ_FF_TL_OFFSET + #1
-	jr nz, _setSolid_2
-	ld a, #TILE_TYPE_FATAL_OR_SOLID
-	ret
-_setSolid_2 :
-	ld a, #TILE_TYPE_SOLID
-	ret
-_setGate :
-	; its a gate, lets check for an Wall or Interactive tile
-	cp #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET
-	jr c, _tryWall
-	ld a, #TILE_TYPE_INTERACTIVE
-	ret
-_tryWall :
-	cp #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET
-	jr c, _gateOnly
-	ld a, #TILE_TYPE_WALL
-	ret
-_gateOnly :
-	ld a, #TILE_TYPE_SPECIAL_GATE
-	ret
-_setBelt :
-	ld a, #TILE_TYPE_SPECIAL_BELT
-	ret
-_setSpecialSolid :
-	ld a, #TILE_TYPE_SPECIAL_SOLID
-	ret
-_setSpecialTile :
-	ld a, #TILE_TYPE_SPECIAL
-	ret
-_setObject :
-	ld a, #TILE_TYPE_OBJECT
-	ret
-_setPortal :
-	ld a, #TILE_TYPE_PORTAL
-	ret
-_setCollect :
-	ld a, #TILE_TYPE_COLLECTIBLE
-	ret
-_setBlank :
-	ld a, #TILE_TYPE_BLANK
-	ret
+	ld d, #0
+	add hl, de
+	ld a, (hl)
+	pop hl
+	;ret
 __endasm;
 }  // void load_levelmap_data()
 
+/*
+* Fills cTileClassLUT[]  lookup table with the correct Tile Class for the game tileset
+*/
+void setup_tileclass_LUT()
+{
+__asm
+  ld b, #255
+	ld hl, #_cTileClassLUT
+	xor a
+
+_check_tile_loop :
+  cp #TS_SCORE_SIZE + #GAME_FATL_TL_OFFSET
+  jr nc, _setFatal
+  cp #TS_SCORE_SIZE + #GAME_COLLECT_TL_OFFSET
+  jr nc, _setCollect
+  cp #TS_SCORE_SIZE + #GAME_EGG_TL_OFFSET
+  jr nc, _setEgg
+  cp #TS_SCORE_SIZE + #GAME_SOLD_TL_OFFSET
+  jr nc, _setSolid
+  cp #TS_SCORE_SIZE + #GAME_SP_GAT_TL_OFFSET
+  jr nc, _setGate
+  cp #TS_SCORE_SIZE + #GAME_SP_BLT_TL_OFFSET
+  jr nc, _setBelt
+  cp #TS_SCORE_SIZE + #GAME_SPECSD_TL_OFFSET
+  jr nc, _setSpecialSolid
+  cp #TS_SCORE_SIZE + #GAME_SPEC_TL_OFFSET
+  jr nc, _setSpecialTile
+  cp #TS_SCORE_SIZE + #0
+  jr nc, _setBlank
+  cp #SCORE_PORTAL_TL_OFFSET
+  jr nc, _setPortal
+  cp #SCORE_OBJ_TL_OFFSET
+  jr nc, _setObject
+  jr _setBlank
+_setFatal :
+  ld (hl), #TILE_TYPE_FATAL
+	jr _check_for_next_tile
+_setEgg :
+  ld (hl), #TILE_TYPE_EGG
+	jr _check_for_next_tile
+_setSolid :
+  ld (hl), #TILE_TYPE_SOLID
+	jr _check_for_next_tile
+_setGate :
+  ld (hl), #TILE_TYPE_SPECIAL_GATE
+	jr _check_for_next_tile
+_setBelt :
+  ld (hl), #TILE_TYPE_SPECIAL_BELT
+	jr _check_for_next_tile
+_setSpecialSolid :
+  ld (hl), #TILE_TYPE_SPECIAL_SOLID
+	jr _check_for_next_tile
+_setSpecialTile :
+  ld (hl), #TILE_TYPE_SPECIAL
+	jr _check_for_next_tile
+_setObject :
+  ld (hl), #TILE_TYPE_OBJECT
+	jr _check_for_next_tile
+_setPortal :
+  ld (hl), #TILE_TYPE_PORTAL
+	jr _check_for_next_tile
+_setCollect :
+  ld (hl), #TILE_TYPE_COLLECTIBLE
+	jr _check_for_next_tile
+_setBlank :
+  ld (hl), #TILE_TYPE_BLANK
+
+_check_for_next_tile :
+  inc hl
+	inc a
+  djnz _check_tile_loop
+
+	; set special cases
+	; 2 horizontal FF tiles
+  ld hl, #_cTileClassLUT + #TS_SCORE_SIZE + #GAME_HORIZ_FF_TL_OFFSET
+  ld (hl), #TILE_TYPE_FATAL_OR_SOLID
+	inc hl
+	ld (hl), #TILE_TYPE_FATAL_OR_SOLID
+
+	; 2 wall tiles
+	ld hl, #_cTileClassLUT + #TS_SCORE_SIZE + #GAME_WALL_BRK_TL_OFFSET
+	ld (hl), #TILE_TYPE_WALL
+	inc hl
+	ld (hl), #TILE_TYPE_WALL
+
+	; 6 interactive tiles
+	ld hl, #_cTileClassLUT + #TS_SCORE_SIZE + #GAME_PWR_SWITCH_TL_OFFSET
+	ld b, #6
+_set_interactive_tileclass :
+	ld (hl), #TILE_TYPE_INTERACTIVE
+	inc hl
+	djnz _set_interactive_tileclass
+__endasm;
+}  // void setup_tileclass_LUT()
 
 /*
 * Update player X and Y position after a shift screen map (left, right, up, down or teletransport.
@@ -7592,6 +7613,11 @@ _do_alien_attack :
 	jr z, _tongue_is_hidden
 	ld c, a
 
+	; if LIGHT_SCENE_OFF_FL_OFF, no need to display alien tongle
+	ld a, (#_cGlbGameSceneLight)
+	cp #LIGHT_SCENE_OFF_FL_OFF
+	jr z, _no_tongue_on_the_dark
+
 	; show alien tongue sprite
 	ld hl, #_sGlbSpAttr
 	push hl ; used at _spman_alloc_fixed_sprite() calls
@@ -7636,6 +7662,7 @@ _cont_alien_tongue_dir :
 	call	_spman_alloc_fixed_sprite
 	pop af
 
+_no_tongue_on_the_dark :
 	; check if alien tongue has hit the player
 	; if (Ax2 < Px1) or (Ax1 > Px2) then "NO HORIZONTAL CONFLICT"
 	; if (Ay2 < Py1) or (Ay1 > Py2) then "NO VERTICAL CONFLICT"
@@ -7726,9 +7753,9 @@ _start_check_enemy :
 	cp #ENEMY_STATUS_KILLED + #1  ; also includes #ENEMY_STATUS_INACTIVE
 	jr c, _next_enemy_to_check_ex
 	cp #ENEMY_STATUS_GRABBED
-	jp z, _anim_enemy_grab     ; always animate a grabber FH, even if its in a different screen
+	jp z, _anim_enemy_grab     ; always animate a grabbeb FH, even if its in/from a different screen
 	cp #ENEMY_STATUS_HURT
-	jp z, _anim_enemy_hurt     ; always animate a hurt FH, even if its in a different screen
+	jp z, _anim_enemy_hurt     ; always animate a hurt FH, even if its in/from a different screen
 	ld c, a
 	ld a, (#_cScreenMap)
   cp 9 (ix) ; screenId
@@ -7888,41 +7915,25 @@ _anim_enemy_walk :
 	cp #BOOL_FALSE
 	jr z, _no_enemy_colision
 
-	; relax a bit the colision detection to be easier to escape from facehug
-	; if (ye + 16) < yp = no colision
-	;; if (ye + 8) > (yp + 16) = no colision
-	; if (ye + 9) > (yp + 16) = no colision
-	ld b, 1 (ix) ; ye
-	ld a, #16
-	add b
-	ld c, a
+	; if |(ye - yp)| >= 8 then no player colision
 	ld a, (#_sThePlayer + #1) ; yp
-	cp c
+	ld b, 1 (ix) ; ye
+	sub b
+	jr nc, _positive_dist_5
+	neg
+_positive_dist_5 :
+	cp #8
 	jr nc, _no_enemy_colision
-	add #16
-	ld c, a
-	ld a, #9
-	add b
-	cp c
-	jr nc, _no_enemy_colision
-		
-	; relax a bit the colision detection to be easier to escape from facehug
-	;; if xe > (xp + 16) = no colision
-	;; if (xe + 16) < xp = no colision
-	; if (xe + 1) > (xp + 12) = no colision
-	; if (xe + 15) < (xp + 4) = no colision
+
+	; if |(xe - xp)| >= 12 then no player colision
 	ld a, (#_sThePlayer) ; xp
 	ld b, 0 (ix) ; xe
-	inc b
-	add #12
-	cp b
-	jr c, _no_enemy_colision
-	sub #8
-	ld c, a
-	ld a, b
-	add #14
-	cp c
-	jr c, _no_enemy_colision
+	sub b
+	jr nc, _positive_dist_4
+	neg
+_positive_dist_4 :
+  cp #12
+	jr nc, _no_enemy_colision
 
 	; enemy colision detected
 	; no need to check for the other enemies in this same screen
@@ -7960,19 +7971,15 @@ _no_enemy_colision :
 	cp c
 	jr c, _no_shot_colision
 
-	; if xe > (xs + 16) = no colision
-	; if (xe + 16) < xs = no colision
+	; if |(xe - xs)| >= 16 then no shot colision
 	ld a, (#_cShotX) ; xs
 	ld b, 0 (ix) ; xe
-	add #16
-	cp b
-	jr c, _no_shot_colision
-	sub #16
-	ld c, a
-	ld a, b
-	add #16
-	cp c
-	jr c, _no_shot_colision
+	sub b
+	jr nc, _positive_dist_3
+	neg
+_positive_dist_3 :
+	cp #16
+	jr nc, _no_shot_colision
 
 	; shot colision detected
 	ld a, #BOOL_TRUE
@@ -8023,9 +8030,9 @@ _continue_enemy_walk :
 _do_display_enemy :
 	ld a, 4 (ix) ; hitcount
 	cp #ENEMY_HIT_COUNT
-	ld a, #0x0A  ; not hurt - yellow
+	ld a, #FACEHUG_SPRITE_COLORS >> #4 ; not hurt
 	jr z, _do_display_enemy_ex
-	ld a, #0x09  ; hurt - light red
+	ld a, #FACEHUG_SPRITE_COLORS & #0b00001111 ; hurt
 _do_display_enemy_ex :
 	ld (#_sGlbSpAttr + #03), a ; _sGlbSpAttr.attr
 
@@ -8073,7 +8080,7 @@ _anim_enemy_hurt_ex_2 :
 ; pattern = ENEMY_PAT_BASE_IDX + (enemy_hurt_frames[Frame] + Dir * 5) * 8
 	ld de, #_enemy_hurt_frames
 	ld hl, #_enemy_hurt_frames
-	ld a, #0x09; light red
+	ld a, #FACEHUG_SPRITE_COLORS & #0b00001111 ; hurt
 	jp _do_display_enemy_ex
 
 _upd_frame_and_display_enemy :
@@ -8112,6 +8119,54 @@ _no_sprite_flip :
 	ld hl, #_ENEMY_PAT_BASE_IDX
 	inc 0 (ix)
 _no_sprite_flip_ex :
+	; if facehug status = GRABBED then always animate
+	ld a, 3 (ix)
+	cp #ENEMY_STATUS_GRABBED
+  jr nz, _test_scene_dark
+	; if LIGHT_SCENE_OFF_FL_OFF, just need to change facehug color (its in the dark)
+	ld a, (#_cGlbGameSceneLight)
+	cp #LIGHT_SCENE_OFF_FL_OFF
+	jr nz, _do_display_FH_normal
+	ld a, #FACEHUG_SPRITE_COLOR_DARK ; Dark
+	ld (#_sGlbSpAttr + #03), a ; _sGlbSpAttr.attr
+	jr _do_display_FH_normal
+
+_test_scene_dark :
+	; if LIGHT_SCENE_OFF_FL_OFF, no need to display facehug
+	ld a, (#_cGlbGameSceneLight)
+	cp #LIGHT_SCENE_OFF_FL_OFF
+	ret z
+
+	; if LIGHT_SCENE_OFF_FL_ON, need to check if facehug is visible by the Flashlight
+	cp #LIGHT_SCENE_OFF_FL_ON
+	jr nz, _do_display_FH_normal
+	; if facehug status = JUMPING then always animate (visible by Flashlight)
+	ld a, 3 (ix)
+	cp #ENEMY_STATUS_JUMPING
+	jr z, _do_display_FH_normal
+	; for all other status, need to check facehug position against player
+
+	; if |(ye - yp)| >= 29 then facehug is not visible
+	ld a, (#_sThePlayer + #1) ; yp
+	ld b, 1 (ix) ; ye
+	sub b
+	jr nc, _positive_dist_2
+	neg
+_positive_dist_2 :
+	cp #24 + #4 + #1
+  ret nc
+
+	; if |(xe - xp)| >= 29 then facehug is not visible
+	ld a, (#_sThePlayer) ; xp
+	ld b, 0 (ix) ; xe
+	sub b
+	jr nc, _positive_dist_1
+	neg
+_positive_dist_1 :
+	cp #24 + #4 + #1
+	ret nc
+
+_do_display_FH_normal :
 	ld a, c  ; enemy_XXX_frames[Frame] + Dir * 5
 	add a, a
 	add a, a  ; (enemy_XXX_frames[Frame] + Dir * 5) * 4
@@ -8411,7 +8466,7 @@ _no_decrement :
 	ld(hl), a; _sGlbSpAttr.y
 	inc hl
 	ld a, (#_sThePlayer)
-	ld(hl), a; _sGlbSpAttr.x
+	ld (hl), a; _sGlbSpAttr.x
 	inc hl
 	ld a, (#_cShieldFrame)
 	xor #1
@@ -8427,10 +8482,10 @@ _no_decrement :
 	ld a, b
 	or b
 	jr z, _color_2
-	ld a, #SHIELD_SPRITE_COLOR_1
+  ld a, #SHIELD_SPRITE_COLORS >> #4
 	jr _set_attr
 _color_2 :
-	ld a, #SHIELD_SPRITE_COLOR_2
+  ld a, #SHIELD_SPRITE_COLORS & #0b00001111
 _set_attr :
 	ld(hl), a; _sGlbSpAttr.attr
 	; allocate the Shield sprites;  not fixed so they can flicker
@@ -9600,7 +9655,7 @@ _do_insert_anim_queue :
 	add hl, de
 	ld a, c
 	call	_getTileClass
-	ld(hl), a
+	ld (hl), a
 	pop hl
 	ret
 
@@ -9908,11 +9963,11 @@ void Run_Game()
 		cGameStage = GAMESTAGE_LEVEL;
 
 		// Level 3 TEST
-		cLevel = 3;
-		cMeltdownSeconds = 20;
-		cMeltdownTimerCtrl = 0;
-	  cMeltdownMinutes = 0;
-		bFinalMeltdown = true;
+		cLevel = 2;
+		//cMeltdownSeconds = 20;
+		//cMeltdownTimerCtrl = 0;
+	  //cMeltdownMinutes = 0;
+		//bFinalMeltdown = true;
 
 		draw_game_level_info();
 
@@ -10587,7 +10642,7 @@ void main(void)
 	unpack_alien_tileset();
 
 	// fill cTileClassLUT[] array with the correct Tile Class info
-	//setupTileClassLUT();
+	setup_tileclass_LUT();
 
 	while (true) // continuous loop - do not return to BASIC/BIOS
 	{
