@@ -6,7 +6,6 @@
 // TODOS: Bugs list:
 // Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
-// 2. Sprite color for Ash and Rippley
 // 3. Jump and Fall with gravity simulation?
 // 4. Music for Level 2
 
@@ -395,10 +394,10 @@ enum pattern_type
 // 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1}
 
 #define PLYR_SPRITE_L1_COLOR_NORMAL 0xDF  // Magenta(13) and White(15) - Ash
+#define PLYR_SPRITE_L2_COLOR_NORMAL 0x4E  // Blue(04) and Gray(14) - Rippley
 #define PLYR_SPRITE_L1_COLOR_HIT    0x8B  // Red(08) and Light Yellow(11)
 #define PLYR_SPRITE_L1_COLOR_DEAD   0x9E  // Light Red(09) and Gray(14)
 #define PLYR_SPRITE_L1_COLOR_DARK   0xFE  // White(15) and Gray(14)
-#define PLYR_SPRITE_L2_COLOR_NORMAL 0xCB  // Green(12) and Light Yellow(11) - Rippley
 
 #define SHIELD_SPRITE_COLORS        0x7E  // Cyan(07) and Gray(14)
 #define FACEHUG_SPRITE_COLORS       0xA9  // Yellow(10) and Light Red(09)
@@ -7213,9 +7212,16 @@ _player_not_hit :
 	; change player color if SceneLight = OFF and FlashLight = OFF
 	ld a, (#_cGlbGameSceneLight)
 	cp #LIGHT_SCENE_OFF_FL_OFF
-	ld a, #PLYR_SPRITE_L1_COLOR_NORMAL
-	jr nz, _do_player_display
 	ld a, #PLYR_SPRITE_L1_COLOR_DARK
+	jr z, _do_player_display
+	ld a, (#_cLevel)
+	cp #1 ; Ash
+	jr nz, _player_level_2or3
+	ld a, #PLYR_SPRITE_L1_COLOR_NORMAL
+	jr _do_player_display
+_player_level_2or3 :
+	ld a, #PLYR_SPRITE_L2_COLOR_NORMAL
+
 _player_was_hit :
 _do_player_display :
 	ld (#_cGlbPlyColor), a
@@ -7223,7 +7229,7 @@ _do_player_display :
 	ld (#_sGlbSpAttr + #03), a	; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR low nibble
 	; allocate the player sprites; main sprite fixed so they never flicker
 	call	_spman_alloc_fixed_sprite
-	; second one is 4 patterns away(16x16 sprites)
+	; second one is 4 patterns away (16x16 sprites)
 	ld a, (#_sGlbSpAttr + #02)
 	add a, #04
 	ld (#_sGlbSpAttr + #02), a	; _sGlbSpAttr.pattern+=4
@@ -9963,7 +9969,7 @@ void Run_Game()
 		cGameStage = GAMESTAGE_LEVEL;
 
 		// Level 3 TEST
-		cLevel = 2;
+		//cLevel = 3;
 		//cMeltdownSeconds = 20;
 		//cMeltdownTimerCtrl = 0;
 	  //cMeltdownMinutes = 0;
