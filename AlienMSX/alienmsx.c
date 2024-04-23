@@ -7,7 +7,6 @@
 // Known issues:
 // 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
 // 3. Jump and Fall with gravity simulation?
-// 4. Music for Level 2
 
 #include <stdio.h>
 #include <string.h>
@@ -325,25 +324,23 @@ enum pattern_type
 
 // sound effects matching our Arkos efx song
 // configure the song to use MSX AY
-#define SFX_NONE         0
-#define SFX_SELECT       1
-#define SFX_GET_OBJECT   2
-#define SFX_GATE         3
-#define SFX_HIT          4
-#define SFX_HURT         5
-#define SFX_SHOOT        6
-#define SFX_EXPLODE      7
-#define SFX_TIMEOFF      8
-#define SFX_PORTAL       9
-#define SFX_TYPING      10
+#define SFX_NONE         0x00
+#define SFX_SELECT       0x01
+#define SFX_GET_OBJECT   0x02
+#define SFX_GATE         0x03
+#define SFX_HIT          0x04
+#define SFX_HURT         0x05
+#define SFX_SHOOT        0x06
+#define SFX_EXPLODE      0x07
+#define SFX_TIMEOFF      0x08
+#define SFX_PORTAL       0x09
+#define SFX_TYPING       0x0A
+#define SFX_MISSIONCPLT  0x0B
+#define SXF_INTERACTIVE  0x0C
+#define SFX_ALIENATTACK  0x0D
+#define SFX_DEADPLAYER   0x0E
 
-#define SXF_INTERACTIVE SFX_SELECT //11
-#define SFX_ALIENATTACK SFX_HURT   //12
-#define SFX_MISSIONCPLT SFX_SELECT //13
-#define SFX_DEADPLAYER  SFX_HURT   //14
-
-
-#define SFX_CHAN_NO    1
+#define SFX_CHAN_NO      0x01  // options 0, 1 or 2
 
 
 #define MAX_ANIM_TILES           32                 // max animated tiles per map
@@ -1422,10 +1419,12 @@ __endasm;
 void update_mission_status()
 {
 __asm
-	ld b, #MAX_MISSIONS
-	ld hl, #_cMissionStatus
-	ld c, #0
+  ld hl, #_cMissionStatus
+	;ld b, #MAX_MISSIONS
+	;ld c, #0
+	ld bc, #0x0400
 	ld d, #0
+
 _check_mission_complete :
 	ld a, #MISSION_COMPLETE
 	cp (hl)
@@ -1450,6 +1449,11 @@ _next_mission :
 	inc hl
 	inc c
 	djnz _check_mission_complete
+
+	; mplayer_play_effect_p(SFX_MISSIONCPLT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x000B; 00 + SFX_MISSIONCPLT
+	call	_mplayer_play_effect_p_asm_direct
 
 	; if Level = 3 and Mission_3 = Complete, enable bFinalMeltdown timer flag
 	ld a, (#_cLevel)
@@ -1643,11 +1647,25 @@ __endasm;
 */
 void Draw_Score_Panel()
 {
-	put_tile_block(0, 0, SCORE_MAP_TL_OFFSET + 6, 2, 3);  // LIFE:, SCORE: & POWER:
-	put_tile_block(26, 0, SCORE_MAP_TL_OFFSET + 6 + 2 * 3, 2, 2);  // LEVEL: & MISSIONS:
-	put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1, 2, 3 and 4
-
 __asm
+  ;put_tile_block(0, 0, SCORE_MAP_TL_OFFSET + 6, 2, 3);  // LIFE:, SCORE: & POWER:
+	ld bc, #0x0000
+	ld a, #SCORE_MAP_TL_OFFSET + #6
+	ld de, #0x0203
+  call _put_tile_block_asm_direct
+	;put_tile_block(26, 0, SCORE_MAP_TL_OFFSET + 6 + 2 * 3, 2, 2);  // LEVEL: & MISSIONS:
+	ld bc, #0x001A
+	ld a, #SCORE_MAP_TL_OFFSET + #6 + #2 * #3
+	ld de, #0x0202
+	call _put_tile_block_asm_direct
+	;put_tile_block(28, 1, SCORE_MISSION_TL_OFFSET, cMissionQty, 1);  // Missions 1, 2, 3 and 4
+	ld bc, #0x011C
+	ld e, #0x01
+	ld a, (#_cMissionQty)
+	ld d, a
+	ld a, #SCORE_MISSION_TL_OFFSET
+	call _put_tile_block_asm_direct
+
   ; ubox_put_tile(9, 2, SCORE_SHIELD_TL_OFFSET);
   ld a, #SCORE_SHIELD_TL_OFFSET
   ld bc, #0x0209
@@ -4723,7 +4741,7 @@ __endasm;
 
 /* 
 * Find the right special Gate/Wall/Locker/Collectible (2 tiles) / Interactive (1 tile) / Egg (4 tiles) animated tile in the Tile list and activate it
-* This function is only being called for an Interactive object (ANIMATE_OBJ_INTER or ANIMATE_OBJ_COLLC) if:
+* This function is only being called for an Interactive object (ANIMATE_OBJ_INTER or ANIMATE_OBJ_COLLC) under this specific cases:
 *   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
 *   - shot colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_SWITCH_TL_OFFSET (update_and_display_objects())
 *   - player walking colision with Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LIGHT_ONOFF AND Tile=GAME_PWR_SWITCH_TL_OFFSET+1 AND PlayerObjects=HAS_OBJECT_SCREW (is_player_walking_ok())
@@ -4862,6 +4880,10 @@ _check_if_interactive_already_enabled :
 	ld a, #SCORE_COLLECTBL_POINTS
 	push hl
 	call _add_score_points
+	; mplayer_play_effect_p(SXF_INTERACTIVE, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x000C; 00 + SXF_INTERACTIVE
+	call	_mplayer_play_effect_p_asm_direct
 	pop hl
 	jp _noKeyReq_ex
 
@@ -4887,6 +4909,10 @@ _end_animate :
 	; Add SCORE_INTERACTV_POINTS points to the score
 	ld a, #SCORE_INTERACTV_POINTS
 	call _add_score_points
+	; mplayer_play_effect_p(SXF_INTERACTIVE, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x000C; 00 + SXF_INTERACTIVE
+	call	_mplayer_play_effect_p_asm_direct
 	ld l, #BOOL_TRUE
 	ret
 
@@ -4896,7 +4922,7 @@ _chkLocker :
 	; its a Locker - check if cEnableType = ANIMATE_OBJ_LOCKER
 	ld a, c
 	cp #ANIMATE_OBJ_LOCKER
-	jr nz, _exit_locker
+	jp nz, _exit_locker
 	pop hl
 	dec hl ; HL = &_sAnimSpecialTiles->cSpTileStatus
 	jp _noKeyReq
@@ -5895,8 +5921,6 @@ _execute_mission_complete :
 	; Add SCORE_MISSION_POINTS points to the score
 	ld a, #SCORE_MISSION_POINTS
   call _add_score_points
-
-; TODO: Mission complete SFX SFX_MISSIONCPLT
 	call _update_mission_status
 _mission_already_completed :
 	pop af  ; recover A = cObjID(10aaOOOO)
@@ -6865,7 +6889,7 @@ _set_player_as_dead :
 _cont_dead_player :
 	; mplayer_play_effect_p(SFX_DEADPLAYER, SFX_CHAN_NO, 0);
 	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
-	ld de, #0x0005; 00 + SFX_DEADPLAYER
+	ld de, #0x000E; 00 + SFX_DEADPLAYER
 	call	_mplayer_play_effect_p_asm_direct
 	ret
 
@@ -7722,7 +7746,7 @@ _tongue_is_hidden :
 	jr nz, _set_tongue_frame
 	; mplayer_play_effect_p(SFX_ALIENATTACK, SFX_CHAN_NO, 0);
 	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
-	ld de, #0x0005; 00 + SFX_HURT
+	ld de, #0x000D; 00 + SFX_ALIENATTACK
 	call	_mplayer_play_effect_p_asm_direct
 	xor a
 _set_tongue_frame :
@@ -8677,7 +8701,6 @@ _detect_colision :
 	ld hl, #_cRemainMission
 	dec(hl)
 
-	; TODO: Mission complete SFX SFX_MISSIONCPLT
 	call _update_mission_status
 	; Add SCORE_MISSION_POINTS points to the score
 	ld a, #SCORE_MISSION_POINTS
@@ -8816,7 +8839,11 @@ _txt_erase :
 	ld de, #0x0301
 	call	_fill_block_asm_direct
 	; mplayer_init(SONG, SONG_SILENCE / SONG_IN_GAME);
-	ld a, #SONG_IN_GAME
+	ld a, (#_cLevel)
+	cp #2
+	ld a, #SONG_IN_GAME  ; level 1 and 3
+	jr nz, _do_sfx
+	ld a, #SONG_IN_GAME_2 ; level 2
 
 _do_sfx :
 	; mplayer_init(SONG, SONG_SILENCE / SONG_IN_GAME);
@@ -8971,6 +8998,11 @@ _max_X :
 	jr _set_X
 
 _do_shot :
+	; mplayer_play_effect_p(SFX_SHOOT, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x0006; 00 + SFX_SHOOT
+	call	_mplayer_play_effect_p_asm_direct
+		
 	; decrement Amno, set Count, (X, Y and Dir already set) and Frame
 	ld a, (#_cPlyRemainAmno)
 	dec a
@@ -8981,12 +9013,8 @@ _do_shot :
 	xor a
 	ld (#_cShotFrame), a
 
-	; Update Score, SoundFX
+	; update Score
 	call _display_gun_amno
-	; mplayer_play_effect_p(SFX_SHOOT, SFX_CHAN_NO, 0);
-	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
-	ld de, #0x0006; 00 + SFX_SHOOT
-	call	_mplayer_play_effect_p_asm_direct
 __endasm;
 } // void check_for_fire()
 
@@ -10018,7 +10046,20 @@ void Run_Game()
 				Draw_Score_Panel();
 				draw_map();
 				ubox_enable_screen();
-				mplayer_init(SONG, SONG_IN_GAME);
+__asm
+        //mplayer_init(SONG, SONG_IN_GAME / SONG_IN_GAME_2);
+        ld a, (#_cLevel)
+				cp #2
+				ld a, #SONG_IN_GAME   ; level 1 and 3
+				jr nz, 00155$
+				ld a, #SONG_IN_GAME_2 ; level 2
+00155$:
+				ld	hl, #_SONG
+
+					ld a, #SONG_SILENCE
+
+				call _mplayer_init_asm_direct
+__endasm;
 			}
 			cMiniMapX = SCORE_MINIMAP_X_POS * 8 + cMapX * 4 + 3;
 			cMiniMapY = SCORE_MINIMAP_Y_POS * 8 + cMapY * 3 + 7;

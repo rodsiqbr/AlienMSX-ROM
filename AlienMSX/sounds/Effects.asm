@@ -15,6 +15,10 @@ AlienMSXSfX_SoundEffectsDisarkPointerRegionStart0
 	dw AlienMSXSfX_SoundEffects_Sound8	; Sound effect 8.
 	dw AlienMSXSfX_SoundEffects_Sound9	; Sound effect 9.
 	dw AlienMSXSfX_SoundEffects_Sound10	; Sound effect 10.
+	dw AlienMSXSfX_SoundEffects_Sound11	; Sound effect 11.
+	dw AlienMSXSfX_SoundEffects_Sound12	; Sound effect 12.
+	dw AlienMSXSfX_SoundEffects_Sound13	; Sound effect 13.
+	dw AlienMSXSfX_SoundEffects_Sound14	; Sound effect 14.
 AlienMSXSfX_SoundEffectsDisarkPointerRegionEnd0
 
 AlienMSXSfX_SoundEffectsDisarkByteRegionStart1
@@ -410,6 +414,272 @@ AlienMSXSfX_SoundEffects_Sound10_Loop	db 200	; No soft, no hard. Volume: 9.
 	db 1	; Noise: 1.
 
 	db 160	; No soft, no hard. Volume: 4.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
+	db 1	; Noise: 1.
+
+	db 4	; End of the sound effect.
+
+; Sound effect 11.
+AlienMSXSfX_SoundEffects_Sound11
+	db 4	; Speed
+
+AlienMSXSfX_SoundEffects_Sound11_Loop	db 41	; Soft only. Volume: 10.
+	dw 424	; Software period.
+
+	db 41	; Soft only. Volume: 10.
+	dw 212	; Software period.
+
+	db 41	; Soft only. Volume: 10.
+	dw 106	; Software period.
+
+	db 41	; Soft only. Volume: 10.
+	dw 53	; Software period.
+
+	db 4	; End of the sound effect.
+
+; Sound effect 12.
+AlienMSXSfX_SoundEffects_Sound12
+	db 1	; Speed
+
+	db 49	; Soft only. Volume: 12.
+	dw 212	; Software period.
+
+	db 41	; Soft only. Volume: 10.
+	dw 267	; Software period.
+
+	db 45	; Soft only. Volume: 11.
+	dw 317	; Software period.
+
+	db 37	; Soft only. Volume: 9.
+	dw 424	; Software period.
+
+	db 41	; Soft only. Volume: 10.
+	dw 424	; Software period.
+
+	db 41	; Soft only. Volume: 10.
+	dw 424	; Software period.
+
+	db 33	; Soft only. Volume: 8.
+	dw 213	; Software period.
+
+	db 37	; Soft only. Volume: 9.
+	dw 268	; Software period.
+
+	db 29	; Soft only. Volume: 7.
+	dw 337	; Software period.
+
+	db 33	; Soft only. Volume: 8.
+	dw 425	; Software period.
+
+	db 33	; Soft only. Volume: 8.
+	dw 425	; Software period.
+
+AlienMSXSfX_SoundEffects_Sound12_Loop	db 25	; Soft only. Volume: 6.
+	dw 425	; Software period.
+
+	db 4	; End of the sound effect.
+
+; Sound effect 13.
+AlienMSXSfX_SoundEffects_Sound13
+	db 0	; Speed
+
+AlienMSXSfX_SoundEffects_Sound13_Loop	db 248	; No soft, no hard. Volume: 15.
+	db 2	; Noise: 2.
+
+	db 57	; Soft only. Volume: 14.
+	dw 424	; Software period.
+
+	db 181	; Soft only. Volume: 13.
+	db 1	; Noise: 1.
+	dw 632	; Software period.
+
+	db 173	; Soft only. Volume: 11.
+	db 1	; Noise: 1.
+	dw 824	; Software period.
+
+	db 216	; No soft, no hard. Volume: 11.
+	db 1	; Noise: 1.
+
+	db 216	; No soft, no hard. Volume: 11.
+	db 3	; Noise: 3.
+
+	db 208	; No soft, no hard. Volume: 10.
+	db 4	; Noise: 4.
+
+	db 200	; No soft, no hard. Volume: 9.
+	db 1	; Noise: 1.
+
+	db 4	; End of the sound effect.
+
+; Sound effect 14.
+AlienMSXSfX_SoundEffects_Sound14
+	db 1	; Speed
+
+AlienMSXSfX_SoundEffects_Sound14_Loop	db 189	; Soft only. Volume: 15.
+	db 31	; Noise: 31.
+	dw 212	; Software period.
+
+	db 185	; Soft only. Volume: 14.
+	db 28	; Noise: 28.
+	dw 224	; Software period.
+
+	db 181	; Soft only. Volume: 13.
+	db 25	; Noise: 25.
+	dw 238	; Software period.
+
+	db 177	; Soft only. Volume: 12.
+	db 22	; Noise: 22.
+	dw 252	; Software period.
+
+	db 177	; Soft only. Volume: 12.
+	db 19	; Noise: 19.
+	dw 267	; Software period.
+
+	db 173	; Soft only. Volume: 11.
+	db 17	; Noise: 17.
+	dw 283	; Software period.
+
+	db 173	; Soft only. Volume: 11.
+	db 15	; Noise: 15.
+	dw 300	; Software period.
+
+	db 169	; Soft only. Volume: 10.
+	db 13	; Noise: 13.
+	dw 317	; Software period.
+
+	db 169	; Soft only. Volume: 10.
+	db 12	; Noise: 12.
+	dw 336	; Software period.
+
+	db 208	; No soft, no hard. Volume: 10.
+	db 11	; Noise: 11.
+
+	db 200	; No soft, no hard. Volume: 9.
+	db 10	; Noise: 10.
+
+	db 200	; No soft, no hard. Volume: 9.
+	db 9	; Noise: 9.
+
+	db 200	; No soft, no hard. Volume: 9.
+	db 8	; Noise: 8.
+
+	db 192	; No soft, no hard. Volume: 8.
+	db 7	; Noise: 7.
+
+	db 192	; No soft, no hard. Volume: 8.
+	db 6	; Noise: 6.
+
+	db 192	; No soft, no hard. Volume: 8.
+	db 5	; Noise: 5.
+
+	db 184	; No soft, no hard. Volume: 7.
+	db 4	; Noise: 4.
+
+	db 184	; No soft, no hard. Volume: 7.
+	db 3	; Noise: 3.
+
+	db 184	; No soft, no hard. Volume: 7.
+	db 2	; Noise: 2.
+
+	db 184	; No soft, no hard. Volume: 7.
+	db 1	; Noise: 1.
+
+	db 176	; No soft, no hard. Volume: 6.
+	db 1	; Noise: 1.
+
+	db 176	; No soft, no hard. Volume: 6.
+	db 1	; Noise: 1.
+
+	db 176	; No soft, no hard. Volume: 6.
+	db 1	; Noise: 1.
+
+	db 176	; No soft, no hard. Volume: 6.
+	db 1	; Noise: 1.
+
+	db 168	; No soft, no hard. Volume: 5.
+	db 1	; Noise: 1.
+
+	db 168	; No soft, no hard. Volume: 5.
+	db 1	; Noise: 1.
+
+	db 168	; No soft, no hard. Volume: 5.
+	db 1	; Noise: 1.
+
+	db 168	; No soft, no hard. Volume: 5.
+	db 1	; Noise: 1.
+
+	db 168	; No soft, no hard. Volume: 5.
+	db 1	; Noise: 1.
+
+	db 160	; No soft, no hard. Volume: 4.
+	db 1	; Noise: 1.
+
+	db 160	; No soft, no hard. Volume: 4.
+	db 1	; Noise: 1.
+
+	db 160	; No soft, no hard. Volume: 4.
+	db 1	; Noise: 1.
+
+	db 160	; No soft, no hard. Volume: 4.
+	db 1	; Noise: 1.
+
+	db 160	; No soft, no hard. Volume: 4.
+	db 1	; Noise: 1.
+
+	db 152	; No soft, no hard. Volume: 3.
+	db 1	; Noise: 1.
+
+	db 152	; No soft, no hard. Volume: 3.
+	db 1	; Noise: 1.
+
+	db 152	; No soft, no hard. Volume: 3.
+	db 1	; Noise: 1.
+
+	db 152	; No soft, no hard. Volume: 3.
+	db 1	; Noise: 1.
+
+	db 152	; No soft, no hard. Volume: 3.
+	db 1	; Noise: 1.
+
+	db 152	; No soft, no hard. Volume: 3.
+	db 1	; Noise: 1.
+
+	db 144	; No soft, no hard. Volume: 2.
+	db 1	; Noise: 1.
+
+	db 144	; No soft, no hard. Volume: 2.
+	db 1	; Noise: 1.
+
+	db 144	; No soft, no hard. Volume: 2.
+	db 1	; Noise: 1.
+
+	db 144	; No soft, no hard. Volume: 2.
+	db 1	; Noise: 1.
+
+	db 144	; No soft, no hard. Volume: 2.
+	db 1	; Noise: 1.
+
+	db 144	; No soft, no hard. Volume: 2.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
+	db 1	; Noise: 1.
+
+	db 136	; No soft, no hard. Volume: 1.
 	db 1	; Noise: 1.
 
 	db 136	; No soft, no hard. Volume: 1.
