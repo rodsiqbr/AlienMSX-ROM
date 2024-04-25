@@ -1,12 +1,6 @@
 // ----------------------------------------------------------
-//	ALIEN ROM program (32K cartridge) for MSX
+//	ALIEN ROM program (32KB cartridge) for MSX
 // ----------------------------------------------------------
-
-
-// TODOS: Bugs list:
-// Known issues:
-// 1. Eventually the sliderfloor appears corrupt (1 random tile is missing). This was noticed on 2 / 06. Difficult to reproduce, may be associated with horizontal forcefield, slidefloor collision or jump into portal.
-// 3. Jump and Fall with gravity simulation?
 
 #include <stdio.h>
 #include <string.h>
@@ -163,8 +157,7 @@ struct FlashLightStatusData
 // CONSTANT DATA AND DEFINES SECTION
 // ----------------------------------------------------------
 
-//TODO: create 1 single compressed data package with all data set
-// N = N {0, 1, 2}: Tile offset to print at screen (base tile + N)
+// N = n {0, 1, 2}: Tile offset to print at screen (base tile + N)
 // N = 0xFF			: Blank Tile to print at screen
 // N = 0xFE			: Stop animation (until animation restarts by an user action or a timer)
 const uint8_t cCycleTable[] = {
@@ -194,29 +187,7 @@ const uint8_t cCycleTable[] = {
 																26, 1, 1, 1, 1,							// N		
 																6, 0, 0, 2, 2,              // A		
                                 21, 0, 2, 2, 0,             // E
-																// several control frame animation - not yet implemented
-//																0, 1, 2, 3, 4, 3, 2, 1,                               // cCtrl_frames[INTRO_CTRL_CYCLE]
-//																0, 1, 0, 2,                                           // walk_frames[PLYR_WALK_CYCLE]
 };
-/*
-#include "data/datapkg.h"
-#define DATA_TILE_CYCLE_SIZE				(10 * 10)
-#define DATA_INTRO_BLOCK_SIZE				(5 * 12)
-#define DATA_INTRO_CTRL_CYCLE_SIZE	(1 * 8)
-#define DATA_PLYR_WALK_CYCLE_SIZE		(1 * 4)
-
-uint8_t cGlbDataPackage[DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + DATA_INTRO_CTRL_CYCLE_SIZE + DATA_PLYR_WALK_CYCLE_SIZE + 1];
-uint8_t *cCycleTable;
-uint8_t *cIntroData;
-uint8_t *cCtrl_frames;
-uint8_t *cWalk_frames;
-
-zx0_uncompress(cGlbDataPackage, data_package);
-cCycleTable = cGlbDataPackage;
-cIntroData = cGlbDataPackage + DATA_TILE_CYCLE_SIZE;
-cCtrl_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE;
-cWalk_frames = cGlbDataPackage + DATA_TILE_CYCLE_SIZE + DATA_INTRO_BLOCK_SIZE + DATA_INTRO_CTRL_CYCLE_SIZE;
-*/
 
 // Nostromo ship tileset map RLEncoded
 const uint8_t cNostromo_img_guide[] = { 6, 1, 3, 2,              // Line 1: 6 zeros then 1 tile, 3 zeros then 2 tiles
@@ -436,7 +407,7 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ALIEN_STATUS_CHASE       0x60  // alien only
 #define ALIEN_STATUS_ATTACK      0x70  // alien only
 
-#define ENEMY_HIT_COUNT          2
+#define ENEMY_HIT_COUNT          2     // number of hits (shoots) before facehug to be hurt
 
 const uint8_t enemy_awake_frames[] = { 0, 2, 2, 2, 2, 1, 1, 0, 0xFC };     // use frame 0, 2, 2, 2, 2, 1, 1, 0 then keep at 0
 const uint8_t enemy_walk_frames[]  = { 0, 1, 0xFD };                       // use frame 0, 1 then restart
@@ -623,7 +594,6 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define HIT_PTS_MEDIUM          8
 #define HIT_PTS_HIGH           12
 #define HIT_PTS_TONGUE         50
-///#define HIT_PTS_DEATH          MAX_POWER
 
 #define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
 #define SCORE_INTERACTV_POINTS 25  //  25 points to the score when activating an interactive
@@ -803,8 +773,7 @@ unsigned char cAlienTileset[12 * 8 * 4]; // buffer to unpack and pre-process Ali
 unsigned char cTileClassLUT[256];        // tile class LookUp Table
 unsigned char cPowerTile[8 * 3];         // copy buffer - Power tile from original Pattern table
 
-// current map tile_map (uncompressed map data + entities)
-// can't use ROM directly because its compressed
+// current map tile_map (uncompressed map data + entities) - can't use ROM directly because its compressed
 uint8_t cMap_TileClass[MAP_BYTES_SIZE];
 uint8_t cMap_ObjIndex[MAP_BYTES_SIZE];
 uint8_t cMap_Data[MAP_BYTES_SIZE + (MAX_ANIM_TILES + MAX_ANIM_SPEC_TILES_FULL + MAX_ENEMIES_PER_SCREEN + 1) * 4];
@@ -1406,7 +1375,6 @@ _player_hit_asm_direct :
 	ret nz
 	ld a, h
 _hit_execute :
-	; TODO: add cPowerQtty to _cGlbPlyHitCount
 	ld (#_cGlbPlyHitCount), a
 	ld a, #BOOL_TRUE
 	ld (#_sThePlayer + #4), a  ; player.hitflag = TRUE
@@ -2413,6 +2381,13 @@ __asm
 	cp 1 (ix); ScreenObject->cX0
 	jp c, _no_foot_colision
 	; foot colision detected. Update player Y coordinate above the object and stop falling
+	; if PLYR_STATUS_JUMPING, set cGlbPlyJumpTimer = ONE_SECOND_TIMER/2 before restoring status to PLYR_STATUS_STAND (avoid double jump)
+	ld a, (#_sThePlayer + #03) ; A = sThePlayer.status
+	cp #PLYR_STATUS_JUMPING
+	jr nz, _set_status_stand
+	ld a, #ONE_SECOND_TIMER >> #2
+	ld (#_cGlbPlyJumpTimer), a
+_set_status_stand :
 	ld a, #PLYR_STATUS_STAND
 	ld (#_sThePlayer + #03), a ; A = sThePlayer.status
 	ld e, #256 - #16
@@ -2595,7 +2570,7 @@ __asm
 	; SLIDEFLOOR attributes : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbCyle(H) and cGlbSpObjID
 	; EGG attributes        : cGlbWidth(B), cGlbTimer(C), cGlbStep(D), cGlbFlag(E), cGlbCyle(H) and cGlbSpObjID
 	; A, IX and IY can be used/changed
-	; BC, DE, H cannot be used without push/pop first at the caller
+	; BC, DE, H cannot be used without push/pop first at the caller level
 
 	ld a, (#_cGlbSpObjID)
 _insert_new_screen_object_ex :
@@ -3201,8 +3176,9 @@ _end_wall_status :
 	; wall width is always 2
 	ld b, #2
 
-	; TODO: Armazenar o nro de tiros já recebidos no histórico desse objeto e restaurar quando voltar nessa tela
-	; Armazenar a qtde de tiros restantes em 1 novo atributo de Object History, atualizar sempre que 1 novo tiro é dado e recuperar o pInsertAnimTile->cTimeLeft a cada recarga de tela
+	; TODO (improvement): Store the number of shots already received in the history of that object and restore it when you return to this screen
+	; Store the number of remaining shots in 1 new Object History attribute, update whenever 1 new shot is fired and recover the pInsertAnimTile->cTimeLeft with each screen reload
+
 	ld h, #ANIM_CYCLE_WALL_BREAK
 
 	ld iy, #_cGlbSpObjID
@@ -3213,7 +3189,6 @@ _end_wall_status :
 
 _proc_param_interactive :
 	; set INTERACTIVE attributes : cGlbWidth(B), cGlbStep(D), cGlbFlag(E), cGlbCyle(H), cGlbDir(L) and cGlbSpObjID
-	; TODO: INTERACTIVE_ACTION_COLLECT_CPLT
 	; if Interactive is BLANK, no need to animate
 	ld a, (#_cGlbTile)
 	or a
@@ -4880,10 +4855,6 @@ _check_if_interactive_already_enabled :
 	ld a, #SCORE_COLLECTBL_POINTS
 	push hl
 	call _add_score_points
-	; mplayer_play_effect_p(SXF_INTERACTIVE, SFX_CHAN_NO, 0);
-	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
-	ld de, #0x000C; 00 + SXF_INTERACTIVE
-	call	_mplayer_play_effect_p_asm_direct
 	pop hl
 	jp _noKeyReq_ex
 
@@ -4909,10 +4880,6 @@ _end_animate :
 	; Add SCORE_INTERACTV_POINTS points to the score
 	ld a, #SCORE_INTERACTV_POINTS
 	call _add_score_points
-	; mplayer_play_effect_p(SXF_INTERACTIVE, SFX_CHAN_NO, 0);
-	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
-	ld de, #0x000C; 00 + SXF_INTERACTIVE
-	call	_mplayer_play_effect_p_asm_direct
 	ld l, #BOOL_TRUE
 	ret
 
@@ -5372,7 +5339,7 @@ _upper_tile_not_solid :
 _upper_tile_is_solid_so_dont_climb_up :
 	ld hl, #_sThePlayer + #01 ; HL = &_sThePlayer.y
 	inc (hl) ; rollback y position
-	; TODO: SFX HERE?
+	; TODO: include SFX HERE?
 	ld l, #BOOL_TRUE; everything ok
 __endasm;
 }  // bool is_player_climb_up()
@@ -5447,7 +5414,7 @@ _flSolid :
 	ld a, (#_sThePlayer + #1); A = _sThePlayer.y
 	and #0b11111000
 	ld (#_sThePlayer + #1), a
-	; TODO: SFX here? (reach floor)
+	; TODO: include SFX here? (reach floor)
 _no_cable_so_end_climbing_down :
 _cdSolid :
 	; solid tile found. Stop climbing
@@ -6225,10 +6192,6 @@ _dir_right :
 	; not moving to next map
 	inc (hl)
 	
-	;;preciso disso aqui mesmo??? já faz acima
-	;;;ld a, #BOOL_TRUE
-	;;;ld (#_bGlbPlyChangedPosition), a ; player trying to move RIGHT
-
 	ld a, #PLYR_JUMP_DIR_RIGHT
 	ld e, a
 	ld (#_cGlbPlyJumpDirection), a
@@ -6245,10 +6208,6 @@ _dir_left :
 	jp z, _do_next_map_left
 	; not moving to next map
 	dec (hl)
-
-	;;precisa disso????
-	;;;ld a, #BOOL_TRUE
-	;;;ld (#_bGlbPlyChangedPosition), a ; player trying to move LEFT
 
 	ld a, #PLYR_JUMP_DIR_LEFT
 	ld e, a
@@ -6439,7 +6398,7 @@ _test_solid_up :
 
 	; its not fatal nor portal, so test if Solid...
 	; ...but if cFFFlagColision = true, check for a SOLID_COLISION <> TILE_TYPE_FATAL_OR_SOLID. If found then do not move
-	bit 7, a; SOLID BIT
+	bit 7, a ; SOLID BIT
 	; no solid colision detected, check next tile
 	jr z, _jmpNextSearch_01
 	; there is a solid colision, need to check if real or not
@@ -6514,8 +6473,6 @@ _vert_validate :
 	ld a, (hl)
 	bit 5, a  ; FATAL BIT
 	jp nz, _jmpFoundFatal_02
-	;;;cp #TILE_TYPE_FATAL
-	;;;jp z, _jmpFoundFatal_02
 	cp #TILE_TYPE_PORTAL
 	jp z, _jmpFoundPortal_02
 
@@ -6938,16 +6895,6 @@ _start_with_new_life :
 	; A already set to 0
 	;ld a, #BOOL_FALSE
 	ld (#_sThePlayer + #9), a ; grabflag = false
-
-;;	inc hl
-;;	inc hl
-;;	inc hl
-;;	ld (hl), #00; _sThePlayer.frame = 0
-;;	inc hl
-;;	inc hl
-;;	inc hl
-;;	ld (hl), #BOOL_FALSE ; grabflag
-
 	ld a, #BOOL_TRUE
 	ld (#_bGlbPlyChangedPosition), a
 __endasm;
@@ -7264,7 +7211,6 @@ _do_player_display :
 	rra
 	and #0b0001111
 	ld (#_sGlbSpAttr + #03), a  ; _sGlbSpAttr.attr = PLYR_SPRITE_Ln_COLOR high nibble
-	;;call	_spman_alloc_fixed_sprite
 	; second player sprite can flicker, thus enabling other sprites to be shown in certain circunstances (2 player + enemy killed + enemy walking + shield)
 	call	_spman_alloc_sprite
 	pop	af
@@ -8395,7 +8341,9 @@ __endasm;
 									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_LOCKER_OPEN AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY or
 									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_BUTTON_TL_OFFSET or
 									//                                      Tiletype=TILE_TYPE_INTERACTIVE AND Action=INTERACTIVE_ACTION_MISSION_CPLT AND Tile=GAME_PWR_LOCK_TL_OFFSET AND PlayerObjects=HAS_OBJECT_KEY
-									mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
+									
+									//mplayer_play_effect_p(SFX_GATE, SFX_CHAN_NO, 0);
+									mplayer_play_effect_p(SXF_INTERACTIVE, SFX_CHAN_NO, 0);
 								}
 							}
 						}
@@ -8534,7 +8482,7 @@ _chkforFlashLight :
 	ld a, (#_cFlashLUpdateTimer)
 	inc a
 	ld (#_cFlashLUpdateTimer), a
-	cp #ONE_SECOND_TIMER
+	cp #ONE_SECOND_TIMER + #1
 	jr nz, _chkforShot
 	xor a
 	ld (#_cFlashLUpdateTimer), a
@@ -9759,15 +9707,10 @@ _encode_lvl_code :
 	; step 1: compute iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
 	ld hl, (#_iScore)
 	
-	; set HL (Score) here to hack a new level code
-	;;ld hl, #300
 	ld (#_cBuffer), hl
 
 	ld a, (#_cLevel)
 	inc a ; next level required [2 or 3]
-
-	; set A (Level) here to hack a new level code
-	;;ld a, #2
 
 	rlca
 	rlca
@@ -9775,9 +9718,6 @@ _encode_lvl_code :
 	or #CRC8_SALT_1
 	ld b, a ; cLevel + SALT_1
 	ld a, (#_cLives)
-
-	; set A (Lives) here to hack a new level code
-	;;ld a, #3
 
 	rrca
 	rrca
@@ -10014,12 +9954,12 @@ void Run_Game()
 		// global variable initialization - once per level
 		cLastPower = 0xFF;  // force update on the first display_power() call
 		bGlbMMEnabled = false;
-		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 		cGlbGameSceneLight = LIGHT_SCENE_ON_FL_ANY;
 		cGlbFlashLightAction = GAME_LIGHTS_ACTION_NONE;
 		cPlyObjects = cPlyAddtObjects = HAS_NO_OBJECT;  // Player starts with no objects
 		sThePlayer.type = ET_UNUSED;
 		cPlyRemainShield = INVULNERABILITY_SHIELD;
+		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 
 		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
 		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = 0;
@@ -10055,9 +9995,6 @@ __asm
 				ld a, #SONG_IN_GAME_2 ; level 2
 00155$:
 				ld	hl, #_SONG
-
-					ld a, #SONG_SILENCE
-
 				call _mplayer_init_asm_direct
 __endasm;
 			}
@@ -10429,6 +10366,8 @@ _cont_nostromo_loop :
 	pop de
   djnz _nostromo_animation_loop
 
+  ; TODO: SFX or not???
+
 	; cBuffer contains Nostromo image (20 + 1[blank] x 13) tileset
 	; Explosion step 1
 	call _explosion_step_1
@@ -10450,6 +10389,7 @@ _cont_nostromo_loop :
 	call _explosion_step_4
 	call _ubox_wait
 	call _explosion_step_5
+	; TODO: END SFX or not? ? ?
 
 	ld a, (#_cGameStatus)
 	cp #GM_STATUS_TIME_IS_OVER
@@ -10464,9 +10404,6 @@ _draw_last_message :
 	call _search_text_block
 	ld bc, #0x1301 ; YY/XX
 	jp _display_msg_and_wait
-
-	;;call _display_msg_and_wait
-	;;jp _draw_game_win
 
 _explosion_step_1 :
 	; ld b, #9

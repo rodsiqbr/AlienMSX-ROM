@@ -1041,7 +1041,7 @@ AlienMSXSongfile_Subsong0DisarkByteRegionStart1
 	db 0	; Most used wait.
 	db 1	; Second most used wait.
 
-	db 34	; Default start note in tracks.
+	db 70	; Default start note in tracks.
 	db 6	; Default start instrument in tracks.
 	db 0	; Default start wait in tracks.
 
@@ -1054,15 +1054,15 @@ AlienMSXSongfile_Subsong0DisarkByteRegionStart2
 AlienMSXSongfile_Subsong0_Loop
 	db 186	; State byte.
 	db 15	; New height.
-	db 130	; New track (0) for channel 1, as a reference (index 2).
+	db 129	; New track (0) for channel 1, as a reference (index 1).
 	db 12	; New transposition on channel 2.
-	db 130	; New track (0) for channel 2, as a reference (index 2).
+	db 129	; New track (0) for channel 2, as a reference (index 1).
 	db 128	; New track (13) for channel 3, as a reference (index 0).
 
 ; Pattern 1
 	db 132	; State byte.
 	db 24	; New transposition on channel 1.
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 2
 	db 196	; State byte.
@@ -1073,7 +1073,7 @@ AlienMSXSongfile_Subsong0_Loop
 ; Pattern 3
 	db 132	; State byte.
 	db 24	; New transposition on channel 1.
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 4
 	db 196	; State byte.
@@ -1084,24 +1084,24 @@ AlienMSXSongfile_Subsong0_Loop
 ; Pattern 5
 	db 132	; State byte.
 	db 24	; New transposition on channel 1.
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 6
 	db 252	; State byte.
 	db 0	; New transposition on channel 1.
-	db 134	; New track (1) for channel 1, as a reference (index 6).
+	db 133	; New track (1) for channel 1, as a reference (index 5).
 	db 2	; New transposition on channel 2.
-	db 134	; New track (1) for channel 2, as a reference (index 6).
+	db 133	; New track (1) for channel 2, as a reference (index 5).
 	db 8	; New transposition on channel 3.
 	db 128	; New track (13) for channel 3, as a reference (index 0).
 
 ; Pattern 7
 	db 248	; State byte.
-	db 133	; New track (2) for channel 1, as a reference (index 5).
+	db 134	; New track (2) for channel 1, as a reference (index 6).
 	db 0	; New transposition on channel 2.
-	db 133	; New track (2) for channel 2, as a reference (index 5).
+	db 134	; New track (2) for channel 2, as a reference (index 6).
 	db 0	; New transposition on channel 3.
-	db 137	; New track (15) for channel 3, as a reference (index 9).
+	db 136	; New track (15) for channel 3, as a reference (index 8).
 
 ; Pattern 8
 	db 184	; State byte.
@@ -1112,9 +1112,9 @@ AlienMSXSongfile_Subsong0_Loop
 
 ; Pattern 9
 	db 168	; State byte.
-	db 136	; New track (4) for channel 1, as a reference (index 8).
-	db 136	; New track (4) for channel 2, as a reference (index 8).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 137	; New track (4) for channel 1, as a reference (index 9).
+	db 137	; New track (4) for channel 2, as a reference (index 9).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 10
 	db 232	; State byte.
@@ -1127,7 +1127,7 @@ AlienMSXSongfile_Subsong0_Loop
 	db 168	; State byte.
 	db 135	; New track (5) for channel 1, as a reference (index 7).
 	db 135	; New track (5) for channel 2, as a reference (index 7).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 12
 	db 232	; State byte.
@@ -1140,11 +1140,11 @@ AlienMSXSongfile_Subsong0_Loop
 	db 168	; State byte.
 	db 139	; New track (7) for channel 1, as a reference (index 11).
 	db 139	; New track (7) for channel 2, as a reference (index 11).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 14
 	db 248	; State byte.
-	db 134	; New track (1) for channel 1, as a reference (index 6).
+	db 133	; New track (1) for channel 1, as a reference (index 5).
 	db 1	; New transposition on channel 2.
 	db 131	; New track (8) for channel 2, as a reference (index 3).
 	db 8	; New transposition on channel 3.
@@ -1152,11 +1152,11 @@ AlienMSXSongfile_Subsong0_Loop
 
 ; Pattern 15
 	db 248	; State byte.
-	db 133	; New track (2) for channel 1, as a reference (index 5).
+	db 134	; New track (2) for channel 1, as a reference (index 6).
 	db 0	; New transposition on channel 2.
 	db 140	; New track (12) for channel 2, as a reference (index 12).
 	db 0	; New transposition on channel 3.
-	db 137	; New track (15) for channel 3, as a reference (index 9).
+	db 136	; New track (15) for channel 3, as a reference (index 8).
 
 ; Pattern 16
 	db 184	; State byte.
@@ -1169,8 +1169,8 @@ AlienMSXSongfile_Subsong0_Loop
 	db 168	; State byte.
 	db ((AlienMSXSongfile_Subsong0_Track9 - ($ + 2)) & #ff00) / 256	; New track (9) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong0_Track9 - ($ + 1)) & 255)
-	db 136	; New track (4) for channel 2, as a reference (index 8).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 137	; New track (4) for channel 2, as a reference (index 9).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 18
 	db 236	; State byte.
@@ -1186,7 +1186,7 @@ AlienMSXSongfile_Subsong0_Loop
 	db ((AlienMSXSongfile_Subsong0_Track10 - ($ + 2)) & #ff00) / 256	; New track (10) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong0_Track10 - ($ + 1)) & 255)
 	db 135	; New track (5) for channel 2, as a reference (index 7).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 20
 	db 232	; State byte.
@@ -1200,14 +1200,14 @@ AlienMSXSongfile_Subsong0_Loop
 	db ((AlienMSXSongfile_Subsong0_Track11 - ($ + 2)) & #ff00) / 256	; New track (11) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong0_Track11 - ($ + 1)) & 255)
 	db 139	; New track (7) for channel 2, as a reference (index 11).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 22
 	db 252	; State byte.
 	db 1	; New transposition on channel 1.
 	db 131	; New track (8) for channel 1, as a reference (index 3).
 	db 0	; New transposition on channel 2.
-	db 134	; New track (1) for channel 2, as a reference (index 6).
+	db 133	; New track (1) for channel 2, as a reference (index 5).
 	db 8	; New transposition on channel 3.
 	db 128	; New track (13) for channel 3, as a reference (index 0).
 
@@ -1215,9 +1215,9 @@ AlienMSXSongfile_Subsong0_Loop
 	db 236	; State byte.
 	db 0	; New transposition on channel 1.
 	db 140	; New track (12) for channel 1, as a reference (index 12).
-	db 133	; New track (2) for channel 2, as a reference (index 5).
+	db 134	; New track (2) for channel 2, as a reference (index 6).
 	db 0	; New transposition on channel 3.
-	db 137	; New track (15) for channel 3, as a reference (index 9).
+	db 136	; New track (15) for channel 3, as a reference (index 8).
 
 ; Pattern 24
 	db 184	; State byte.
@@ -1230,8 +1230,8 @@ AlienMSXSongfile_Subsong0_Loop
 	db 168	; State byte.
 	db ((AlienMSXSongfile_Subsong0_Track9 - ($ + 2)) & #ff00) / 256	; New track (9) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong0_Track9 - ($ + 1)) & 255)
-	db 136	; New track (4) for channel 2, as a reference (index 8).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 137	; New track (4) for channel 2, as a reference (index 9).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 26
 	db 236	; State byte.
@@ -1247,7 +1247,7 @@ AlienMSXSongfile_Subsong0_Loop
 	db ((AlienMSXSongfile_Subsong0_Track10 - ($ + 2)) & #ff00) / 256	; New track (10) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong0_Track10 - ($ + 1)) & 255)
 	db 135	; New track (5) for channel 2, as a reference (index 7).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 28
 	db 232	; State byte.
@@ -1261,14 +1261,14 @@ AlienMSXSongfile_Subsong0_Loop
 	db ((AlienMSXSongfile_Subsong0_Track11 - ($ + 2)) & #ff00) / 256	; New track (11) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong0_Track11 - ($ + 1)) & 255)
 	db 139	; New track (7) for channel 2, as a reference (index 11).
-	db 129	; New track (14) for channel 3, as a reference (index 1).
+	db 130	; New track (14) for channel 3, as a reference (index 2).
 
 ; Pattern 30
 	db 252	; State byte.
 	db 1	; New transposition on channel 1.
 	db 131	; New track (8) for channel 1, as a reference (index 3).
 	db 0	; New transposition on channel 2.
-	db 134	; New track (1) for channel 2, as a reference (index 6).
+	db 133	; New track (1) for channel 2, as a reference (index 5).
 	db 8	; New transposition on channel 3.
 	db 128	; New track (13) for channel 3, as a reference (index 0).
 
@@ -1276,9 +1276,9 @@ AlienMSXSongfile_Subsong0_Loop
 	db 236	; State byte.
 	db 0	; New transposition on channel 1.
 	db 140	; New track (12) for channel 1, as a reference (index 12).
-	db 133	; New track (2) for channel 2, as a reference (index 5).
+	db 134	; New track (2) for channel 2, as a reference (index 6).
 	db 0	; New transposition on channel 3.
-	db 137	; New track (15) for channel 3, as a reference (index 9).
+	db 136	; New track (15) for channel 3, as a reference (index 8).
 
 	db 1	; End of the Song.
 	db 0	; Speed to 0, meaning "end of song".
@@ -1291,15 +1291,15 @@ AlienMSXSongfile_Subsong0DisarkPointerRegionEnd3
 AlienMSXSongfile_Subsong0_TrackIndexes
 AlienMSXSongfile_Subsong0DisarkPointerRegionStart4
 	dw AlienMSXSongfile_Subsong0_Track13	; Track 13, index 0.
-	dw AlienMSXSongfile_Subsong0_Track14	; Track 14, index 1.
-	dw AlienMSXSongfile_Subsong0_Track0	; Track 0, index 2.
+	dw AlienMSXSongfile_Subsong0_Track0	; Track 0, index 1.
+	dw AlienMSXSongfile_Subsong0_Track14	; Track 14, index 2.
 	dw AlienMSXSongfile_Subsong0_Track8	; Track 8, index 3.
 	dw AlienMSXSongfile_Subsong0_Track3	; Track 3, index 4.
-	dw AlienMSXSongfile_Subsong0_Track2	; Track 2, index 5.
-	dw AlienMSXSongfile_Subsong0_Track1	; Track 1, index 6.
+	dw AlienMSXSongfile_Subsong0_Track1	; Track 1, index 5.
+	dw AlienMSXSongfile_Subsong0_Track2	; Track 2, index 6.
 	dw AlienMSXSongfile_Subsong0_Track5	; Track 5, index 7.
-	dw AlienMSXSongfile_Subsong0_Track4	; Track 4, index 8.
-	dw AlienMSXSongfile_Subsong0_Track15	; Track 15, index 9.
+	dw AlienMSXSongfile_Subsong0_Track15	; Track 15, index 8.
+	dw AlienMSXSongfile_Subsong0_Track4	; Track 4, index 9.
 	dw AlienMSXSongfile_Subsong0_Track6	; Track 6, index 10.
 	dw AlienMSXSongfile_Subsong0_Track7	; Track 7, index 11.
 	dw AlienMSXSongfile_Subsong0_Track12	; Track 12, index 12.
@@ -1553,8 +1553,7 @@ AlienMSXSongfile_Subsong0_Track11
 	db 127	;   Escape wait value.
 
 AlienMSXSongfile_Subsong0_Track12
-	db 206	; New escaped note: 70. New wait (7).
-	db 70	;   Escape note value.
+	db 207	; Same escaped note: 70. New wait (7).
 	db 7	;   Escape wait value.
 	db 248	; New instrument (5). Note reference (8). New wait (3).
 	db 5	;   Escape instrument value.
@@ -1581,7 +1580,8 @@ AlienMSXSongfile_Subsong0_Track14
 	db 127	;   Escape wait value.
 
 AlienMSXSongfile_Subsong0_Track15
-	db 207	; Same escaped note: 34. New wait (3).
+	db 206	; New escaped note: 34. New wait (3).
+	db 34	;   Escape note value.
 	db 3	;   Escape wait value.
 	db 14	; New escaped note: 46. 
 	db 46	;   Escape note value.
@@ -1690,7 +1690,7 @@ AlienMSXSongfile_Subsong2DisarkByteRegionStart1
 	db 0	; Most used wait.
 	db 1	; Second most used wait.
 
-	db 37	; Default start note in tracks.
+	db 56	; Default start note in tracks.
 	db 0	; Default start instrument in tracks.
 	db 0	; Default start wait in tracks.
 
@@ -1726,8 +1726,7 @@ AlienMSXSongfile_Subsong2DisarkPointerRegionEnd4
 AlienMSXSongfile_Subsong2DisarkByteRegionStart5
 AlienMSXSongfile_Subsong2_Track0
 	db 12	; Note with effects flag.
-	db 94	; Primary instrument (8). New escaped note: 56. Primary wait (0).
-	db 56	;   Escape note value.
+	db 95	; Primary instrument (8). Same escaped note: 56. Primary wait (0).
 	db 98	;    Volume effect, with inverted volume: 6.
 	db 94	; Primary instrument (8). New escaped note: 61. Primary wait (0).
 	db 61	;   Escape note value.
@@ -1841,7 +1840,8 @@ AlienMSXSongfile_Subsong2_Track1
 
 AlienMSXSongfile_Subsong2_Track2
 	db 12	; Note with effects flag.
-	db 223	; Primary instrument (8). Same escaped note: 37. New wait (15).
+	db 222	; Primary instrument (8). New escaped note: 37. New wait (15).
+	db 37	;   Escape note value.
 	db 15	;   Escape wait value.
 	db 98	;    Volume effect, with inverted volume: 6.
 	db 30	; Primary instrument (8). New escaped note: 35. 
@@ -1889,7 +1889,7 @@ AlienMSXSongfile_Subsong3DisarkByteRegionStart1
 	db 0	; Most used wait.
 	db 1	; Second most used wait.
 
-	db 45	; Default start note in tracks.
+	db 70	; Default start note in tracks.
 	db 7	; Default start instrument in tracks.
 	db 0	; Default start wait in tracks.
 
@@ -1903,7 +1903,7 @@ AlienMSXSongfile_Subsong3_Loop
 	db 171	; State byte.
 	db 7	; New speed (>0).
 	db 7	; New height.
-	db 131	; New track (1) for channel 1, as a reference (index 3).
+	db 129	; New track (1) for channel 1, as a reference (index 1).
 	db 128	; New track (0) for channel 2, as a reference (index 0).
 	db 128	; New track (0) for channel 3, as a reference (index 0).
 
@@ -1922,7 +1922,7 @@ AlienMSXSongfile_Subsong3_Loop
 
 ; Pattern 4
 	db 168	; State byte.
-	db 131	; New track (1) for channel 1, as a reference (index 3).
+	db 129	; New track (1) for channel 1, as a reference (index 1).
 	db 128	; New track (0) for channel 2, as a reference (index 0).
 	db 128	; New track (0) for channel 3, as a reference (index 0).
 
@@ -1933,8 +1933,8 @@ AlienMSXSongfile_Subsong3_Loop
 	db 168	; State byte.
 	db ((AlienMSXSongfile_Subsong3_Track3 - ($ + 2)) & #ff00) / 256	; New track (3) for channel 1, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong3_Track3 - ($ + 1)) & 255)
-	db 129	; New track (5) for channel 2, as a reference (index 1).
-	db 129	; New track (5) for channel 3, as a reference (index 1).
+	db 131	; New track (5) for channel 2, as a reference (index 3).
+	db 131	; New track (5) for channel 3, as a reference (index 3).
 
 ; Pattern 7
 	db 0	; State byte.
@@ -1950,9 +1950,9 @@ AlienMSXSongfile_Subsong3DisarkPointerRegionEnd3
 AlienMSXSongfile_Subsong3_TrackIndexes
 AlienMSXSongfile_Subsong3DisarkPointerRegionStart4
 	dw AlienMSXSongfile_Subsong3_Track0	; Track 0, index 0.
-	dw AlienMSXSongfile_Subsong3_Track5	; Track 5, index 1.
+	dw AlienMSXSongfile_Subsong3_Track1	; Track 1, index 1.
 	dw AlienMSXSongfile_Subsong3_Track4	; Track 4, index 2.
-	dw AlienMSXSongfile_Subsong3_Track1	; Track 1, index 3.
+	dw AlienMSXSongfile_Subsong3_Track5	; Track 5, index 3.
 AlienMSXSongfile_Subsong3DisarkPointerRegionEnd4
 
 AlienMSXSongfile_Subsong3DisarkByteRegionStart5
@@ -1965,8 +1965,7 @@ AlienMSXSongfile_Subsong3_Track0
 
 AlienMSXSongfile_Subsong3_Track1
 	db 12	; Note with effects flag.
-	db 78	; New escaped note: 70. Primary wait (0).
-	db 70	;   Escape note value.
+	db 79	; Same escaped note: 70. Primary wait (0).
 	db 98	;    Volume effect, with inverted volume: 6.
 	db 70	; Note reference (6). Primary wait (0).
 	db 142	; New escaped note: 62. Secondary wait (1).
@@ -1998,7 +1997,8 @@ AlienMSXSongfile_Subsong3_Track3
 
 AlienMSXSongfile_Subsong3_Track4
 	db 12	; Note with effects flag.
-	db 223	; Primary instrument (8). Same escaped note: 45. New wait (127).
+	db 222	; Primary instrument (8). New escaped note: 45. New wait (127).
+	db 45	;   Escape note value.
 	db 127	;   Escape wait value.
 	db 130	;    Volume effect, with inverted volume: 8.
 
@@ -2033,7 +2033,7 @@ AlienMSXSongfile_Subsong4DisarkPointerRegionStart0
 AlienMSXSongfile_Subsong4DisarkPointerRegionEnd0
 
 AlienMSXSongfile_Subsong4DisarkByteRegionStart1
-	db 8	; Initial speed.
+	db 9	; Initial speed.
 
 	db 8	; Most used instrument.
 	db 18	; Second most used instrument.
@@ -2054,10 +2054,10 @@ AlienMSXSongfile_Subsong4DisarkByteRegionStart2
 AlienMSXSongfile_Subsong4_Loop
 	db 170	; State byte.
 	db 63	; New height.
-	db 129	; New track (0) for channel 1, as a reference (index 1).
+	db 128	; New track (0) for channel 1, as a reference (index 0).
 	db ((AlienMSXSongfile_Subsong4_Track2 - ($ + 2)) & #ff00) / 256	; New track (2) for channel 2, as an offset. Offset MSB, then LSB.
 	db ((AlienMSXSongfile_Subsong4_Track2 - ($ + 1)) & 255)
-	db 128	; New track (1) for channel 3, as a reference (index 0).
+	db 129	; New track (1) for channel 3, as a reference (index 1).
 
 ; Pattern 1
 	db 32	; State byte.
@@ -2079,8 +2079,8 @@ AlienMSXSongfile_Subsong4DisarkPointerRegionEnd3
 ; The indexes of the tracks.
 AlienMSXSongfile_Subsong4_TrackIndexes
 AlienMSXSongfile_Subsong4DisarkPointerRegionStart4
-	dw AlienMSXSongfile_Subsong4_Track1	; Track 1, index 0.
-	dw AlienMSXSongfile_Subsong4_Track0	; Track 0, index 1.
+	dw AlienMSXSongfile_Subsong4_Track0	; Track 0, index 0.
+	dw AlienMSXSongfile_Subsong4_Track1	; Track 1, index 1.
 AlienMSXSongfile_Subsong4DisarkPointerRegionEnd4
 
 AlienMSXSongfile_Subsong4DisarkByteRegionStart5
@@ -2089,7 +2089,7 @@ AlienMSXSongfile_Subsong4_Track0
 	db 126	; New instrument (17). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 17	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 126	; New instrument (12). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 12	;   Escape instrument value.
@@ -2099,50 +2099,50 @@ AlienMSXSongfile_Subsong4_Track0
 	db 126	; New instrument (17). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 100	; Secondary instrument (18). Note reference (4). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 100	; Secondary instrument (18). Note reference (4). Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 127	; New instrument (16). Same escaped note: 62. Primary wait (0).
 	db 16	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 102	; Secondary instrument (18). Note reference (6). Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 100	; Secondary instrument (18). Note reference (4). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 127	; New instrument (17). Same escaped note: 62. Primary wait (0).
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 110	; Secondary instrument (18). New escaped note: 64. Primary wait (0).
 	db 64	;   Escape note value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 64. Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 110	; Secondary instrument (18). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 97	; Secondary instrument (18). Note reference (1). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 97	; Secondary instrument (18). Note reference (1). Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 79	; Same escaped note: 62. Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 126	; New instrument (12). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 12	;   Escape instrument value.
@@ -2152,90 +2152,90 @@ AlienMSXSongfile_Subsong4_Track0
 	db 126	; New instrument (17). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 100	; Secondary instrument (18). Note reference (4). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 100	; Secondary instrument (18). Note reference (4). Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 127	; New instrument (16). Same escaped note: 62. Primary wait (0).
 	db 16	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 102	; Secondary instrument (18). Note reference (6). Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 100	; Secondary instrument (18). Note reference (4). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 127	; New instrument (17). Same escaped note: 62. Primary wait (0).
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 110	; Secondary instrument (18). New escaped note: 64. Primary wait (0).
 	db 64	;   Escape note value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 64. Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (16). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 16	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (12). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 12	;   Escape instrument value.
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 12	; Note with effects flag.
 	db 97	; Secondary instrument (18). Note reference (1). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (17). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 78	; New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 127	; New instrument (12). Same escaped note: 62. Primary wait (0).
 	db 12	;   Escape instrument value.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 127	; New instrument (17). Same escaped note: 62. Primary wait (0).
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 127	; New instrument (12). Same escaped note: 62. Primary wait (0).
 	db 12	;   Escape instrument value.
 	db 12	; Note with effects flag.
 	db 127	; New instrument (16). Same escaped note: 62. Primary wait (0).
 	db 16	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 127	; New instrument (17). Same escaped note: 62. Primary wait (0).
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 66	;    Volume effect, with inverted volume: 4.
+	db 146	;    Volume effect, with inverted volume: 9.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 97	; Secondary instrument (18). Note reference (1). Primary wait (0).
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 97	; Secondary instrument (18). Note reference (1). Primary wait (0).
 	db 97	; Secondary instrument (18). Note reference (1). Primary wait (0).
 	db 79	; Same escaped note: 62. Primary wait (0).
@@ -2245,47 +2245,47 @@ AlienMSXSongfile_Subsong4_Track0
 	db 12	; Note with effects flag.
 	db 127	; New instrument (17). Same escaped note: 62. Primary wait (0).
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 127	; New instrument (12). Same escaped note: 62. Primary wait (0).
 	db 12	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 127	; New instrument (16). Same escaped note: 62. Primary wait (0).
 	db 16	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 50	;    Volume effect, with inverted volume: 3.
+	db 130	;    Volume effect, with inverted volume: 8.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 127	; New instrument (17). Same escaped note: 62. Primary wait (0).
 	db 17	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
-	db 66	;    Volume effect, with inverted volume: 4.
+	db 146	;    Volume effect, with inverted volume: 9.
 	db 111	; Secondary instrument (18). Same escaped note: 62. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 126	; New instrument (16). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 16	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 111	; Secondary instrument (18). Same escaped note: 57. Primary wait (0).
 	db 111	; Secondary instrument (18). Same escaped note: 57. Primary wait (0).
 	db 12	; Note with effects flag.
 	db 255	; New instrument (17). Same escaped note: 57. New wait (127).
 	db 17	;   Escape instrument value.
 	db 127	;   Escape wait value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 
 AlienMSXSongfile_Subsong4_Track1
 	db 12	; Note with effects flag.
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 93	; Effect only. Primary wait (0).
 	db 244	;    Pitch down: 2304.
 	db 0	;    Pitch, LSB.
@@ -2293,7 +2293,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 12	; Note with effects flag.
 	db 114	; New instrument (19). Note reference (2). Primary wait (0).
 	db 19	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 66	; Note reference (2). Primary wait (0).
 	db 70	; Note reference (6). Primary wait (0).
 	db 66	; Note reference (2). Primary wait (0).
@@ -2303,23 +2303,23 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (19). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 19	;   Escape instrument value.
-	db 66	;    Volume effect, with inverted volume: 4.
+	db 146	;    Volume effect, with inverted volume: 9.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 143	; Same escaped note: 26. Secondary wait (1).
 	db 12	; Note with effects flag.
 	db 126	; New instrument (19). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 19	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 78	; New escaped note: 64. Primary wait (0).
 	db 64	;   Escape note value.
 	db 68	; Note reference (4). Primary wait (0).
@@ -2328,7 +2328,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 93	; Effect only. Primary wait (0).
 	db 244	;    Pitch down: 2304.
 	db 0	;    Pitch, LSB.
@@ -2336,7 +2336,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 12	; Note with effects flag.
 	db 114	; New instrument (19). Note reference (2). Primary wait (0).
 	db 19	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 66	; Note reference (2). Primary wait (0).
 	db 70	; Note reference (6). Primary wait (0).
 	db 66	; Note reference (2). Primary wait (0).
@@ -2346,17 +2346,17 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (19). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
 	db 19	;   Escape instrument value.
-	db 66	;    Volume effect, with inverted volume: 4.
+	db 146	;    Volume effect, with inverted volume: 9.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 143	; Same escaped note: 26. Secondary wait (1).
 	db 206	; New escaped note: 21. New wait (3).
 	db 21	;   Escape note value.
@@ -2371,7 +2371,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (19). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 19	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 79	; Same escaped note: 57. Primary wait (0).
 	db 65	; Note reference (1). Primary wait (0).
 	db 78	; New escaped note: 62. Primary wait (0).
@@ -2381,7 +2381,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (19). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
@@ -2391,13 +2391,13 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 143	; Same escaped note: 26. Secondary wait (1).
 	db 12	; Note with effects flag.
 	db 126	; New instrument (19). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 19	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 79	; Same escaped note: 57. Primary wait (0).
 	db 65	; Note reference (1). Primary wait (0).
 	db 78	; New escaped note: 62. Primary wait (0).
@@ -2406,7 +2406,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 93	; Effect only. Primary wait (0).
 	db 244	;    Pitch down: 2304.
 	db 0	;    Pitch, LSB.
@@ -2415,7 +2415,7 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (19). New escaped note: 57. Primary wait (0).
 	db 57	;   Escape note value.
 	db 19	;   Escape instrument value.
-	db 34	;    Volume effect, with inverted volume: 2.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 79	; Same escaped note: 57. Primary wait (0).
 	db 65	; Note reference (1). Primary wait (0).
 	db 78	; New escaped note: 62. Primary wait (0).
@@ -2425,15 +2425,15 @@ AlienMSXSongfile_Subsong4_Track1
 	db 126	; New instrument (9). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 9	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 110	; Secondary instrument (18). New escaped note: 62. Primary wait (0).
 	db 62	;   Escape note value.
-	db 66	;    Volume effect, with inverted volume: 4.
+	db 146	;    Volume effect, with inverted volume: 9.
 	db 12	; Note with effects flag.
 	db 78	; New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 143	; Same escaped note: 26. Secondary wait (1).
 	db 206	; New escaped note: 21. New wait (127).
 	db 21	;   Escape note value.
@@ -2442,7 +2442,7 @@ AlienMSXSongfile_Subsong4_Track1
 AlienMSXSongfile_Subsong4_Track2
 	db 12	; Note with effects flag.
 	db 143	; Same escaped note: 14. Secondary wait (1).
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 190	; New instrument (14). New escaped note: 38. Secondary wait (1).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
@@ -2501,17 +2501,17 @@ AlienMSXSongfile_Subsong4_Track2
 	db 190	; New instrument (13). New escaped note: 50. Secondary wait (1).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
@@ -2519,52 +2519,52 @@ AlienMSXSongfile_Subsong4_Track2
 	db 126	; New instrument (10). New escaped note: 14. Primary wait (0).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (11). New escaped note: 38. Secondary wait (1).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (13). New escaped note: 50. Secondary wait (1).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (13). New escaped note: 50. Secondary wait (1).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
@@ -2572,107 +2572,131 @@ AlienMSXSongfile_Subsong4_Track2
 	db 126	; New instrument (10). New escaped note: 14. Primary wait (0).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 45. Primary wait (0).
 	db 45	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (11). New escaped note: 38. Secondary wait (1).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 254	; New instrument (13). New escaped note: 45. New wait (127).
 	db 45	;   Escape note value.
 	db 13	;   Escape instrument value.
 	db 127	;   Escape wait value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 
 AlienMSXSongfile_Subsong4_Track3
 	db 12	; Note with effects flag.
 	db 143	; Same escaped note: 14. Secondary wait (1).
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 114	;    Volume effect, with inverted volume: 7.
+	db 12	; Note with effects flag.
 	db 190	; New instrument (14). New escaped note: 38. Secondary wait (1).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 191	; New instrument (11). Same escaped note: 38. Secondary wait (1).
 	db 11	;   Escape instrument value.
 	db 126	; New instrument (15). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 15	;   Escape instrument value.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (10). New escaped note: 14. Primary wait (0).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
+	db 114	;    Volume effect, with inverted volume: 7.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (14). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
+	db 82	;    Volume effect, with inverted volume: 5.
+	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
+	db 114	;    Volume effect, with inverted volume: 7.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (14). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 191	; New instrument (11). Same escaped note: 38. Secondary wait (1).
 	db 11	;   Escape instrument value.
 	db 191	; New instrument (14). Same escaped note: 38. Secondary wait (1).
 	db 14	;   Escape instrument value.
+	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
+	db 114	;    Volume effect, with inverted volume: 7.
+	db 12	; Note with effects flag.
 	db 190	; New instrument (14). New escaped note: 38. Secondary wait (1).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 191	; New instrument (11). Same escaped note: 38. Secondary wait (1).
 	db 11	;   Escape instrument value.
 	db 126	; New instrument (15). New escaped note: 26. Primary wait (0).
 	db 26	;   Escape note value.
 	db 15	;   Escape instrument value.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (10). New escaped note: 14. Primary wait (0).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
+	db 114	;    Volume effect, with inverted volume: 7.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (14). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
+	db 82	;    Volume effect, with inverted volume: 5.
+	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
+	db 114	;    Volume effect, with inverted volume: 7.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (14). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 14	;   Escape instrument value.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 191	; New instrument (11). Same escaped note: 38. Secondary wait (1).
 	db 11	;   Escape instrument value.
 	db 191	; New instrument (14). Same escaped note: 38. Secondary wait (1).
 	db 14	;   Escape instrument value.
+	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (13). New escaped note: 50. Secondary wait (1).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
@@ -2680,52 +2704,52 @@ AlienMSXSongfile_Subsong4_Track3
 	db 126	; New instrument (10). New escaped note: 14. Primary wait (0).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (11). New escaped note: 38. Secondary wait (1).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (13). New escaped note: 50. Secondary wait (1).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (13). New escaped note: 50. Secondary wait (1).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 82	;    Volume effect, with inverted volume: 5.
+	db 162	;    Volume effect, with inverted volume: 10.
 	db 126	; New instrument (11). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 11	;   Escape instrument value.
@@ -2733,31 +2757,37 @@ AlienMSXSongfile_Subsong4_Track3
 	db 126	; New instrument (10). New escaped note: 14. Primary wait (0).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 50. Primary wait (0).
 	db 50	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
 	db 12	; Note with effects flag.
 	db 190	; New instrument (10). New escaped note: 14. Secondary wait (1).
 	db 14	;   Escape note value.
 	db 10	;   Escape instrument value.
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 114	;    Volume effect, with inverted volume: 7.
 	db 12	; Note with effects flag.
 	db 126	; New instrument (13). New escaped note: 45. Primary wait (0).
 	db 45	;   Escape note value.
 	db 13	;   Escape instrument value.
-	db 18	;    Volume effect, with inverted volume: 1.
+	db 98	;    Volume effect, with inverted volume: 6.
+	db 12	; Note with effects flag.
 	db 126	; New instrument (20). New escaped note: 38. Primary wait (0).
 	db 38	;   Escape note value.
 	db 20	;   Escape instrument value.
-	db 79	; Same escaped note: 38. Primary wait (0).
+	db 82	;    Volume effect, with inverted volume: 5.
 	db 12	; Note with effects flag.
 	db 79	; Same escaped note: 38. Primary wait (0).
-	db 2	;    Volume effect, with inverted volume: 0.
+	db 66	;    Volume effect, with inverted volume: 4.
+	db 12	; Note with effects flag.
+	db 79	; Same escaped note: 38. Primary wait (0).
+	db 50	;    Volume effect, with inverted volume: 3.
+	db 12	; Note with effects flag.
 	db 207	; Same escaped note: 38. New wait (127).
 	db 127	;   Escape wait value.
+	db 34	;    Volume effect, with inverted volume: 2.
 
 AlienMSXSongfile_Subsong4DisarkByteRegionEnd5
 ; The note indexes.
