@@ -73,7 +73,8 @@ typedef struct
 	uint8_t dir;           //    2 | entity direction
 	uint8_t status;        //    3 | entity status
 	uint8_t hitcounter;    //    4 | enemy hit counter
-	uint8_t pat;           //    5 | entity sprite pattern # - NOT USED
+//	uint8_t pat;           //    5 | entity sprite pattern # - NOT USED
+	uint8_t objAlign;      //    5 | when dead indicates the object alignment for PTS! animation (PTS_ALIGN_PLAYER or PTS_ALIGN_SHOT)
 	uint8_t frame;         //    6 | entity sprite frame #
 	uint8_t delay;         //    7 | entity sprite frame delay counter
 	uint8_t type;          //    8 | entity type
@@ -279,6 +280,7 @@ enum pattern_type
 	PAT_SHOT_FLIP,
 	PAT_EXPLOSION,
 	PAT_MINIMAP,
+	PAT_PTS,
 	PAT_ENEMY_BASE,
 	PAT_ENEMY_BASE_FLIP,
 	PAT_ALIEN_TONGUE,
@@ -393,6 +395,10 @@ const uint8_t ply_dead_pat_frames[PLYR_DEAD_CYCLE] =  {48, 64, 56, 72, 64 };  //
 #define SPRT_MAP_COLOR_CYCLE   4
 const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 
+#define SPRT_PTR_COLOR_CYCLE   9
+const uint8_t ptr_color_frames[SPRT_PTR_COLOR_CYCLE] = { 12, 2, 3, 11, 11, 10, 15, 15, 14 };
+
+
 // several Enemy control status: sprite direction, status, jump stage, jump direction, color
 #define ENEMY_SPRT_DIR_RIGHT     PLYR_SPRT_DIR_RIGHT   // 0
 #define ENEMY_SPRT_DIR_LEFT      PLYR_SPRT_DIR_LEFT    // 1
@@ -408,6 +414,9 @@ const uint8_t color_frames[SPRT_MAP_COLOR_CYCLE] = { 11, 8, 10, 6 };
 #define ALIEN_STATUS_ATTACK      0x70  // alien only
 
 #define ENEMY_HIT_COUNT          2     // number of hits (shoots) before facehug to be hurt
+
+#define PTS_ALIGN_PLAYER         0b00000000
+#define PTS_ALIGN_SHOT           0b10000000
 
 const uint8_t enemy_awake_frames[] = { 0, 2, 2, 2, 2, 1, 1, 0, 0xFC };     // use frame 0, 2, 2, 2, 2, 1, 1, 0 then keep at 0
 const uint8_t enemy_walk_frames[]  = { 0, 1, 0xFD };                       // use frame 0, 1 then restart
@@ -732,8 +741,8 @@ uint8_t cRemainKey;
 uint8_t cRemainScrewdriver;
 uint8_t cRemainKnife;
 
-uint8_t cShotCount;
 uint8_t cShotX, cShotY;
+uint8_t cShotCount;
 uint8_t cShotDir;
 uint8_t cShotFrame;
 uint8_t cShotPattern;
@@ -742,6 +751,11 @@ uint8_t cShotTrigTimer;
 uint8_t cShieldFrame;
 uint8_t cShieldUpdateTimer;
 uint8_t cShieldPattern;
+
+uint8_t cPointsX;
+uint8_t cPointsY;
+uint8_t cPointsFrame;   // 0 = no PTS animation active
+uint8_t cPointsPattern;
 
 uint8_t cExplosionX, cExplosionY;
 uint8_t cExplosionFrame;
@@ -2863,6 +2877,9 @@ unsigned int iBuffOffset;
 	// Minimap: 1 frame x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
 	cMiniMapPattern = spman_alloc_pat(PAT_MINIMAP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
 
+	// PTS!: 1 frame x 1 sprite per frame = 1 sprite (16 x 16 each sprite)
+	cPointsPattern = spman_alloc_pat(PAT_PTS, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+
 	// No need to load enemy sprites at level 1
 	if (cLevel == 1) return;
 
@@ -3615,7 +3632,7 @@ _check_new_enemy :
 	djnz _try_find_enemy
 _insert_new_enemy :
 	; iy = free EnemyEntity record
-	; x, y, hitcounter, pat, frame and delay attributes will be set when Enemy released
+	; x, y, hitcounter, objAlign, frame and delay attributes will be set when Enemy released
 
 	ld a, (hl); 0IIIwwww
 	and #0b00001111
@@ -4776,7 +4793,7 @@ _TileFound :
 	ld c, (hl)
 	ld de, #04
 	add hl, de
-	dec (hl); sAnimSpecialTiles->cTimeLeft--
+	dec (hl) ; sAnimSpecialTiles->cTimeLeft--
 	ld a, #ST_EGG_DESTROYED << #4 | #UPD_OBJECT_EGG
 	jr z, _anim_egg
 	xor a
@@ -4811,6 +4828,8 @@ _anim_wall :
 	inc hl
 	ld (hl), a ; sAnimSpecialTiles->cTimeLeft = sAnimSpecialTiles->cTimer
 	; Add sAnimSpecialTiles->cTimer points to the score
+	; PTS! animation aligned to Shot object
+	or a, #PTS_ALIGN_SHOT
 	call _add_score_points
 	pop hl
 	dec hl; HL = &_sAnimSpecialTiles->cSpTileStatus
@@ -4818,9 +4837,16 @@ _anim_wall :
 
 _anim_egg :
 	; B = ObjID, A = New_Status
+	push af
 	call _update_screen_object_ex
-	ld a, #EGG_SHOTS_TO_DESTROY
+	pop af
+	; only if Status = #ST_EGG_DESTROYED player wins points
+	cp #ST_EGG_DESTROYED << #4 | #UPD_OBJECT_EGG
+	jr nz, _no_win_points
+	; PTS! animation aligned to Shot object
+	ld a, #EGG_SHOTS_TO_DESTROY << #1 | #PTS_ALIGN_SHOT
 	call _add_score_points
+_no_win_points :
 	pop hl
 	dec hl; HL = &_sAnimSpecialTiles->cSpTileStatus
 	push hl
@@ -5701,6 +5727,7 @@ _cont_activate_enemy :
 
   ; no need to set pattern attribute
 
+	ld 5 (iy), #PTS_ALIGN_SHOT
 	ld 6 (iy), #0  ; frame
 	ld 7 (iy), #ENEMY_ANIM_DELAY  ; animation delay
 
@@ -5838,7 +5865,7 @@ _wlkInteractiveFound :
 	ld a, (hl) ; A = cObjID(10aaOOOO)
 	ld b, a  ; B = cObjID(10aaOOOO)
   and #0b00110000  ; A = 00aa0000
-	jr z, _check_for_action_light
+	jp z, _check_for_action_light
 	
 	ld c, #0
 	cp #INTERACTIVE_ACTION_LOCKER_OPEN << #4
@@ -5894,9 +5921,26 @@ _mission_already_completed :
 	jr _commit_interactive_found_ex
 
 _add_score_points :
+	ld hl, #_sThePlayer ; default Object
+	bit 7, a
+	jr z, _align_with_player
+	ld hl, #_cShotX ; non-default Object
+	and a, #0b01111111 ; reset Object ID (7th) bit
+_align_with_player :
+	push hl
 	ld hl, #_cScoretoAdd
 	add a, (hl); cScoretoAdd += A
 	ld (hl), a
+	ld a, #SPRT_PTR_COLOR_CYCLE
+	ld (#_cPointsFrame), a
+	; add PTS! animation X and Y
+	pop hl
+	ld a, (hl) ; x
+	ld (#_cPointsX), a
+	inc hl
+	ld a, (hl) ; y
+	sub a, #6
+	ld (#_cPointsY), a
 	ret
 
 _execute_open_locker :
@@ -5917,7 +5961,7 @@ _execute_open_locker :
 	or #0b11000000  ; A = Locker ObjectID(1100OOOO)
 	ld b, a
 	ld c, #ANIMATE_OBJ_LOCKER
-	call _activate_interactive_animation_ex  ; try to enable Locker animation(only works if Locker IS in this current screen)
+	call _activate_interactive_animation_ex  ; try to enable Locker animation (only works if Locker IS in this current screen)
 _locker_already_opened :
 	pop af  ; recover A = cObjID(10aaOOOO)
 	jr _commit_interactive_found_ex
@@ -6691,8 +6735,8 @@ _clearTile :
 	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
 	ld de, #0x0002; 00 + SFX_GET_OBJECT
 	call	_mplayer_play_effect_p_asm_direct
-_clearTile_none :
 
+_clearTile_none :
 	; remove the Object Tile from the screen
 	; if LIGHT_SCENE_OFF_FL_OFF, no need to display animated tiles (no need to update VRAM)
 	ld a, (#_cGlbGameSceneLight)
@@ -6733,6 +6777,10 @@ _after_clear :
 
 	xor a ; Tile = 0
 	call _insert_new_obj_history
+
+	; cScoretoAdd += SCORE_OBJECT_POINTS;
+	ld a, #SCORE_OBJECT_POINTS
+	call _add_score_points
 	ret
 
 _upd_card_pts :
@@ -6857,6 +6905,9 @@ _set_grabbed_enemy_as_dead_ex :
 	ld 3 (ix), #ENEMY_STATUS_HURT ; enemy status
 	ld 6 (ix), #0
 	ld 7 (ix), #ENEMY_ANIM_DELAY
+	; need to set PTS! animation aligned to the Player
+	ld 5 (ix), #PTS_ALIGN_PLAYER
+
 	pop ix
 	ret
 
@@ -7452,13 +7503,18 @@ _do_alien_chase :
 	; check for horizontal player proximity
 	; if (Xa*8 + 16 >= xp + 8) then "Player is at left" else "Player is at right"
 	ld a, (#_sThePlayer) ; xp
-	add a, #8
+
+;;;	add a, #8
+
 	ld b, a ; B = Xa * 8 + 16
 	ld a, (#_sAlien) ; Xa
 	add a, a
 	add a, a
 	add a, a
-	add a, #16
+
+;;;	add a, #16
+	add a, #8
+
 	ld c, a ; C = xp + 8
 	cp b
 	jr nc, _set_alien_dir_left
@@ -7698,6 +7754,7 @@ _tongue_is_hidden :
 _set_tongue_frame :
 	ld (#_sAlien + #4), a
 
+; start facehug animation code
 _update_facehug :
 	ld a, (#_cActiveEnemyQtty)
 	or a
@@ -7854,10 +7911,12 @@ _anim_enemy_grab :
 	dec a ; y on the screen starts in 255
 	ld (hl), a ; _sGlbSpAttr.y
 
-	; if Shield active, enemy is killed
+	; if Shield active, enemy is killed (PTS! aligned to Player)
 	ld a, (#_cPlyRemainShield)
 	or a
-	jp nz, _shot_killed_enemy
+	jp z, _anim_enemy_grab_ex
+	ld 5 (ix), #PTS_ALIGN_PLAYER
+	jp _shot_killed_enemy
 
 _anim_enemy_grab_ex :
 	ld a, (#_sThePlayer) ; xp
@@ -8049,7 +8108,13 @@ _add_2_x :
 	dec (hl)
 	ld a, #BOOL_FALSE
 	ld (#_sThePlayer + #9), a  ; grabflag
+	; need to verify if PTS! animation should be aligned to Player or Shot object
+	ld a, 5 (ix) ; objAlign
+	cp #PTS_ALIGN_PLAYER
 	ld a, #SCORE_ENEMY_HIT_POINTS
+	jr z, _align_pts_to_player
+	or #PTS_ALIGN_SHOT ; PTS! animation aligned to Shot object
+_align_pts_to_player :
 	call _add_score_points
 
 _anim_enemy_hurt_ex_2 :
@@ -8211,7 +8276,7 @@ __endasm;
 						if (cGlbPlyFlag & COLISION_OBJCT)
 						{
 							player_get_object();
-							cScoretoAdd += SCORE_OBJECT_POINTS;
+							//cScoretoAdd += SCORE_OBJECT_POINTS;
 						}
 						if (cGlbPlyFlag & COLISION_GATE)
 						{
@@ -8441,7 +8506,7 @@ _no_decrement :
 	ld hl, #_sGlbSpAttr
 	ld a, (#_sThePlayer + #01)
 	dec a; y on the screen starts in 255
-	ld(hl), a; _sGlbSpAttr.y
+	ld (hl), a ; _sGlbSpAttr.y
 	inc hl
 	ld a, (#_sThePlayer)
 	ld (hl), a; _sGlbSpAttr.x
@@ -8454,7 +8519,7 @@ _no_decrement :
 	rlc b
 	ld a, (#_cShieldPattern)
 	add a, b
-	ld(hl), a; _sGlbSpAttr.pattern
+	ld (hl), a ; _sGlbSpAttr.pattern
 	inc hl
 	; if B=0 then cShieldFrame=0, else cShieldFrame=1
 	ld a, b
@@ -8465,25 +8530,25 @@ _no_decrement :
 _color_2 :
   ld a, #SHIELD_SPRITE_COLORS & #0b00001111
 _set_attr :
-	ld(hl), a; _sGlbSpAttr.attr
+	ld (hl), a; _sGlbSpAttr.attr
 	; allocate the Shield sprites;  not fixed so they can flicker
-	call	_spman_alloc_sprite
+	call _spman_alloc_sprite
 
 _chkforFlashLight :
 	; check if Flashlight is enabled
 	ld a, (#_cGlbGameSceneLight)
 	bit 1, a
-	jp z, _chkforShot
+	jp z, _chkforPTS
 	ld a, (#_cPlyRemainFlashlight)
 	or a
-	jr z, _chkforShot
+	jr z, _chkforPTS
 	ld b, a
 	; Control delay for Flashlight decrement
 	ld a, (#_cFlashLUpdateTimer)
 	inc a
 	ld (#_cFlashLUpdateTimer), a
 	cp #ONE_SECOND_TIMER + #1
-	jr nz, _chkforShot
+	jr nz, _chkforPTS
 	xor a
 	ld (#_cFlashLUpdateTimer), a
 	ld a, b
@@ -8495,6 +8560,38 @@ _timeout_FL :
 	call _disable_FL_ex
 _timeout_FL_ex :
 	call _display_flashlight
+
+_chkforPTS :
+	; check if PTS! is enabled
+	ld a, (#_cPointsFrame)
+	or a
+	jr z, _chkforShot
+	ld hl, #_cPointsY
+	dec (hl)
+	ld a, (hl)
+	ld hl, #_sGlbSpAttr
+	; dec a ; y on the screen starts in 255
+	ld (hl), a ; _sGlbSpAttr.y
+	inc hl
+	ld a, (#_cPointsX)
+	ld (hl), a; _sGlbSpAttr.x
+	inc hl
+	ld a, (#_cPointsFrame)
+	ex de, hl
+	ld hl, #_ptr_color_frames
+	ld b, #0
+	ld c, a
+	add hl, bc
+	ld b, (hl)
+	ex de, hl
+	dec a
+	ld (#_cPointsFrame), a
+	ld a, (#_cPointsPattern)
+	ld (hl), a; _sGlbSpAttr.pattern
+	inc hl
+	ld (hl), b ; _sGlbSpAttr.attr
+	; allocate the Shield sprites;  not fixed so they can flicker
+	call _spman_alloc_sprite
 
 _chkforShot :
 	; check for bShotColisionWithEnemy flag. Kill shot if TRUE
@@ -8561,7 +8658,7 @@ _anim_explosion:
 	ld a, c
 	inc a
 	and #0b00000011; Range 0 - 3 (SPRT_MAP_COLOR_CYCLE)
-	ld(#_cExplosionFrame), a
+	ld (#_cExplosionFrame), a
 	; allocate the Explosion sprites; not fixed so they can flicker
 	call	_spman_alloc_sprite
 	jp _end_updt_obj
@@ -9961,7 +10058,7 @@ void Run_Game()
 		cPlyRemainShield = INVULNERABILITY_SHIELD;
 		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 
-		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
+		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPointsFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
 		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = 0;
 
 		do  // loop at each screen map
