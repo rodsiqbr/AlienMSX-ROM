@@ -675,6 +675,7 @@ uint8_t cMissionStatus[MAX_MISSIONS]; // up to 4 missions per level
 uint8_t cMissionQty, cRemainMission;
 uint8_t cCtrl, cCtrlCmd;
 uint8_t cCodeLenght, cMenuOption;
+uint8_t cMSXDevCheatCount;
 uint8_t cMeltdownMinutes, cMeltdownSeconds, cMeltdownTimerCtrl;
 bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 bool bFinalMeltdown;                  // meltdown timer enabled/disabled
@@ -6688,7 +6689,7 @@ _itsaAmno_ex :
 	jr c, _amno_ok
 	ld a, #MAX_AMNO_SHIELD
 _amno_ok :
-	ld(hl), a
+	ld (hl), a
 	call _display_gun_amno
 	jr _clearTile
 
@@ -8276,7 +8277,6 @@ __endasm;
 						if (cGlbPlyFlag & COLISION_OBJCT)
 						{
 							player_get_object();
-							//cScoretoAdd += SCORE_OBJECT_POINTS;
 						}
 						if (cGlbPlyFlag & COLISION_GATE)
 						{
@@ -8848,6 +8848,55 @@ _end_updt_obj :
 	pop hl
 __endasm;
 } // void update_and_display_objects()
+
+/*
+* Check for MSXDev24 jury cheatcode
+*/
+void check_for_msxdev_jury_cheat()
+{
+__asm
+  ; 'C' key pressed 10x AND
+	; cLives = 1 AND
+	; iScore is Odd AND
+	; cRemainScrewdriver > 0 AND
+	; cPlyRemainAmno = 0
+
+	ld a, (#_cLives)
+	dec a
+	ret nz
+
+	ld a, (#_cRemainScrewdriver)
+	or a
+	ret z
+
+	ld a, (#_cPlyRemainAmno)
+	or a
+	ret nz
+
+	ld hl, (#_iScore)
+	ld a, l
+	and #0b00000001
+	ret z
+
+	ld	l, #0x03
+	call	_ubox_read_keys
+	ld	a, l
+	cp #UBOX_MSX_KEY_C
+	ret nz
+
+	ld a, (#_cMSXDevCheatCount)
+	inc a
+	ld (#_cMSXDevCheatCount), a
+	cp #10
+	ret nz
+
+	ld a, #GM_STATUS_PLAYER_WIN
+	ld (#_cGameStatus), a
+
+	;xor a
+	;ld (#_cMSXDevCheatCount), a
+__endasm;
+} // void check_for_msxdev_jury_cheat()
 
 /*
 * Check for 'P' keypress to enable/disable Pause
@@ -9803,19 +9852,28 @@ __asm
 _encode_lvl_code :
 	; step 1: compute iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
 	ld hl, (#_iScore)
-	
+	; TEMP - force level up gen code
+	;ld hl, #2000
+	; END TEMP
 	ld (#_cBuffer), hl
 
 	ld a, (#_cLevel)
 	inc a ; next level required [2 or 3]
+	; TEMP - force level up gen code
+	;ld a, #3
+	; END TEMP
+	ld (#_cLevel), a
 
 	rlca
 	rlca
 	rlca
 	or #CRC8_SALT_1
 	ld b, a ; cLevel + SALT_1
-	ld a, (#_cLives)
 
+	ld a, (#_cLives)
+	; TEMP - force level up gen code
+	;ld a, #5
+	; END TEMP
 	rrca
 	rrca
 	rrca
@@ -10059,7 +10117,7 @@ void Run_Game()
 		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 
 		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPointsFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
-		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = 0;
+		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = cMSXDevCheatCount = 0;
 
 		do  // loop at each screen map
 		{
@@ -10107,10 +10165,10 @@ __endasm;
 			{			
 				if (sThePlayer.status != PLYR_STATUS_DEAD)
 				{
-					check_for_pause();        // scan for 'P' key
-					check_for_flashlight();   // scan for 'F' key
-					check_for_player_arise(); // scan for 'ESC' key, then Y to confirm
-					//check_for_easteregg();  // not implemented
+					check_for_pause();         // scan for 'P' key
+					check_for_flashlight();    // scan for 'F' key
+					check_for_player_arise();  // scan for 'ESC' key, then Y to confirm
+					//check_for_easteregg();   // not implemented
 				}
 			
 				// update the animated tiles each 7 cycles
@@ -10168,6 +10226,8 @@ __endasm;
 
 				iGameCycles++;
 
+				check_for_msxdev_jury_cheat();  // scan for 'C' key pressed 10x AND (cLives=1 AND iScore is Odd AND cRemainScrewdriver>0 AND cPlyRemainAmno=0)
+
 				// ensure we wait to our desired update rate
 				ubox_wait();
 
@@ -10175,6 +10235,10 @@ __endasm;
 
 			// hide all the sprites
 			spman_hide_all_sprites();
+
+			// TEMP - force level up
+			//if (iScore > 10) cGameStatus = GM_STATUS_MISSION_CPLT;
+			// END TEMP
 
 			if (cGameStatus == GM_STATUS_CHANGE_MAP)
 			{
@@ -10195,7 +10259,7 @@ __endasm;
 			}
 			else if (cGameStatus == GM_STATUS_MISSION_CPLT)
 			{
-				cLevel++;
+				//cLevel++;
 				iScore += (cScoretoAdd + SCORE_LEVELUP_POINTS);
 			}
 		} while (cGameStatus == GM_STATUS_CHANGE_MAP);
