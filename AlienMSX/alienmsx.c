@@ -8850,7 +8850,8 @@ __endasm;
 } // void update_and_display_objects()
 
 /*
-* Check for MSXDev24 jury cheatcode
+* Check for MSXDev24 jury cheat code
+* Should be removed at post-msxdev release
 */
 void check_for_msxdev_jury_cheat()
 {
@@ -10226,6 +10227,7 @@ __endasm;
 
 				iGameCycles++;
 
+				// should be removed at post-msxdev release
 				check_for_msxdev_jury_cheat();  // scan for 'C' key pressed 10x AND (cLives=1 AND iScore is Odd AND cRemainScrewdriver>0 AND cPlyRemainAmno=0)
 
 				// ensure we wait to our desired update rate
@@ -10442,6 +10444,7 @@ __asm
 	call	_ubox_set_colors
 	pop	af
 	inc	sp
+
 	call	_ubox_wait
   call _ubox_disable_screen
 	ld hl, #_cGameStage
@@ -10751,6 +10754,10 @@ _nostromo_display_loop :
 	add hl, bc
 	pop bc
 	djnz _nostromo_display_loop
+	ret
+
+_flash_bg_screen :
+
 __endasm;
 }  // void draw_game_win()
 
