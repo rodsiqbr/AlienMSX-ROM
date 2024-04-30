@@ -598,15 +598,15 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define PLY_DIST_EGG_OPEN       8  // minimum # tiles distance from Player to Egg to open it
 #define PLY_DIST_EGG_FH_RELEASE 6  // minimum # tiles distance from Player to an opened Egg to release Enemy (FaceHug)
 
-#define HIT_PTS_FACEHUG         2
+#define HIT_PTS_FACEHUG         2  // energy points decreased when hit by a facehug
 #define HIT_PTS_SMALL           4
 #define HIT_PTS_MEDIUM          8
 #define HIT_PTS_HIGH           12
-#define HIT_PTS_TONGUE         50
+#define HIT_PTS_TONGUE         50  // energy points decreased when hit by alien tongue
 
 #define SCORE_OBJECT_POINTS     7  //   7 points to the score when getting an object
-#define SCORE_INTERACTV_POINTS 25  //  25 points to the score when activating an interactive
-#define SCORE_ENEMY_HIT_POINTS 30  //  30 points to the score when hit an enemy
+#define SCORE_ENEMY_HIT_POINTS 25  //  25 points to the score when hit an enemy
+#define SCORE_INTERACTV_POINTS 30  //  30 points to the score when activating an interactive
 #define SCORE_COLLECTBL_POINTS 40  //  40 points to the score when collect a collectible item
 #define SCORE_MISSION_POINTS   50  //  50 points to the score when complete a mission
 #define SCORE_LEVELUP_POINTS  100  // 100 points to the score when level complete
@@ -647,6 +647,7 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define ANIMATE_OBJ_EGG    5
 #define ANIMATE_OBJ_COLLC  6
 
+// game status control loop
 #define GM_STATUS_LOOP_CONTINUE  0
 #define GM_STATUS_CHANGE_MAP     1
 #define GM_STATUS_TIME_IS_OVER   2
@@ -667,20 +668,20 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 extern uint8_t SONG[];
 extern uint8_t EFFECTS[];
 
-uint8_t cGameStage, cGameStatus, cLevel, cScreenMap, cScreenShiftDir, cMapX, cMapY;
+uint8_t cLives, cLevel;
+uint8_t cGameStage, cGameStatus, cScreenMap, cScreenShiftDir, cMapX, cMapY;
 uint8_t cPower,cLastPower;
 uint16_t iScore;
 uint8_t cScoretoAdd;
+
 uint8_t cMissionStatus[MAX_MISSIONS]; // up to 4 missions per level
 uint8_t cMissionQty, cRemainMission;
 uint8_t cCtrl, cCtrlCmd;
 uint8_t cCodeLenght, cMenuOption;
-uint8_t cMSXDevCheatCount;
+uint8_t cMSXDevCheatCount;            // for MSXDev24 jury only
 uint8_t cMeltdownMinutes, cMeltdownSeconds, cMeltdownTimerCtrl;
 bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 bool bFinalMeltdown;                  // meltdown timer enabled/disabled
-
-struct sprite_attr sGlbSpAttr;        // global sprite attribute struct - used by all entities
 
 // Global variables for runtime speed optimization
 uint16_t iGameCycles;
@@ -709,10 +710,9 @@ EnemyEntity *sGrabbedEnemyPtr;                            // when enemy grabs th
 AlienEntity sAlien;                                       // alien entity (1 single alien entity)
 
 // Global variables for player control
-uint8_t cGlbPlyFlag; // special global flag to describe player conflict with screen tiles
-
-uint8_t cFFFlagColision;
-
+uint8_t cGlbPlyFlag;          // special global flag to describe player conflict with screen tiles
+uint8_t cPlyHitTimer;
+uint8_t cPlyDeadTimer;
 uint8_t cGlbPlyJumpCycles;
 uint8_t cGlbPlyJumpStage;
 uint8_t cGlbPlyJumpDirection;
@@ -724,17 +724,17 @@ uint8_t cPlyNewX, cPlyNewY;
 uint8_t cPlySafePlaceX, cPlySafePlaceY, cPlySafePlaceDir;
 uint8_t cPlyPortalDestinyX, cPlyPortalDestinyY;
 uint8_t cGlbPlyJumpTimer;     // timer to avoid an undesired jump just after a climp up
+uint8_t cFFFlagColision;
 bool bGlbPlyMoved;            // TRUE if player has walked RIGHT/LEFT, climbed UP/DOWN or falling DOWN
 bool bGlbPlyChangedPosition;  // TRUE if player has changed position (belt, colision, Moved)
 
 
+
+// Objects control status flag
 uint8_t cPlyObjects, cPlyAddtObjects;
-uint8_t cLives;
 uint8_t cPlyRemainAmno;
 uint8_t cPlyRemainShield;
 uint8_t cPlyRemainFlashlight;
-uint8_t cPlyHitTimer;
-uint8_t cPlyDeadTimer;
 uint8_t cRemainYellowCard;
 uint8_t cRemainGreenCard;
 uint8_t cRemainRedCard;
@@ -742,6 +742,9 @@ uint8_t cRemainKey;
 uint8_t cRemainScrewdriver;
 uint8_t cRemainKnife;
 
+struct sprite_attr sGlbSpAttr;  // global sprite attribute struct - used by all entities
+
+// Shot sprite animation
 uint8_t cShotX, cShotY;
 uint8_t cShotCount;
 uint8_t cShotDir;
@@ -749,19 +752,23 @@ uint8_t cShotFrame;
 uint8_t cShotPattern;
 uint8_t cShotTrigTimer;
 
+// Shield sprite animation
 uint8_t cShieldFrame;
 uint8_t cShieldUpdateTimer;
 uint8_t cShieldPattern;
 
+// PTS! sprite animation
 uint8_t cPointsX;
 uint8_t cPointsY;
 uint8_t cPointsFrame;   // 0 = no PTS animation active
 uint8_t cPointsPattern;
 
+// Explosion sprite animation
 uint8_t cExplosionX, cExplosionY;
 uint8_t cExplosionFrame;
 uint8_t cShotExplosionPattern;
 
+// Minimap sprite animation
 uint8_t cMiniMapX, cMiniMapY;
 uint8_t cMiniMapFrame;
 uint8_t cMiniMapPattern;
@@ -772,7 +779,6 @@ uint8_t cLastShotColor;   // color cache for Shot
 
 uint8_t cGlbFlashLightAction;
 uint8_t cGlbGameSceneLight;
-
 uint8_t cFlashLUpdateTimer;
 
 uint8_t cScreenEggsQtty;
@@ -780,6 +786,7 @@ uint8_t cCreatedEnemyQtty, cActiveEnemyQtty;
 bool bCheckPlayerColision;
 bool bCheckShotColision;
 bool bShotColisionWithEnemy;
+
 
 unsigned char cGlbBufNum[10];            // global buffer to support display_number(), display_objects(), display_power() and display_minimap() routines
 unsigned char cBuffer[2048];             // general purpose buffer to unpack Tilesets, Colors, Maps and Sprites
@@ -7978,11 +7985,11 @@ _positive_dist_5 :
 	jr nc, _positive_dist_4
 	neg
 _positive_dist_4 :
+	ld c, a
 	cp #32
 	jr nc, _continue_fh_walking
 
 	; if distance < 32 and Shield active and FH is walking into player direction, change FH direction (runaway from player)
-	ld c, a
 	ld a, (#_cPlyRemainShield)
 	or a
 	jr z, _continue_fh_walking_ex
@@ -8010,11 +8017,19 @@ _continue_fh_walking :
 	jr nc, _no_enemy_colision
 
 	; enemy colision detected
-	; ... but if Shield active, do not jump
+	; ... but if Shield active, do not jump ...
+	; ... but if distance <=8, kill facehug
 	ld a, (#_cPlyRemainShield)
 	or a
-	jr nz, _no_enemy_colision
+	jr z, _continue_fh_jump
+	; shield is active
+	ld a, c
+	cp #8
+	jr nc, _no_enemy_colision
+	ld 5 (ix), #PTS_ALIGN_PLAYER
+	jp _shot_killed_enemy
 
+_continue_fh_jump :
 	; no need to check for the other enemies in this same screen
 	ld a, #BOOL_FALSE
 	ld (#_bCheckPlayerColision), a
