@@ -6881,6 +6881,8 @@ _check_power :
 	or a
 	ret nz
 _set_player_as_dead :
+	ld de, #0x0609
+	call _flash_bg_screen
 	; _cPower = 0. Set PLYR_STATUS_DEAD and start dead animation timer
 	ld hl, #_cPlyDeadTimer
 	ld (hl), #DEAD_ANIM_TIMER
@@ -6891,6 +6893,9 @@ _set_player_as_dead :
 	ld a, (#_sThePlayer + #09) ; grabflag
 	cp #BOOL_TRUE
 	call z, _set_grabbed_enemy_as_dead
+	call _ubox_wait
+	ld de, #0x0101
+	call _flash_bg_screen
 
 _cont_dead_player :
 	; mplayer_play_effect_p(SFX_DEADPLAYER, SFX_CHAN_NO, 0);
@@ -10434,16 +10439,8 @@ __endasm;
 void draw_game_win()
 {
 __asm
-  ; ubox_set_colors(uint8_t fg, uint8_t bg, uint8_t border);
-	call	_ubox_wait
-	ld	de, #0x060D
-	push	de
-	ld	a, #0x01
-	push	af
-	inc	sp
-	call	_ubox_set_colors
-	pop	af
-	inc	sp
+  ld de, #0x0A0B
+  call _flash_bg_screen
 
 	call	_ubox_wait
   call _ubox_disable_screen
@@ -10451,21 +10448,21 @@ __asm
 	ld (hl), #GAMESTAGE_FINAL
 	call _load_tileset
 
+	call	_ubox_wait
+	ld de, #0x0609
+	call _flash_bg_screen
+
 	ld	l, #BLANK_TILE
 	call	_ubox_fill_screen
-
-	ld	de, #0x0101
-	push	de
-	push	de
-	inc sp
-	call	_ubox_set_colors
-	pop	af
-	inc	sp
 
 	call _ubox_enable_screen
 	ld	hl, #_SONG
 	ld a, #SONG_SILENCE
 	call _mplayer_init_asm_direct
+
+	call	_ubox_wait
+	ld de, #0x0101
+	call _flash_bg_screen
 
 	ld a, #GAME_TEXT_GAME_WIN_ID
 	call _search_text_block
@@ -10757,7 +10754,16 @@ _nostromo_display_loop :
 	ret
 
 _flash_bg_screen :
-
+; ubox_set_colors(uint8_t fg, uint8_t bg, uint8_t border);
+  call	_ubox_wait
+	; DE = border + bg
+	push	de
+	ld	a, #0x01
+	push	af
+	inc	sp
+	call	_ubox_set_colors
+	pop	af
+	inc	sp
 __endasm;
 }  // void draw_game_win()
 
