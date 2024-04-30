@@ -2396,15 +2396,20 @@ __asm
 	cp 1 (ix); ScreenObject->cX0
 	jp c, _no_foot_colision
 	; foot colision detected. Update player Y coordinate above the object and stop falling
-	; if PLYR_STATUS_JUMPING, set cGlbPlyJumpTimer = ONE_SECOND_TIMER/2 before restoring status to PLYR_STATUS_STAND (avoid double jump)
 	ld a, (#_sThePlayer + #03) ; A = sThePlayer.status
 	cp #PLYR_STATUS_JUMPING
 	jr nz, _set_status_stand
+	; if player jumping UP and foot colision detected, update player Y position but avoid interrupting the jump
+	ld a, (#_cGlbPlyJumpStage)
+	cp #PLYR_JUMP_STAGE_UP
+	jp z, _keep_player_jumping
+	; if PLYR_STATUS_JUMPING, set cGlbPlyJumpTimer = ONE_SECOND_TIMER / 2 before restoring status to PLYR_STATUS_STAND (avoid double jump)
 	ld a, #ONE_SECOND_TIMER >> #2
 	ld (#_cGlbPlyJumpTimer), a
 _set_status_stand :
 	ld a, #PLYR_STATUS_STAND
 	ld (#_sThePlayer + #03), a ; A = sThePlayer.status
+_keep_player_jumping :
 	ld e, #256 - #16
 _updt_Y_coordinate :
 	ld a, #BOOL_TRUE
@@ -6881,9 +6886,9 @@ _check_power :
 	or a
 	ret nz
 _set_player_as_dead :
+	; _cPower = 0. Set PLYR_STATUS_DEAD and start dead animation timer
 	ld de, #0x0609
 	call _flash_bg_screen
-	; _cPower = 0. Set PLYR_STATUS_DEAD and start dead animation timer
 	ld hl, #_cPlyDeadTimer
 	ld (hl), #DEAD_ANIM_TIMER
 	ld hl, #_sThePlayer + #03  ; status
@@ -7968,15 +7973,48 @@ _positive_dist_5 :
 
 	; if |(xe - xp)| >= 12 then no player colision
 	ld a, (#_sThePlayer) ; xp
-	ld b, 0 (ix) ; xe
+	ld b, 0 (ix) ; xe - already set
 	sub b
 	jr nc, _positive_dist_4
 	neg
 _positive_dist_4 :
-  cp #12
+	cp #32
+	jr nc, _continue_fh_walking
+
+	; if distance < 32 and Shield active and FH is walking into player direction, change FH direction (runaway from player)
+	ld c, a
+	ld a, (#_cPlyRemainShield)
+	or a
+	jr z, _continue_fh_walking_ex
+	; if (xp > xe) &dir_e = right, change fh direction
+	; if (xe > xp) &dir_e = left , change fh direction
+	ld a, (#_sThePlayer) ; xp
+	cp b
+	ld a, 2 (ix) ; dir
+	jr nc, _check_player_at_right
+	cp #ENEMY_SPRT_DIR_LEFT ; 1
+	jr nz, _continue_fh_walking_ex
+_change_fh_direction :
+	xor #1
+	ld 2 (ix), a ; dir
+	jr _no_enemy_colision
+
+_check_player_at_right :
+	cp #ENEMY_SPRT_DIR_RIGHT ; 0
+	jr z, _change_fh_direction
+
+_continue_fh_walking_ex :
+	ld a, c
+_continue_fh_walking :
+	cp #12
 	jr nc, _no_enemy_colision
 
 	; enemy colision detected
+	; ... but if Shield active, do not jump
+	ld a, (#_cPlyRemainShield)
+	or a
+	jr nz, _no_enemy_colision
+
 	; no need to check for the other enemies in this same screen
 	ld a, #BOOL_FALSE
 	ld (#_bCheckPlayerColision), a
