@@ -2482,10 +2482,38 @@ _check_down_8 :
 	cp 3 (ix); ScreenObject->cY0
 	jp c, _no_vertical_colision
 	; colision detected. if ((player.status <> PLYR_STATUS_STAND) and (player.status <> PLYR_STATUS_WALKING)) then update Y coordinate, else update X coordinate
-	ld e, #8
 	ld a, (#_sThePlayer + #03) ; A = sThePlayer.status
+
+	; 05/07/24 - bug fix : if player is jumping when forced down by the slider, need to check if does not pressed against a solid block
+	cp #PLYR_STATUS_JUMPING
+	jr nz, _continue_test_player_status
+	; look at the tile just below player foot - if SOLID, then stop jumping and start colision routine
+	ld c, #7
+	ld d, #16 + #4
+	call _calcTileXYAddr   ;Int
+	ld a, (hl)
+	ld e, #8
+	; lets check the tile at player foot for a solid one
+	bit #7, a ; test if bit 7 (SOLID BIT) is set
+	jp z, _updt_Y_coordinate
+	ld a, #PLYR_STATUS_STAND
+	ld (#_sThePlayer + #03), a ; A = sThePlayer.status
+	; if set PLYR_STATUS_STAND, set cGlbPlyJumpTimer = ONE_SECOND_TIMER before enabling another jump
+	ld a, #ONE_SECOND_TIMER
+	ld (#_cGlbPlyJumpTimer), a
+	; force the player to reach the floor
+	ld a, (#_sThePlayer + #1) ; A = _sThePlayer.y
+	and #0b00000111
+	jr z, _no_foot_colision ; no Y adjustment necessary
+	ld a, 4 (ix) ; A = ScreenObject->cY1
+	inc a
+	ld (#_sThePlayer + #1), a ; player->y = ScreenObject->cY0
+	jr _no_foot_colision
+
+_continue_test_player_status :
+	ld e, #8
 	cp #PLYR_STATUS_FALLING
-	jr nc, _updt_Y_coordinate
+	jp nc, _updt_Y_coordinate
 
 _no_foot_colision :
 	; if (player.x + 8) < ((Object.cX1 + Object.cX0 + 1) / 2) move player LEFT else move player RIGHT
@@ -5321,7 +5349,7 @@ __asm
 	ret nz; not climbing
 
 	xor a
-	ld(#_cGlbPlyFlag), a; reset _cGlbPlyFlag
+	ld(#_cGlbPlyFlag), a ; reset _cGlbPlyFlag
 	inc a
 	ld (#_bGlbPlyMoved), a ; player has moved UP
 
@@ -5329,7 +5357,7 @@ __asm
 	dec a
 	ld (#_sThePlayer + #01), a
 
-	; check for next map when climbing
+	; check for next map when climbing up
 	ld l, #BOOL_TRUE; everything ok
 	cp #4 * #8
 	jr nc, _not_NextM_3
@@ -5367,7 +5395,7 @@ _upper_tile_not_solid :
 	and a, #0b11111000 ; round y to be multiple of 8
 	ld (hl), a
 
-	ld a, #ONE_SECOND_TIMER
+	ld a, #ONE_THIRD_SECOND_TIMER * #2
 	ld (#_cGlbPlyJumpTimer), a
 	xor a ; A = BOOL_FALSE
 	ld (#_bGlbPlyMoved), a   ; player has not moved
@@ -5473,7 +5501,7 @@ __endasm;
 *														||||||L- Solid *
 *														|||||L-- Gate
 *														||||L--- Empty floor
-*														|||L---- Special (Stairs) *
+*														|||L---- Special (Stairs, cable) *
 *														||L----- Next map
 *														|L------ Object
 *														L------- TBD
@@ -5493,17 +5521,18 @@ __asm
 _chk_head_sld :
 	ld a, (hl)
 	; lets check the tile above player head for a solid one (exception for Special Solid Tiles)
-	bit #7, a; test if bit 7 (SOLID BIT) is set
+	bit #7, a ; test if bit 7 (SOLID BIT) is set
 	jr z, _cont_chk_head
 	; Solid tile - check if also Special Solid
 	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
-	jr z, _solid_up; tile is not stairs
+	jr z, _solid_up ; tile is not stairs
 _cont_chk_head :
 	inc hl
 	djnz _chk_head_sld
 
-	; not a solid tile above the head - check for a stair
-	ld d, #256 - #8
+	; not a solid tile above the head - check for a stair at player head
+	;;ld d, #256 - #8
+	ld d, #0 ; dont need to check above the head, but at the head
 _tstforStair :
 	call _chkFootTileQtty  ; B = 1 or 2 horizontal tiles to test
 	ld c, #6
@@ -5512,18 +5541,18 @@ _tstforStair :
 	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
 	jr z, _duNotStairs; tile is not stairs
 	dec b
-	jr z, _stairDetected ; first tile is a stair AND just 1 tile - no need to test a second tile
+	jr z, _stairDetected ; first tile is a stair/cable AND just 1 tile - no need to test a second tile
 	inc hl
 	ld a, (hl)
-	bit #6, a; test if bit 6 (SPECIAL TILE BIT) is set
-	jr z, _duNotStairs ; second tile is not stairs
+	bit #6, a ; test if bit 6 (SPECIAL TILE BIT) is set
+	jr z, _duNotStairs ; second tile is not stair/cable
 _stairDetected :
-	; stairs detected
+	; stairs/cable detected
 	ld a, b
 	inc a
 	ld (#_cGlbObjData), a; _cGlbObjData = 1 or 2 empty tiles
 	ld hl, #_cGlbPlyFlag
-	set 4, (hl); special floor(stairs)
+	set 4, (hl) ; special floor(stairs/cable)
 	jp _dwEndConflicting
 
 _duNotStairs :
@@ -5593,7 +5622,7 @@ _chkFootTileQtty :
 	ret
 
 _dwEndConflicting :
-	ld l, #BOOL_FALSE; conflict detected
+	ld l, #BOOL_FALSE ; conflict detected
 __endasm;
 }  // bool is_player_cmd_down_ok()
 
@@ -6534,7 +6563,7 @@ _vert_validate :
 	jp z, _jmpFoundPortal_02
 
 	; its not fatal nor portal, so test if Solid...
-	; ...but if cFFFlagColision = true, check for a SOLID_COLISION <> TILE_TYPE_FATAL_OR_SOLID.If found then do not move
+	; ...but if cFFFlagColision = true, check for a SOLID_COLISION <> TILE_TYPE_FATAL_OR_SOLID. If found then do not move
 	bit 7, a; SOLID BIT
 	; no solid colision detected, check next tile
 	jr z, _jmpNextSearch_02
@@ -7019,7 +7048,7 @@ _sttClbUp :
 	dec a
 	dec a
 _sttClimb :
-	ld(#_sThePlayer + #01), a
+	ld (#_sThePlayer + #01), a
 	ld d, #PLYR_STATUS_CLIMB
 	jr _sttFall2
 
