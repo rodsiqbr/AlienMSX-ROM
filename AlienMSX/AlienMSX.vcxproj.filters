@@ -122,6 +122,9 @@
     <ClInclude Include="data\explosts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="data\joyts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MSX\BIOS\msxbios.s">

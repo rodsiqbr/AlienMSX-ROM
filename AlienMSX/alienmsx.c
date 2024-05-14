@@ -25,13 +25,14 @@
 #include "data/font1ts.h"    // font 1 Tileset (blue)
 #include "data/font2ts.h"    // font 2 Tileset (white)
 //#include "data/font3ts.h"  // font 3 Tileset (green) - NOT USED
-#include "data/introts.h"    // intro Tileset
+#include "data/introts.h"    // intro Tileset (B&W)
+#include "data/joyts.h"      // intro joystick Tileset
 #include "data/scorets.h"    // score Tileset
 #include "data/game0ts.h"    // game map level 1 and 3 Tileset
 #include "data/game1ts.h"    // game map level 2 Tileset
 #include "data/fatalts.h"    // game map Fatal Tilesets (same for Level 1, 2 and 3)
-#include "data/alients.h"    // Alien creature Tileset
-#include "data/nostrots.h"   // final screen Nostromo ship Tileset
+#include "data/alients.h"    // Alien creature Tileset (B&W)
+#include "data/nostrots.h"   // final screen Nostromo ship Tileset (B&W)
 #include "data/explosts.h"   // final screen Nostromo Explosion Tileset
 
 
@@ -158,6 +159,9 @@ struct FlashLightStatusData
 // CONSTANT DATA AND DEFINES SECTION
 // ----------------------------------------------------------
 
+#define _GAME_VERSION_NTSC_
+//#define _GAME_VERSION_PAL_
+
 // N = n {0, 1, 2}: Tile offset to print at screen (base tile + N)
 // N = 0xFF			: Blank Tile to print at screen
 // N = 0xFE			: Stop animation (until animation restarts by an user action or a timer)
@@ -175,37 +179,121 @@ const uint8_t cCycleTable[] = {
 																0, 1, 2, 0, 1, 2, 0, 1, 2, 0xFF,                      // 10 = portal
 																1, 1, 1, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,    // 11 = locker open
 																2, 0xFE, 0xFF, 0xFE, 0, 0xFE, 6, 0xFE, 0xFE, 0xFE,    // 12 = Facehugger Egg top (0, 2), Facehugger Egg body (4, 6)
-																// Intro logo animation blocks
-																16, 1, 1, 1, 1,							// I
-																5, 3, 2, 2, 2,							// A
-																26, 2, 2, 3, 3,							// N
-																11, 1, 1, 1, 1,							// L
-																20, 1, 1, 1, 1,							// E
-																6, 2, 2, 3, 3,							// A		
-																28, 1, 1, 1, 1,							// N		
-																21, 2, 2, 0, 2,							// E		
-																12, 0, 0, 0, 2,							// L		
-																26, 1, 1, 1, 1,							// N		
-																6, 0, 0, 2, 2,              // A		
-                                21, 0, 2, 2, 0,             // E
 };
 
-// Nostromo ship tileset map RLEncoded
-const uint8_t cNostromo_img_guide[] = { 6, 1, 3, 2,              // Line 1: 6 zeros then 1 tile, 3 zeros then 2 tiles
-                                        14, 2, 3, 2,             // Line 2: 14 zeros then 2 tile2, 3 zeros then 2 tiles
-																				13, 4, 2, 2,             // Line 3: you got it, right?!
-																				13, 4, 1, 4,             // Line 4:
-																				12, 3, 2, 5, 2, 2,       // Line 5:
-																				7, 9, 3, 2,              // Line 6:
-																				7, 9, 2, 4,              // Line 7:
-																				4, 17,                   // Line 8:
-																				5, 16,                   // Line 9:
-																				2, 20,                   // Line 10:
-																				1, 20,                   // Line 11:
-																				1, 20,                   // Line 12:
-																				5, 3, 2, 5, 1, 3, 0xFF,  // Line 13: 0xFF = EOF
+// Intro logo animation blocks
+const uint8_t cIntro_img_guide[] = { 16, 1, 1, 1, 1,						// I
+                                     5, 3, 2, 2, 2,							// A
+																     26, 2, 2, 3, 3,						// N
+																     11, 1, 1, 1, 1,						// L
+																     20, 1, 1, 1, 1,						// E
+																     6, 2, 2, 3, 3,							// A		
+																     28, 1, 1, 1, 1,						// N		
+																     21, 2, 2, 0, 2,						// E		
+																     12, 0, 0, 0, 2,						// L		
+																     26, 1, 1, 1, 1,						// N		
+																     6, 0, 0, 2, 2,             // A		
+																     21, 0, 2, 2, 0,            // E
 };
 
+
+#define ALIEN_RLE_BLACK_TILE 0b00000000
+#define ALIEN_RLE_TILE_TILE  0b01000000
+#define ALIEN_RLE_WHITE_TILE 0b11000000
+
+// Alien Intro tileset map RLEncoded [ttnnnnnn] tt=(B=Black, T=Tile, W=White), nnnnn=Nro de Tiles
+const uint8_t cAlien_img_guide[] = { ALIEN_RLE_TILE_TILE  | 4, // T4
+																		 ALIEN_RLE_BLACK_TILE | 3, // B3
+																		 
+																		 ALIEN_RLE_WHITE_TILE | 2, // W2 
+																		 ALIEN_RLE_TILE_TILE  | 3, // T3
+																		 ALIEN_RLE_BLACK_TILE | 2, // B2
+																		 
+																		 ALIEN_RLE_WHITE_TILE | 4, // W4
+																		 ALIEN_RLE_TILE_TILE  | 2, // T2
+																		 ALIEN_RLE_BLACK_TILE | 1, // B1
+																		 
+																		 ALIEN_RLE_WHITE_TILE | 5, // W5
+																		 ALIEN_RLE_TILE_TILE  | 2, // T2
+																		 
+																		 ALIEN_RLE_WHITE_TILE | 3, // W3
+																		 ALIEN_RLE_TILE_TILE  | 2, // T2
+																		 ALIEN_RLE_WHITE_TILE | 1, // W1
+																		 ALIEN_RLE_TILE_TILE  | 1, // T1
+																		 
+																		 ALIEN_RLE_WHITE_TILE | 2, // W2
+																		 ALIEN_RLE_TILE_TILE  | 7, // T7
+																		 
+																		 ALIEN_RLE_BLACK_TILE | 2, // B2
+																		 ALIEN_RLE_TILE_TILE  | 5, // T5
+																		 
+																		 ALIEN_RLE_BLACK_TILE | 4, // B4
+																		 ALIEN_RLE_TILE_TILE  | 1, // T1
+																		 0xFF,                     // EOF
+};
+
+// Nostromo ship tileset map RLEncoded [ttnnnnnn] tt=(B=Black, T=Tile, W=White), nnnnn=Nro de Tiles
+const uint8_t cNostromo_img_guide[] = { ALIEN_RLE_BLACK_TILE | 6,
+                                        ALIEN_RLE_TILE_TILE  | 1,
+																				ALIEN_RLE_BLACK_TILE | 3,
+																				ALIEN_RLE_TILE_TILE  | 2,  // Line 1
+
+																				ALIEN_RLE_BLACK_TILE | 14,
+																				ALIEN_RLE_TILE_TILE  | 2,
+																				ALIEN_RLE_BLACK_TILE | 3,
+																				ALIEN_RLE_TILE_TILE  | 2,  // Line 2
+
+																				ALIEN_RLE_BLACK_TILE | 13,
+																				ALIEN_RLE_TILE_TILE  | 4,
+																				ALIEN_RLE_BLACK_TILE | 2,
+																				ALIEN_RLE_TILE_TILE  | 2,  // Line 3
+
+																				ALIEN_RLE_BLACK_TILE | 13,
+																				ALIEN_RLE_TILE_TILE  | 4,
+																				ALIEN_RLE_BLACK_TILE | 1,
+																				ALIEN_RLE_TILE_TILE  | 4,  // Line 4
+
+																				ALIEN_RLE_BLACK_TILE | 12,
+																				ALIEN_RLE_TILE_TILE  | 3,
+																				ALIEN_RLE_BLACK_TILE | 2,
+																				ALIEN_RLE_TILE_TILE  | 5,
+																				ALIEN_RLE_BLACK_TILE | 2,
+																				ALIEN_RLE_TILE_TILE  | 2,  // Line 5
+
+																				ALIEN_RLE_BLACK_TILE | 7,
+																				ALIEN_RLE_TILE_TILE  | 9,
+																				ALIEN_RLE_BLACK_TILE | 3,
+																				ALIEN_RLE_TILE_TILE  | 2,  // Line 6
+
+																				ALIEN_RLE_BLACK_TILE | 7,
+																				ALIEN_RLE_TILE_TILE  | 9,
+																				ALIEN_RLE_BLACK_TILE | 2,
+																				ALIEN_RLE_TILE_TILE  | 4,  // Line 7
+
+																				ALIEN_RLE_BLACK_TILE | 4,
+																				ALIEN_RLE_TILE_TILE  | 17, // Line 8
+
+																				ALIEN_RLE_BLACK_TILE | 5,
+																				ALIEN_RLE_TILE_TILE  | 16, // Line 9
+
+																				ALIEN_RLE_BLACK_TILE | 2,
+																				ALIEN_RLE_TILE_TILE  | 20, // Line 10
+
+																				ALIEN_RLE_BLACK_TILE | 1,
+																				ALIEN_RLE_TILE_TILE  | 20, // Line 11
+
+																				ALIEN_RLE_BLACK_TILE | 1,
+																				ALIEN_RLE_TILE_TILE  | 20, // Line 12
+
+																				ALIEN_RLE_BLACK_TILE | 5,
+																				ALIEN_RLE_TILE_TILE  | 3,
+																				ALIEN_RLE_BLACK_TILE | 2,
+																				ALIEN_RLE_TILE_TILE  | 5,
+																				ALIEN_RLE_BLACK_TILE | 1,
+																				ALIEN_RLE_TILE_TILE  | 3,
+																				ALIEN_RLE_BLACK_TILE | 3, // Line 13
+																				0xFF,                     // EOF
+};
 
 #define ANIM_CYCLE_STEP_BLANK   0xFF
 #define ANIM_CYCLE_STEP_STOP    0xFE
@@ -225,8 +313,6 @@ const uint8_t cNostromo_img_guide[] = { 6, 1, 3, 2,              // Line 1: 6 ze
 #define ANIM_CYCLE_SLIDER_DOWN  51
 #define ANIM_CYCLE_SLIDER_RIGHT 52
 #define ANIM_CYCLE_SLIDER_LEFT  53
-
-#define INTRO_BLOCK_OFFSET      13 // start row for Intro block animation data at cCycleTable[]
 
 
 #define GAMESTAGE_INTRO    1
@@ -441,11 +527,14 @@ const uint8_t enemy_hurt_frames[]  = { 3, 3, 3, 3, 4, 4, 4, 4, 4, 0xFC };  // us
 uint8_t FONT1_TILE_OFFSET;  // first font tile (' ') position in the Tileset
 uint8_t FONT2_TILE_OFFSET; 
 
-#define INTRO_CTRL_TILE_NR     (TS_FONT1_SIZE + 65) // first Control tile starts at position 65 in the 'Intro' Tileset
-#define INTRO_BOX_TILE_NR      (TS_FONT1_SIZE + 94) // first Box Tile tile starts at position 94 in the 'Intro' Tileset
-#define INTRO_MENU_POS_X        6                   // X position for Intro menu
-#define INTRO_MENU_POS_Y       16                   // Y position for Intro menu
-#define MAX_INTRO_MENU_OPTIONS  3                   // only 3 option in the intro menu
+#define INTRO_SELECT_TILE_OFS  65      // first Select animated box Tile at 'Intro' Tileset
+#define INTRO_ALIEN_TILE_OFS   85      // first Alien Tile at 'Intro' Tileset
+#define INTRO_ALIEN_WHITE_OFS  112     // Alien White Tile at 'Intro' Tileset
+#define INTRO_CTRL_TILE_OFS    113     // first Control Tile at 'Intro' Tileset
+
+#define INTRO_MENU_POS_X        6      // X position for Intro menu
+#define INTRO_MENU_POS_Y       16      // Y position for Intro menu
+#define MAX_INTRO_MENU_OPTIONS  3      // only 3 option in the intro menu
 
 #define INTRO_CTRL_CYCLE        8
 const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2, 4 << 2, 3 << 2, 2 << 2, 1 << 2 };
@@ -583,8 +672,26 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define FLASHLIGHT_BATTR_PTS   30
 #define INVULNERABILITY_SHIELD 05
 #define MAX_AMNO_SHIELD        99
-#define ONE_SECOND_TIMER       30  // = 1 sec
-#define ONE_THIRD_SECOND_TIMER 10  // = 300 msec
+
+#ifdef _GAME_VERSION_PAL_
+
+#define ONE_SECOND_TIMER        25  // = 1 sec
+#define HALF_SECOND_TIMER       13  // = 500 Msec
+#define ONE_THIRD_SECOND_TIMER   8  // = 300 msec
+#define ONE_FOURTH_SECOND_TIMER  6  // = 250 msec
+
+#define ALIEN_ANIM_DELAY         6  // 250 msec to change alien frame
+
+#else // _GAME_VERSION_NTSC_
+
+#define ONE_SECOND_TIMER        30  // = 1 sec
+#define HALF_SECOND_TIMER       15  // = 500 Msec
+#define ONE_THIRD_SECOND_TIMER  10  // = 300 msec
+#define ONE_FOURTH_SECOND_TIMER  7  // = 250 msec
+
+#define ALIEN_ANIM_DELAY         7  // 250 msec to change alien frame
+
+#endif
 
 #define EGG_SHOTS_TO_DESTROY    7
 #define ST_EGG_CLOSED           0  // ** must be 0 for animation to work
@@ -612,12 +719,9 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define SCORE_LEVELUP_POINTS  100  // 100 points to the score when level complete
 
 #define SCORE_ADD_ANIM          4  // score points to increase for each score animation cycle
-#define HIT_ANIM_TIMER          7
-#define DEAD_ANIM_TIMER        25  // 5 cycles, each cycle = 5 distinct frame
-#define KEY_PRESS_DELAY        16  // delay in cycles before accept a new key press
 
+#define DEAD_ANIM_CYCLES       25  // 5 cycles, each cycle = 5 distinct frame
 #define ENEMY_ANIM_DELAY       96  // cycles to change enemy frame
-#define ALIEN_ANIM_DELAY        6  // cycles to change alien frame
 #define PLAYER_ANIM_DELAY       3  // cycles to change player frame
 
 #define CACHE_INVALID           0xFF
@@ -685,6 +789,7 @@ bool bFinalMeltdown;                  // meltdown timer enabled/disabled
 
 // Global variables for runtime speed optimization
 uint16_t iGameCycles;
+uint8_t cGameCycles;
 uint8_t cAnimTilesQty;
 uint8_t cAnimSpecialTilesQty;
 uint8_t cGlbSpecialTilesActive;
@@ -844,48 +949,77 @@ void load_tileset()
 __asm
 	ld a, (#_cGameStage)
 	cp #GAMESTAGE_INTRO
-	jr nz, _test_levelgs
+	jp nz, _test_levelgs
 
   ; INTRO STAGE
 _intro_stage :
 	xor a
 	ld (#_FONT1_TILE_OFFSET), a
-	ld a, #TS_FONT1_SIZE + #TS_INTRO_SIZE
+	ld a, #TS_FONT1_SIZE
 	ld (#_FONT2_TILE_OFFSET), a
 
-	; upload font1 + intro + font 2 tileset
+	; upload font1 + font 2 + intro + joy tileset
 	ld hl, #_font1
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
 
-	ld hl, #_intro
+	ld hl, #_font2
 	ld de, #_cBuffer + #TS_FONT1_SIZE * #8
 	call _zx0_uncompress_asm_direct
 
-	ld hl, #_font2
-	ld de, #_cBuffer + #TS_FONT1_SIZE *#8 + #TS_INTRO_SIZE * #8
+	ld hl, #_intro
+	ld de, #_cBuffer + #TS_FONT1_SIZE *#8 + #TS_FONT2_SIZE * #8
 	call _zx0_uncompress_asm_direct
 
+	ld hl, #_injoy
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #8 + #TS_INTRO_SIZE * #8
+	call _zx0_uncompress_asm_direct
+		
 	ld hl, #_cBuffer
 	call _ubox_set_tiles
 
-	; now upload font1 color + intro color + font 2 color
+	; now upload font1 color + font 2 color + intro + joy color
 	ld hl, #_font1_colors
 	ld de, #_cBuffer
 	call _zx0_uncompress_asm_direct
 
-	ld hl, #_intro_colors
+	ld hl, #_font2_colors
 	ld de, #_cBuffer + #TS_FONT1_SIZE * #8
 	call _zx0_uncompress_asm_direct
 
-	ld hl, #_font2_colors
-	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_INTRO_SIZE * #8
-	call _zx0_uncompress_asm_direct
+	; set colors for this B&W tileset
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #8
+	ld a, #7 << #4;  // ALIEN TEXT Cyan
+	ld bc, #INTRO_SELECT_TILE_OFS * #8
+	call _set_buffer_with_value
+	ld a, #15 << #4; // Select Tiles White
+	ld bc, #INTRO_ALIEN_TILE_OFS * #8 - #INTRO_SELECT_TILE_OFS * #8
+	call _set_buffer_with_value
+	xor a // ALIEN Black
+	ld bc, #INTRO_CTRL_TILE_OFS * #8 - #INTRO_ALIEN_TILE_OFS * #8
+	call _set_buffer_with_value
+	ld a, #15 << #4; // Control Tiles White
+	ld bc, #TS_INTRO_SIZE * #8 - #INTRO_CTRL_TILE_OFS * #8
+	call _set_buffer_with_value
 
+	ld hl, #_injoy_colors
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #8 + #TS_INTRO_SIZE * #8
+	call _zx0_uncompress_asm_direct
+		
 	ld hl, #_cBuffer
 	call _ubox_set_tiles_colors
 	ret
 
+_set_buffer_with_value :
+	ld (de), a
+	inc de
+	dec bc ; does not affect Z flag
+	ld l, a
+	ld a, b
+	or c
+	ld a, l
+	jr nz, _set_buffer_with_value
+	ret
 
 _test_levelgs :
 	cp #GAMESTAGE_LEVEL
@@ -1017,15 +1151,10 @@ _test_finalgs :
 	call _zx0_uncompress_asm_direct
 		
 	ld bc, #TS_NOSTROMO_SIZE * #8
-	ld hl, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #4
-	ld e, #0xF0
-_set_nostromo_color_loop :
-	ld (hl), e
-	inc hl
-	dec bc
-	ld a, b
-	or c
-	jr nz, _set_nostromo_color_loop
+
+	ld de, #_cBuffer + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #4
+	ld a, #0xF0
+	call _set_buffer_with_value
 
 	ld hl, #_cBuffer
 	call _ubox_set_tiles_colors
@@ -1740,10 +1869,37 @@ void display_game_logo()
 __asm
 	push iy
 
+	; rebuild and display Alien creature (7x8 initially BLANK) at bottom-left corner
+	ld iy, #_cAlien_img_guide
+	ld hl, #_cBuffer
+	ld e, #TS_FONT1_SIZE + #TS_FONT2_SIZE + #INTRO_ALIEN_TILE_OFS ; First Alien tile
+	call _rebuild_rle_tile_sequence
+
+	ld de, #UBOX_MSX_NAMTBL_ADDR + #16 * #32
+	ld hl, #_cBuffer
+	ld bc, #0x0807
+_print_alien_line :
+	push bc
+	push hl
+	push de
+	ld b, #0
+	call #0x005C ; LDIRVM - Copia um bloco da RAM para a VRAM / BC = Comprimento, DE = Endereço VRAM, HL = Endereço RAM / Modifica : AF, BC, DE, HL, EI
+	ld bc, #32
+	pop de
+	ex de, hl
+	add hl, bc
+	ex de, hl
+	ld bc, #7
+	pop hl
+	add hl, bc
+	pop bc
+	djnz _print_alien_line
+
 	; Set IY at Block size matrix
-	ld iy, #_cCycleTable + #INTRO_BLOCK_OFFSET * #10
+	ld iy, #_cIntro_img_guide
 	ld b, #12 ; 12 animation steps
-	ld c, #TS_FONT1_SIZE; First Intro tile
+	ld c, #TS_FONT1_SIZE + #TS_FONT2_SIZE ; First Intro tile
+
 _new_anim_step :
 	push bc
 	call _anim_intro_block
@@ -1752,12 +1908,30 @@ _new_anim_step :
 	ld	a, (#_bIntroAnim)
 	or a
 	jr	z, _no_wait
-	ld	l, #0x08
+	ld	l, #ONE_THIRD_SECOND_TIMER
 	call	_ubox_wait_for
 _no_wait :
 	ld d, c ; D = Last tile used
 	pop bc
 	ld c, d
+
+
+
+	ld a, b
+	cp #9
+	jr nz, _prox_alien_block
+	push bc
+	ld bc, #INTRO_CTRL_TILE_OFS * #8 - #INTRO_ALIEN_TILE_OFS * #8
+	ld hl, #UBOX_MSX_COLTBL_ADDR + #512 * #8 + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #8 + #INTRO_ALIEN_TILE_OFS * #8
+	ld a, #0xF0
+	call #0x0056; FILVRM - Fill VRAM with value
+
+
+	pop bc
+_prox_alien_block :
+
+
+
 	djnz _new_anim_step
 
 	; Display_Text(18, 7, FONT2_TILE_OFFSET, ".UNOFFICIAL");
@@ -1774,6 +1948,37 @@ _no_wait :
 	pop af
 	pop iy
 	ret
+
+_rebuild_rle_tile_sequence :
+_next_alien_rle:
+	ld a, 0 (iy)
+	cp #0xFF
+	ret z
+	ld d, a
+	and #0b00111111
+	ld b, a
+_next_rle_alien_tile :
+	ld a, d
+	and #0b11000000
+	cp #ALIEN_RLE_BLACK_TILE
+	jr z, _set_black_tile
+	cp #ALIEN_RLE_WHITE_TILE
+	jr z, _set_white_tile
+	; continue from last used tile
+	ld a, e
+	inc e
+	jr _set_alien_rle_tile
+_set_black_tile :
+	xor a
+	jr _set_alien_rle_tile
+_set_white_tile :
+	ld a, #TS_FONT1_SIZE + #TS_FONT2_SIZE + #INTRO_ALIEN_WHITE_OFS
+_set_alien_rle_tile :
+	ld (hl), a
+	inc hl
+	djnz _next_rle_alien_tile
+	inc iy
+	jr _next_alien_rle
 
 	; C = First intro tile for this block
 	; (iy + 0) = X
@@ -1834,7 +2039,7 @@ _new_color_anim :
 
 	ld h, #0
 	ld l, e
-	rlc l
+	add hl, hl
 	add hl, hl
 	add hl, hl
 	ld bc, #UBOX_MSX_COLTBL_ADDR
@@ -1940,7 +2145,7 @@ _cctrl_loop :
 	ld (#_cCtrl), a
 
 	ld a, (#_ubox_tick)
-	cp #15
+	cp #HALF_SECOND_TIMER
 	jr nz, _cctrl_loop
 	push bc
 	; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 9 + (cCtrl_frames[cCont] << 2), 2, 2);
@@ -1948,7 +2153,7 @@ _cctrl_loop :
 	ld b, #0
 	add hl, bc
 	ld a, (hl)
-  add a, #INTRO_CTRL_TILE_NR + #9
+	add a, #TS_FONT1_SIZE + #TS_FONT2_SIZE + #INTRO_SELECT_TILE_OFS
 	ld c, #INTRO_MENU_POS_X + #20
 	ld b, #INTRO_MENU_POS_Y
 	ld de, #0x0202
@@ -1978,11 +2183,11 @@ _cctrl_selected :
 	jr nz, _try_joy_1
 
   ; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 5, 2, 2);
-	ld a, #INTRO_CTRL_TILE_NR + #5
+  ld a, #TS_FONT1_SIZE + #TS_FONT2_SIZE + #INTRO_CTRL_TILE_OFS  ; keyboard
 	jr _disp_cctrl
 _try_joy_1 :
 	; put_tile_block(26, INTRO_MENU_POS, INTRO_CTRL_TILE_NR, 2, 2);
-	ld a, #INTRO_CTRL_TILE_NR
+  ld a, #TS_FONT1_SIZE + #TS_FONT2_SIZE + #INTRO_CTRL_TILE_OFS + #4 ; joystick 1
 _disp_cctrl :
 	ld c, #INTRO_MENU_POS_X + #20
 	ld b, #INTRO_MENU_POS_Y
@@ -1995,7 +2200,7 @@ _try_joy_2 :
 	cp #UBOX_MSX_CTL_PORT2
 	jr nz, _end_display_cctrl
 	; ubox_put_tile(27, INTRO_MENU_POS, INTRO_CTRL_TILE_NR + 4);
-	ld a, #INTRO_CTRL_TILE_NR + #4
+  ld a, #TS_FONT1_SIZE + #TS_FONT2_SIZE + #INTRO_CTRL_TILE_OFS + #4 + #4  ; joystick 2
 	ld b, #INTRO_MENU_POS_Y
 	ld c, #INTRO_MENU_POS_X + #20 + #1
 	call _put_tile_asm_direct
@@ -2158,7 +2363,7 @@ _wait_and_reak_key_ex :
 	call	_mplayer_play_effect_p_asm_direct
 _wait_and_reak_key :
 	; wait some cycles before restart reading keyboard
-	ld	l, #12
+	ld	l, #ONE_THIRD_SECOND_TIMER
 	call _ubox_wait_for
 	jp _get_input_code
 
@@ -2942,13 +3147,10 @@ unsigned int iBuffOffset;
 void reset_locker_and_enemies()
 {
 __asm
-	ld b, #MAX_LOCKERS_PER_LEVEL
-	ld hl, #_cLockerOpened
-_rst_locker:
-	ld (hl), #BOOL_FALSE
-	inc hl
-	djnz _rst_locker
-
+	ld bc, #MAX_LOCKERS_PER_LEVEL
+	ld a, #BOOL_FALSE
+	ld de, #_cLockerOpened
+	call _set_buffer_with_value
 	xor a
 	ld (#_cCreatedEnemyQtty), a
 	ld (#_cActiveEnemyQtty), a
@@ -4102,12 +4304,12 @@ _try_Level3 :
 _reset_missions :
 	ld (#_cMissionQty), a
 	ld (#_cRemainMission), a
-	ld b, a
-	ld hl, #_cMissionStatus
-_next_mission_reset :
-	ld (hl), #MISSION_INCOMPLETE
-	inc hl
-	djnz _next_mission_reset
+
+	ld b, #0
+	ld c, a
+	ld a, #MISSION_INCOMPLETE
+	ld de, #_cMissionStatus
+	jp _set_buffer_with_value
 __endasm;
 }  // void load_gamelevel_data()
 
@@ -6926,7 +7128,7 @@ _set_player_as_dead :
 	ld de, #0x0609
 	call _flash_bg_screen
 	ld hl, #_cPlyDeadTimer
-	ld (hl), #DEAD_ANIM_TIMER
+	ld (hl), #DEAD_ANIM_CYCLES
 	ld hl, #_sThePlayer + #03  ; status
 	ld (hl), #PLYR_STATUS_DEAD
 	ld hl, #_sThePlayer + #06 ; frame
@@ -6934,9 +7136,6 @@ _set_player_as_dead :
 	ld a, (#_sThePlayer + #09) ; grabflag
 	cp #BOOL_TRUE
 	call z, _set_grabbed_enemy_as_dead
-	call _ubox_wait
-	ld de, #0x0101
-	call _flash_bg_screen
 
 _cont_dead_player :
 	; mplayer_play_effect_p(SFX_DEADPLAYER, SFX_CHAN_NO, 0);
@@ -7094,6 +7293,12 @@ __asm
 	or a
 	jr z, _continue_display_player
 	; dead player animation
+	cp #DEAD_ANIM_CYCLES - #4
+	jr nz, _cont_dead_player_anim
+	ld de, #0x0101
+	call _flash_bg_screen
+	ld a, (#_cPlyDeadTimer)
+_cont_dead_player_anim :
 	dec a
 	ld (#_cPlyDeadTimer), a
 	; set player pattern when dead
@@ -7258,7 +7463,7 @@ _chk_for_hit :
   ld a, (#_sThePlayer + #4)  ; A = player.hitflag
 	cp #BOOL_TRUE
 	jr nz, _player_not_hit
-	ld a, #HIT_ANIM_TIMER
+	ld a, #ONE_FOURTH_SECOND_TIMER
 	ld (#_cPlyHitTimer), a
 	; decrease_power
 	ld a, (#_cGlbPlyHitCount)
@@ -7550,16 +7755,12 @@ _do_alien_chase :
 	; check for horizontal player proximity
 	; if (Xa*8 + 16 >= xp + 8) then "Player is at left" else "Player is at right"
 	ld a, (#_sThePlayer) ; xp
-
-;;;	add a, #8
-
 	ld b, a ; B = Xa * 8 + 16
 	ld a, (#_sAlien) ; Xa
 	add a, a
 	add a, a
 	add a, a
 
-;;;	add a, #16
 	add a, #8
 
 	ld c, a ; C = xp + 8
@@ -9036,7 +9237,7 @@ _do_sfx :
 	ld de, #0x0001; 00 + SFX_SELECT
 	call	_mplayer_play_effect_p_asm_direct
 	; wait some cycles before restart reading keyboard
-	ld	l, #12
+	ld	l, #ONE_THIRD_SECOND_TIMER
 	call _ubox_wait_for
 	ret
 
@@ -9221,7 +9422,7 @@ _checkFL :
 	ret nz
 
 	; pressed F key - check for enable/disable Flashlight
-	ld a, #KEY_PRESS_DELAY
+	ld a, #HALF_SECOND_TIMER
 	ld (#_cGlbFLDelay), a
 	ld a, (#_cGlbGameSceneLight)
 	bit 1, a
@@ -9512,7 +9713,7 @@ _update_FL_effect :
 	ld h, 10 (ix)
 	ld d, 11 (ix); sFlashLightStatusData.cWidthFL
 	ld e, 12 (ix); sFlashLightStatusData.cHeightFL
-	halt
+  halt
 	call _fill_block_addr_asm_direct
 	pop de
 	pop hl
@@ -10207,6 +10408,8 @@ void Run_Game()
 		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPointsFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
 		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = cMSXDevCheatCount = 0;
 
+		ubox_wait(); // set baseline framerate
+
 		do  // loop at each screen map
 		{
 			// Load, uncompress map data and update object history
@@ -10246,7 +10449,7 @@ __endasm;
 
 			// reset tile list for the first cycle
 			pAnimTileList = sAnimTileList;
-			cAnimCycleParityFlag = cGlbPlyFlag = cGlbSpObjID = cShotCount = 0;
+			cAnimCycleParityFlag = cGlbPlyFlag = cGlbSpObjID = cShotCount = cGameCycles = 0;
 			iGameCycles = 0;
 			cGlbPlyFlagCache = CACHE_INVALID;
 			do  // loop until player is dead (lives=0) or need to change map
@@ -10259,11 +10462,13 @@ __endasm;
 					//check_for_easteregg();   // not implemented
 				}
 			
-				// update the animated tiles each 7 cycles
-				if ((iGameCycles & 0b00000111) == 0x07) // 7 cycles
+				// update the animated tiles each 1/4 second
+				//if ((iGameCycles & 0b00000111) == 0x07) // 7 cycles
+				if (cGameCycles == ONE_FOURTH_SECOND_TIMER)
 				{
+					cGameCycles = 0;
 					// process standard & special animated tiles
-					// in case of sliderfloor, also update the object coordinates into the screen, detect player colision and update player position if necessary
+					// in case of sliderfloor, also update the object coordinates into the screen, detect player colision and update player position when necessary
 					update_animated_tiles();
 				}
 
@@ -10313,11 +10518,12 @@ __endasm;
 				update_game_loop_status();
 
 				iGameCycles++;
+				cGameCycles++;
 
 				// should be removed at post-msxdev release
 				check_for_msxdev_jury_cheat();  // scan for 'C' key pressed 10x AND (cLives=1 AND iScore is Odd AND cRemainScrewdriver>0 AND cPlyRemainAmno=0)
 
-				// ensure we wait to our desired update rate
+				// ensure we wait to our desired frame rate
 				ubox_wait();
 
 			} while (cGameStatus == GM_STATUS_LOOP_CONTINUE);
@@ -10524,13 +10730,13 @@ __asm
   ld de, #0x0A0B
   call _flash_bg_screen
 
-	call	_ubox_wait
   call _ubox_disable_screen
 	ld hl, #_cGameStage
 	ld (hl), #GAMESTAGE_FINAL
 	call _load_tileset
 
-	call	_ubox_wait
+	ld	l, #4
+	call _ubox_wait_for
 	ld de, #0x0609
 	call _flash_bg_screen
 
@@ -10542,7 +10748,8 @@ __asm
 	ld a, #SONG_SILENCE
 	call _mplayer_init_asm_direct
 
-	call	_ubox_wait
+	ld	l, #4
+	call _ubox_wait_for
 	ld de, #0x0101
 	call _flash_bg_screen
 
@@ -10553,40 +10760,12 @@ __asm
 	call _display_format_text_block
 
 	; rebuild Nostromo ship Tile map
-	ld bc, #NOSTROMO_IMG_WIDTH * #NOSTROMO_IMG_HEIGHT
+  push iy
+	ld iy, #_cNostromo_img_guide
 	ld hl, #_cBuffer
-_reset_nostromo_map :
-	xor a
-	ld (hl), a
-	inc hl
-	dec bc
-	ld a, b
-	or c
-	jr nz, _reset_nostromo_map
-
-  push ix
 	ld e, #TS_FONT1_SIZE + #TS_FONT1_SIZE / #2
-	ld hl, #_cBuffer
-  ld ix, #_cNostromo_img_guide
-_built_nostromo_loop :
-	ld a, 0 (ix)
-	cp #0xFF ; end of processing
-	jr z, _end_rebuild_nostromo
-	ld c, a
-	ld b, #0
-	add hl, bc
-	inc ix
-	ld b, 0 (ix)
-_build_nostromo_tiles :
-	ld (hl), e
-	inc e
-	inc hl
-	djnz _build_nostromo_tiles
-	inc ix
-	jr _built_nostromo_loop
-
-_end_rebuild_nostromo :
-	pop ix
+	call _rebuild_rle_tile_sequence
+	pop iy
 
 	ld b, #21 + #6 - #1 ; 21 tiles to move + 6 left blank tiles - 1st tile
 	ld de, #UBOX_MSX_NAMTBL_ADDR + #32 ; X = 31, 30, 29, ..., Y = 0
@@ -10601,38 +10780,45 @@ _nostromo_animation_loop :
 _cont_nostromo_loop :
 	push bc
 
+	ld	l, #3
+	call _ubox_wait_for
+
 	call _display_full_nostromo_image
 
-	call _ubox_wait
-	call _ubox_wait
 	pop bc
 	pop de
   djnz _nostromo_animation_loop
 
-  ; TODO: SFX or not???
-
 	; cBuffer contains Nostromo image (20 + 1[blank] x 13) tileset
 	; Explosion step 1
 	call _explosion_step_1
-	call _ubox_wait
-	call _ubox_wait
+
+	ld	l, #4
+	call _ubox_wait_for
+		
 	ld a, #EXPLO_STEP2_TL_OFFSET
 	call _explosion_step_2_3
-	call _ubox_wait
-	call _ubox_wait
+
+	ld	l, #4
+	call _ubox_wait_for
+
 	ld a, #EXPLO_STEP3_TL_OFFSET
 	call _explosion_step_2_3
-	call _ubox_wait
-	call _ubox_wait
-	ld a, #EXPLO_STEP4_TL_OFFSET
+
+	ld	l, #4
+	call _ubox_wait_for
+
+  ld a, #EXPLO_STEP4_TL_OFFSET
 	ld hl, #_cBuffer + #5 * #NOSTROMO_IMG_WIDTH ; 6th line
 	call _explosion_step_4
 	ld a, #EXPLO_STEP4_TL_OFFSET + #4
 	ld hl, #_cBuffer + #7 * #NOSTROMO_IMG_WIDTH ; 8th line
 	call _explosion_step_4
-	call _ubox_wait
+
+	ld	l, #2
+	call _ubox_wait_for
+
 	call _explosion_step_5
-	; TODO: END SFX or not? ? ?
 
 	ld a, (#_cGameStatus)
 	cp #GM_STATUS_TIME_IS_OVER
@@ -10837,7 +11023,6 @@ _nostromo_display_loop :
 
 _flash_bg_screen :
 ; ubox_set_colors(uint8_t fg, uint8_t bg, uint8_t border);
-  call	_ubox_wait
 	; DE = border + bg
 	push	de
 	ld	a, #0x01
