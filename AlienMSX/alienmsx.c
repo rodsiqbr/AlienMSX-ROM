@@ -457,7 +457,7 @@ enum pattern_type
 
 #define SHIELD_SPRITE_COLORS        0x7E  // Cyan(07) and Gray(14)
 #define FACEHUG_SPRITE_COLORS       0xA9  // Yellow(10) and Light Red(09)
-#define FACEHUG_SPRITE_COLOR_DARK   0x07  // Cyan(07)
+#define FACEHUG_SPRITE_COLOR_DARK   0x07  // Cyan(07) - grabbed facehug into the dark
 
 
 uint8_t PLYR_PAT_WALK_IDX;
@@ -472,8 +472,8 @@ uint8_t ALIEN_PAT_TONGUE_IDX;
 uint8_t ALIEN_PAT_TONGUE_FLIP_IDX;
 
 
-#define PLYR_WALK_CYCLE        4
-#define PLYR_DEAD_CYCLE        5
+#define PLYR_WALK_CYCLE  4
+#define PLYR_DEAD_CYCLE  5
 const uint8_t ply_walk_frames[PLYR_WALK_CYCLE] = { 0, 1, 0, 2 };    // walk animation frames
 const uint8_t ply_dead_pat_frames[PLYR_DEAD_CYCLE] =  {48, 64, 56, 72, 64 };  // dead player animation frames (pattern #)
 
@@ -535,6 +535,8 @@ uint8_t FONT2_TILE_OFFSET;
 #define INTRO_MENU_POS_X        6      // X position for Intro menu
 #define INTRO_MENU_POS_Y       16      // Y position for Intro menu
 #define MAX_INTRO_MENU_OPTIONS  3      // only 3 option in the intro menu
+
+#define INTRO_ALIEN_ANIM_CYCLE  4      // check for Intro Alien creature animation each 3 cycles
 
 #define INTRO_CTRL_CYCLE        8
 const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2, 4 << 2, 3 << 2, 2 << 2, 1 << 2 };
@@ -784,6 +786,7 @@ uint8_t cCtrl, cCtrlCmd;
 uint8_t cCodeLenght, cMenuOption;
 uint8_t cMSXDevCheatCount;            // for MSXDev24 jury only
 uint8_t cMeltdownMinutes, cMeltdownSeconds, cMeltdownTimerCtrl;
+uint8_t cIntroCounter;                // Alien creature animation counter
 bool bIntroAnim;                      // enable/disable Intro animation with ESC key
 bool bFinalMeltdown;                  // meltdown timer enabled/disabled
 
@@ -1895,6 +1898,9 @@ _print_alien_line :
 	pop bc
 	djnz _print_alien_line
 
+	ld a, #INTRO_ALIEN_ANIM_CYCLE - #1
+	ld (#_cIntroCounter), a
+
 	; Set IY at Block size matrix
 	ld iy, #_cIntro_img_guide
 	ld b, #12 ; 12 animation steps
@@ -1907,31 +1913,43 @@ _new_anim_step :
 	add iy, de
 	ld	a, (#_bIntroAnim)
 	or a
+	ld e, c ; E = Last tile used
 	jr	z, _no_wait
 	ld	l, #ONE_THIRD_SECOND_TIMER
 	call	_ubox_wait_for
-_no_wait :
-	ld d, c ; D = Last tile used
-	pop bc
-	ld c, d
-
-
-
-	ld a, b
-	cp #9
-	jr nz, _prox_alien_block
-	push bc
-	ld bc, #INTRO_CTRL_TILE_OFS * #8 - #INTRO_ALIEN_TILE_OFS * #8
-	ld hl, #UBOX_MSX_COLTBL_ADDR + #512 * #8 + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #8 + #INTRO_ALIEN_TILE_OFS * #8
+	; check for Alien creature flashing
+	push bc ; C = Last tile used
+	ld a, (#_cIntroCounter)
+	dec a
+	ld (#_cIntroCounter), a
+	jr nz, _no_alien_intro_animation
+	ld a, #INTRO_ALIEN_ANIM_CYCLE
+	ld (#_cIntroCounter), a
+	; check randomly for Alien creature animation
+	call _randombyte
+	ld a, l
+	cp #100
+	jr c, _no_alien_intro_animation
 	ld a, #0xF0
-	call #0x0056; FILVRM - Fill VRAM with value
-
-
+	call _flash_alien_creature
+	halt
+	ld a, #0xE0
+	call _flash_alien_creature
+	halt
+	ld a, #0x70
+	call _flash_alien_creature
+	halt
+	ld a, #0x50
+	call _flash_alien_creature
+	halt
+	xor a
+	call _flash_alien_creature
+	halt
+_no_alien_intro_animation :
+	pop de ; E = Last tile used
+_no_wait :
 	pop bc
-_prox_alien_block :
-
-
-
+	ld c, e ; C = Last tile used
 	djnz _new_anim_step
 
 	; Display_Text(18, 7, FONT2_TILE_OFFSET, ".UNOFFICIAL");
@@ -1947,6 +1965,12 @@ _prox_alien_block :
 	inc	sp
 	pop af
 	pop iy
+	ret
+
+_flash_alien_creature :
+	ld bc, #INTRO_CTRL_TILE_OFS* #8 - #INTRO_ALIEN_TILE_OFS * #8
+	ld hl, #UBOX_MSX_COLTBL_ADDR + #512 * #8 + #TS_FONT1_SIZE * #8 + #TS_FONT2_SIZE * #8 + #INTRO_ALIEN_TILE_OFS * #8
+	call #0x0056; FILVRM - Fill VRAM with value
 	ret
 
 _rebuild_rle_tile_sequence :
@@ -2380,7 +2404,7 @@ _upd_code_buffer :
 	djnz _upd_code_buffer
 
 _disp_lvl_code :
- ;; Display_Text(17, 18, FONT2_TILE_OFFSET, cBuffer + 10);
+ ; Display_Text(17, 18, FONT2_TILE_OFFSET, cBuffer + 10);
 	ld hl, #_cBuffer + #10
 	push hl
 	ld a, (#_FONT2_TILE_OFFSET)
@@ -2426,7 +2450,7 @@ _decode_level_code :
 	call _do_sub_and_merge
 
 	; step 3: compute back iScore[16 bit] + cLives[3 bit] + cLevel[2 bit] + SALT_1[3 bit] + SALT_2[8 bit] + CRC[8bit]
-	; step 4: check SALT_1, cLives, cLeveland CRC. Reject code if fails
+	; step 4: check SALT_1, cLives, cLevel and CRC. Reject code if fails
 	ld hl, #_cBuffer
 	ld de, #04
 	call _crc8b
@@ -3017,7 +3041,7 @@ __asm
   call _search_text_block
 
 	ld bc, #0x0202
-	ld de, #0x0106
+	ld de, #0x0105
 	call _display_format_text_block
 	jp _wait_fire
 
@@ -10215,7 +10239,7 @@ _encode_lvl_code :
 	ld (#_cBuffer + #18), a ; [4, 1, 8, 3, 5, 9, 2, 0] + '\0'
 
 	; step 4: print it
-	;; Display_Text(14, 15, FONT1_TILE_OFFSET, cBuffer + 10);
+	; Display_Text(14, 15, FONT1_TILE_OFFSET, cBuffer + 10);
 	ld hl, #_cBuffer + #10
 	push hl
 	ld a, (#_FONT1_TILE_OFFSET)
