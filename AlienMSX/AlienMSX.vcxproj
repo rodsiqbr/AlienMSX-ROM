@@ -134,6 +134,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="data\AlienTS_12x2.png" />
+    <Image Include="data\Alien_Game_1.png" />
+    <Image Include="data\Alien_Game_2.png" />
+    <Image Include="data\Alien_Intro.png" />
     <Image Include="data\Enemies_12x2.png" />
     <Image Include="data\ExplosionTSv1_16x1.png" />
     <Image Include="data\Font1TS_16x4.png" />
@@ -145,7 +148,9 @@
     <Image Include="data\Game1TSv2_16x5.png" />
     <Image Include="data\Game1TSv2_FULL_16x15.png" />
     <Image Include="data\Game_FatalTS_16x2.png" />
-    <Image Include="data\IntroTS_16x6.png" />
+    <Image Include="data\IntroTSv2_BW_13x9.png" />
+    <Image Include="data\JoyTS_5x1.png" />
+    <Image Include="data\Nostromo_Full.png" />
     <Image Include="data\Objects_12x2.png" />
     <Image Include="data\Player_Ash_16x2.png" />
     <Image Include="data\Player_Full_16x4.png" />

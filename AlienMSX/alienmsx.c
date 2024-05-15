@@ -159,9 +159,6 @@ struct FlashLightStatusData
 // CONSTANT DATA AND DEFINES SECTION
 // ----------------------------------------------------------
 
-#define _GAME_VERSION_NTSC_
-//#define _GAME_VERSION_PAL_
-
 // N = n {0, 1, 2}: Tile offset to print at screen (base tile + N)
 // N = 0xFF			: Blank Tile to print at screen
 // N = 0xFE			: Stop animation (until animation restarts by an user action or a timer)
@@ -536,7 +533,9 @@ uint8_t FONT2_TILE_OFFSET;
 #define INTRO_MENU_POS_Y       16      // Y position for Intro menu
 #define MAX_INTRO_MENU_OPTIONS  3      // only 3 option in the intro menu
 
-#define INTRO_ALIEN_ANIM_CYCLE  4      // check for Intro Alien creature animation each 3 cycles
+#define INTRO_ALIEN_ANIM_CYCLE  9
+const uint8_t cAlien_Intro_colors[INTRO_ALIEN_ANIM_CYCLE] = { 0x00, 0x00, 0x00, 0x50, 0xE0, 0x70, 0xF0, 0xF0, 0xE0 };  // Alien creature Intro animation colors in REVERSE order
+
 
 #define INTRO_CTRL_CYCLE        8
 const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2, 4 << 2, 3 << 2, 2 << 2, 1 << 2 };
@@ -675,26 +674,6 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define INVULNERABILITY_SHIELD 05
 #define MAX_AMNO_SHIELD        99
 
-#ifdef _GAME_VERSION_PAL_
-
-#define ONE_SECOND_TIMER        25  // = 1 sec
-#define HALF_SECOND_TIMER       13  // = 500 Msec
-#define ONE_THIRD_SECOND_TIMER   8  // = 300 msec
-#define ONE_FOURTH_SECOND_TIMER  6  // = 250 msec
-
-#define ALIEN_ANIM_DELAY         6  // 250 msec to change alien frame
-
-#else // _GAME_VERSION_NTSC_
-
-#define ONE_SECOND_TIMER        30  // = 1 sec
-#define HALF_SECOND_TIMER       15  // = 500 Msec
-#define ONE_THIRD_SECOND_TIMER  10  // = 300 msec
-#define ONE_FOURTH_SECOND_TIMER  7  // = 250 msec
-
-#define ALIEN_ANIM_DELAY         7  // 250 msec to change alien frame
-
-#endif
-
 #define EGG_SHOTS_TO_DESTROY    7
 #define ST_EGG_CLOSED           0  // ** must be 0 for animation to work
 #define ST_EGG_OPENED           2
@@ -761,10 +740,32 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define GM_STATUS_GAME_OVER      4
 #define GM_STATUS_PLAYER_WIN     5
 
-
 #define BOOL_FALSE 0
 #define BOOL_TRUE  1
 
+
+#define _GAME_VERSION_NTSC_
+//#define _GAME_VERSION_PAL_
+
+#ifdef _GAME_VERSION_PAL_
+
+#define ONE_SECOND_TIMER        25  // = 1 sec
+#define HALF_SECOND_TIMER       13  // = 500 Msec
+#define ONE_THIRD_SECOND_TIMER   8  // = 300 msec
+#define ONE_FOURTH_SECOND_TIMER  6  // = 250 msec
+
+#define ALIEN_ANIM_DELAY         6  // 250 msec to change alien frame
+
+#else // _GAME_VERSION_NTSC_
+
+#define ONE_SECOND_TIMER        30  // = 1 sec
+#define HALF_SECOND_TIMER       15  // = 500 Msec
+#define ONE_THIRD_SECOND_TIMER  10  // = 300 msec
+#define ONE_FOURTH_SECOND_TIMER  7  // = 250 msec
+
+#define ALIEN_ANIM_DELAY         7  // 250 msec to change alien frame
+
+#endif
 
 // ----------------------------------------------------------
 // GLOBAL VARIABLES SECTION
@@ -1898,7 +1899,7 @@ _print_alien_line :
 	pop bc
 	djnz _print_alien_line
 
-	ld a, #INTRO_ALIEN_ANIM_CYCLE - #1
+	xor a
 	ld (#_cIntroCounter), a
 
 	; Set IY at Block size matrix
@@ -1917,40 +1918,27 @@ _new_anim_step :
 	jr	z, _no_wait
 	ld	l, #ONE_THIRD_SECOND_TIMER
 	call	_ubox_wait_for
-	; check for Alien creature flashing
-	push bc ; C = Last tile used
+
+	; decide to start or not Alien creature flashing
+	; if animation still active, nothing to do here
 	ld a, (#_cIntroCounter)
-	dec a
-	ld (#_cIntroCounter), a
+	or a
 	jr nz, _no_alien_intro_animation
-	ld a, #INTRO_ALIEN_ANIM_CYCLE
-	ld (#_cIntroCounter), a
 	; check randomly for Alien creature animation
 	call _randombyte
 	ld a, l
-	cp #100
+	cp #190
 	jr c, _no_alien_intro_animation
-	ld a, #0xF0
-	call _flash_alien_creature
-	halt
-	ld a, #0xE0
-	call _flash_alien_creature
-	halt
-	ld a, #0x70
-	call _flash_alien_creature
-	halt
-	ld a, #0x50
-	call _flash_alien_creature
-	halt
-	xor a
-	call _flash_alien_creature
-	halt
+	ld a, #INTRO_ALIEN_ANIM_CYCLE
+	ld (#_cIntroCounter), a
+
 _no_alien_intro_animation :
-	pop de ; E = Last tile used
 _no_wait :
 	pop bc
 	ld c, e ; C = Last tile used
 	djnz _new_anim_step
+  xor a
+	call _flash_alien_creature
 
 	; Display_Text(18, 7, FONT2_TILE_OFFSET, ".UNOFFICIAL");
 	ld	hl, #__intro_str_0
@@ -2079,7 +2067,32 @@ _new_color_anim :
 	ld a, (ix)
 	inc ix
 
-	call #0x0056; FILVRM - Fill VRAM with value(HL, BC, A)
+	call #0x0056; FILVRM - Fill VRAM with value (HL, BC, A)
+
+	; Alien creature flashing
+	ld a, (#_cIntroCounter)
+	or a
+	jr z, _not_active_alien_intro_animation
+	push de
+	dec a
+	ld (#_cIntroCounter), a
+	cp #INTRO_ALIEN_ANIM_CYCLE - #1
+	jr nz, _no_alien_animation_sound
+	; first animation frame - SFX
+	; mplayer_play_effect_p(SFX_ALIENATTACK, SFX_CHAN_NO, 0);
+	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
+	ld de, #0x000D; 00 + SFX_ALIENATTACK
+	call	_mplayer_play_effect_p_asm_direct
+
+_no_alien_animation_sound :
+	ld hl, #_cAlien_Intro_colors
+	ld c, a
+	ld b, #0
+	add hl, bc
+	ld a, (hl)
+	call _flash_alien_creature
+	pop de
+_not_active_alien_intro_animation :
 	call _check_escape
 	ld	a, (#_bIntroAnim)
 	or a

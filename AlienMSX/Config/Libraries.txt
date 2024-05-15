@@ -20,4 +20,6 @@ uboxlib\lib\ubox_ext.lib
 ;[MSX_LIB_PATH]\fusion-c\include\printf.rel
 ;c:\users\rodsi\Documents\MSX\DEV\libs\fusion-c\include\putchar_msxbasic.rel
 ;c:\users\rodsi\Documents\MSX\DEV\libs\fusion-c\include\getchar_msxbasic.rel
-sounds\akm.rel
+;sounds\akm.rel
+sounds\60hz\akm60hz.rel
+;sounds\50hz\akm50hz.rel

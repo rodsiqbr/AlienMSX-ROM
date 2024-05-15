@@ -271,9 +271,6 @@
     <Image Include="data\Font3TS_32x2.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="data\IntroTS_16x6.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="data\Objects_12x2.png">
       <Filter>Resource Files</Filter>
     </Image>
@@ -311,6 +308,24 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="data\ExplosionTSv1_16x1.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Alien_Game_1.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Alien_Game_2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Alien_Intro.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\IntroTSv2_BW_13x9.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\JoyTS_5x1.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="data\Nostromo_Full.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
