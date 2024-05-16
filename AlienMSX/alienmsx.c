@@ -350,6 +350,24 @@ const uint8_t cNostromo_img_guide[] = { ALIEN_RLE_BLACK_TILE | 6,
 #define ET_LOCKER      14   // ** special animated tile
 
 // types for our pattern groups used by spman
+#define PAT_PLAYER_WALK       0x00
+#define PAT_PLAYER_WALK_FLIP  0x01
+#define PAT_PLAYER_FALL       0x02
+#define PAT_PLAYER_JUMP       0x03
+#define PAT_PLAYER_JUMP_FLIP  0x04
+#define PAT_PLAYER_CLIMB      0x05
+#define PAT_SHIELD            0x06
+#define PAT_SHOT              0x07
+#define PAT_SHOT_FLIP         0x08
+#define PAT_EXPLOSION         0x09
+#define PAT_MINIMAP           0x0A
+#define PAT_PTS               0x0B
+#define PAT_ENEMY_BASE        0x0C
+#define PAT_ENEMY_BASE_FLIP   0x0D
+#define PAT_ALIEN_TONGUE      0x0E
+#define PAT_ALIEN_TONGUE_FLIP 0x0F
+
+/*
 enum pattern_type
 {
 	PAT_PLAYER_WALK = 0,
@@ -369,6 +387,7 @@ enum pattern_type
 	PAT_ALIEN_TONGUE,
 	PAT_ALIEN_TONGUE_FLIP
 };
+*/
 
 // sub-songs matching our Arkos song
 // configure the song to use MSX AY
@@ -756,6 +775,8 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 
 #define ALIEN_ANIM_DELAY         6  // 250 msec to change alien frame
 
+#define DISPLAY_INTRO_TIMER     0x0104
+
 #else // _GAME_VERSION_NTSC_
 
 #define ONE_SECOND_TIMER        30  // = 1 sec
@@ -764,6 +785,8 @@ const uint8_t cCtrl_frames[INTRO_CTRL_CYCLE] = { 0 << 2, 1 << 2, 2 << 2, 3 << 2,
 #define ONE_FOURTH_SECOND_TIMER  7  // = 250 msec
 
 #define ALIEN_ANIM_DELAY         7  // 250 msec to change alien frame
+
+#define DISPLAY_INTRO_TIMER     0x0105
 
 #endif
 
@@ -3054,7 +3077,7 @@ __asm
   call _search_text_block
 
 	ld bc, #0x0202
-	ld de, #0x0105
+	ld de, #DISPLAY_INTRO_TIMER ; PAL/NTSC distinct timer
 	call _display_format_text_block
 	jp _wait_fire
 
@@ -3121,6 +3144,275 @@ __endasm;
 /*
 * Uncompress and load Sprites
 */
+void load_sprites()
+{
+__asm
+  ; init sprites after every level
+  call _spman_init
+
+  ; uncompress "player_ash" + "player_ripley" sprite data
+	ld hl, #_player_obj
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+	ld hl, #_cBuffer
+
+	ld a, (#_cLevel)
+	cp #1
+	jr z, _no_buffer_offset
+	ld de, #PLAYER_OBJ_LEN / #2
+	add hl, de
+
+_no_buffer_offset :
+	; PLYR_PAT_WALK_IDX = spman_alloc_pat(PAT_PLAYER_WALK, cBuffer + iBuffOffset, 6, 0);
+	ld bc, #0x0006
+	push bc
+	push hl
+	push bc ; PAT_PLAYER_WALK - 0x00
+	inc	sp
+	call	_spman_alloc_pat
+	inc sp
+	pop	de
+	pop	af
+	ld	a, l
+	ex de, hl
+	ld (#_PLYR_PAT_WALK_IDX), a
+
+	; spman_alloc_pat(PAT_PLAYER_WALK_FLIP, cBuffer + iBuffOffset, 6, 1);
+	ld bc, #0x0106
+	push	bc
+	push	hl
+	push bc ; PAT_PLAYER_WALK_FLIP - 0x01
+	inc	sp
+	call	_spman_alloc_pat
+	inc sp
+	pop	hl
+	pop	af
+
+	; PLYR_PAT_FALL_IDX = spman_alloc_pat(PAT_PLAYER_FALL, cBuffer + iBuffOffset + (3 * 2 * 4 * 8), 4, 0);
+	push hl
+	ld	bc, #0x00C0
+	add	hl, bc
+	ld bc, #0x0004
+	push	bc
+	push	hl
+	ld	a, #0x02 ; PAT_PLAYER_FALL
+	push	af
+	inc	sp
+	call	_spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_PLYR_PAT_FALL_IDX), a
+	pop hl
+
+	; PLYR_PAT_JUMP_IDX = spman_alloc_pat(PAT_PLAYER_JUMP, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8), 2, 0);
+	push hl
+	ld bc, #0x0140
+	add	hl, bc
+	ld bc, #0x0002
+	push	bc
+	push	hl
+	ld a, #0x03 ; PAT_PLAYER_JUMP
+	push	af
+	inc	sp
+	call	_spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_PLYR_PAT_JUMP_IDX), a
+
+	; spman_alloc_pat(PAT_PLAYER_JUMP_FLIP, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8), 2, 1);
+	ld bc, #0x0102
+	push bc
+	push de
+	ld a, #0x04 ; PAT_PLAYER_JUMP_FLIP
+	push af
+	inc	sp
+	call	_spman_alloc_pat
+	inc sp
+	pop	hl
+	pop	af
+
+	; PLYR_PAT_CLIMB_IDX = spman_alloc_pat(PAT_PLAYER_CLIMB, cBuffer + iBuffOffset + (3 * 2 * 4 * 8) + (2 * 2 * 4 * 8) + (1 * 2 * 4 * 8), 4, 0);
+	pop hl
+	ld bc, #0x0180
+	add	hl, bc
+	ld bc, #0x0004
+	push bc
+	push hl
+	ld a, #0x05 ; PAT_PLAYER_CLIMB
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_PLYR_PAT_CLIMB_IDX), a
+
+	ld hl, #_object_sprite
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+	ld hl, #_cBuffer
+
+	; cShieldPattern = spman_alloc_pat(PAT_SHIELD, cBuffer, 2, 0);
+	ld bc, #0x0002
+	push bc
+	push hl
+	ld a, #0x06 ; PAT_SHIELD
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_cShieldPattern), a
+
+	; cShotPattern = spman_alloc_pat(PAT_SHOT, cBuffer + (2 * 1 * 4 * 8), 1, 0);
+	ld bc, #0x0001
+	push bc
+	ld hl, #_cBuffer + #0x40
+	push hl
+	ld a, #0x07 ; PAT_SHOT
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_cShotPattern), a
+
+	; spman_alloc_pat(PAT_SHOT_FLIP, cBuffer + (2 * 1 * 4 * 8), 1, 1);
+	ld bc, #0x0101
+	push bc
+	push de
+	ld a, #0x08 ; PAT_SHOT_FLIP
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop	hl
+	pop	af
+
+	; cShotExplosionPattern = spman_alloc_pat(PAT_EXPLOSION, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+	ld bc, #0x0001
+	push bc
+	ld hl, #_cBuffer + #0x60
+	push hl
+	ld a, #0x09 ; PAT_EXPLOSION
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	;pop bc
+	ld a, l
+	ld (#_cShotExplosionPattern), a
+
+	; cMiniMapPattern = spman_alloc_pat(PAT_MINIMAP, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+	;ld bc, #0x0001
+	;push bc
+	ld hl, #_cBuffer + #0x80
+	push hl
+	ld a, #0x0A ; PAT_MINIMAP
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	;pop bc
+	ld a, l
+	ld (#_cMiniMapPattern), a
+
+	; cPointsPattern = spman_alloc_pat(PAT_PTS, cBuffer + (2 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8) + (1 * 1 * 4 * 8), 1, 0);
+	;ld bc, #0x0001
+	;push bc
+	ld hl, #_cBuffer + #0xA0
+	push hl
+	ld a, #0x0B ; PAT_PTS
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_cPointsPattern), a
+
+	; if (cLevel == 1) return
+	ld a, (#_cLevel)
+	dec a
+	ret z
+
+	ld hl, #_enemy_sprite
+	ld de, #_cBuffer
+	call _zx0_uncompress_asm_direct
+
+	; ENEMY_PAT_BASE_IDX = spman_alloc_pat(PAT_ENEMY_BASE, cBuffer, 5, 0);
+	ld bc, #0x0005
+	push bc
+	ld hl, #_cBuffer
+	push hl
+	ld a, #0x0C ; PAT_ENEMY_BASE
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_ENEMY_PAT_BASE_IDX), a
+
+	; ENEMY_PAT_BASE_FLIP_IDX = spman_alloc_pat(PAT_ENEMY_BASE_FLIP, cBuffer, 5, 1);
+	ld bc, #0x0105
+	push bc
+	push de
+	ld a, #0x0D ; PAT_ENEMY_BASE_FLIP
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_ENEMY_PAT_BASE_FLIP_IDX), a
+
+	; ALIEN_PAT_TONGUE_IDX = spman_alloc_pat(PAT_ALIEN_TONGUE, cBuffer + (5 * 1 * 4 * 8), 1, 0);
+	ld bc, #0x0001
+	push bc
+	ld hl, #_cBuffer + #0xA0
+	push hl
+	ld a, #0x0E ; PAT_ALIEN_TONGUE
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_ALIEN_PAT_TONGUE_IDX), a
+
+	; ALIEN_PAT_TONGUE_FLIP_IDX = spman_alloc_pat(PAT_ALIEN_TONGUE_FLIP, cBuffer + (5 * 1 * 4 * 8), 1, 1);
+	ld bc, #0x0101
+	push bc
+	push de
+	ld a, #0x0F ; PAT_ALIEN_TONGUE_FLIP
+	push af
+	inc sp
+	call _spman_alloc_pat
+	inc sp
+	pop de
+	pop af
+	ld a, l
+	ld (#_ALIEN_PAT_TONGUE_FLIP_IDX), a
+__endasm;
+} // void load_sprites()
+
+/*
 void Load_Sprites()
 {
 unsigned int iBuffOffset;
@@ -3176,7 +3468,7 @@ unsigned int iBuffOffset;
 	ALIEN_PAT_TONGUE_IDX = spman_alloc_pat(PAT_ALIEN_TONGUE, cBuffer + (5 * 1 * 4 * 8), 1, 0);
 	ALIEN_PAT_TONGUE_FLIP_IDX = spman_alloc_pat(PAT_ALIEN_TONGUE_FLIP, cBuffer + (5 * 1 * 4 * 8), 1, 1);
 } // void Load_Sprites()
-
+*/
 
 /*
 * Reset some entities each new level
@@ -10428,7 +10720,8 @@ void Run_Game()
 
 		ubox_disable_screen();
 		load_gamelevel_data();
-		Load_Sprites();
+		//Load_Sprites();
+		load_sprites();
 		reset_obj_history();
 		reset_locker_and_enemies();
 
