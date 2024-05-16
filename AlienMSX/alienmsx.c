@@ -396,6 +396,7 @@ enum pattern_type
 #define SONG_GAME_OVER 2
 #define SONG_INTRO     3
 #define SONG_IN_GAME_2 4
+#define SONG_MIS_CPLTD 5
 
 // sound effects matching our Arkos efx song
 // configure the song to use MSX AY
@@ -2161,8 +2162,7 @@ void draw_intro_screen()
 __asm
   ; mplayer_init(SONG, SONG_SILENCE);
 	ld a, #SONG_SILENCE
-	ld hl, #_SONG
-	call _mplayer_init_asm_direct
+	call _change_game_music
 
   call _ubox_disable_screen
 
@@ -2179,8 +2179,7 @@ __asm
 	call _display_game_logo
 
 	ld a, #SONG_INTRO
-	ld hl, #_SONG
-	call _mplayer_init_asm_direct
+	call _change_game_music
 
 	ld a, (#_cCtrl)
 	cp #UBOX_MSX_CTL_NONE
@@ -3065,8 +3064,8 @@ void draw_game_level_info()
 {
 __asm
   ld a, #SONG_SILENCE
-  ld hl, #_SONG
-  call _mplayer_init_asm_direct
+	call _change_game_music
+
   ld a, #GAMESTAGE_LEVEL
 	ld (#_cGameStage), a
 	call _load_tileset
@@ -9559,8 +9558,7 @@ _txt_erase :
 
 _do_sfx :
 	; mplayer_init(SONG, SONG_SILENCE / SONG_IN_GAME);
-	ld	hl, #_SONG
-	call _mplayer_init_asm_direct
+	call _change_game_music
 	; mplayer_play_effect_p(SFX_SELECT, SFX_CHAN_NO, 0);
 	ld bc, #0x0100; SFX_CHAN_NO + Volume(0)
 	ld de, #0x0001; 00 + SFX_SELECT
@@ -10456,10 +10454,8 @@ __endasm;
 void draw_level_up_message()
 {
 __asm
-	; mplayer_init(SONG, SONG_SILENCE);
-	ld	hl, #_SONG
-	ld a, #SONG_SILENCE
-	call _mplayer_init_asm_direct
+  ld a, #SONG_MIS_CPLTD
+  call _change_game_music
 
 	; Fill_Box(6, 6, 20, 11, BLANK_TILE);
 	xor a
@@ -10559,8 +10555,8 @@ _encode_lvl_code :
 
 	ld a, #GAME_TEXT_LEVEL_COMPLETED_ID
 	call _search_text_block
-	ld bc, #0x0707
-	jp _display_msg_and_wait
+	ld bc, #0x0707 ; YY / XX
+	jp _display_msg_and_wait_ex
 
 _do_rotate_and_add :
 	rlca
@@ -10720,7 +10716,6 @@ void Run_Game()
 
 		ubox_disable_screen();
 		load_gamelevel_data();
-		//Load_Sprites();
 		load_sprites();
 		reset_obj_history();
 		reset_locker_and_enemies();
@@ -10735,9 +10730,37 @@ void Run_Game()
 		cPlyRemainShield = INVULNERABILITY_SHIELD;
 		cGameStatus = GM_STATUS_LOOP_CONTINUE;
 
+__asm
+  xor a
+	ld (#_cLastMMColor), a
+	ld (#_cLastShieldColor), a
+	ld (#_cLastShotColor), a
+	ld (#_cShieldUpdateTimer), a
+	ld (#_cFlashLUpdateTimer), a
+	ld (#_cGlbFLDelay), a
+	ld (#_cShieldFrame), a
+	ld (#_cMiniMapFrame), a
+	ld (#_cPointsFrame), a
+	ld (#_cPlyRemainFlashlight), a
+	ld (#_cPlyHitTimer), a
+	ld (#_cPlyDeadTimer), a
+	ld (#_cScreenShiftDir), a
+	ld (#_cGlbPlyJumpTimer), a
+	ld (#_cRemainYellowCard), a
+	ld (#_cRemainGreenCard), a
+	ld (#_cRemainRedCard), a
+	ld (#_cRemainKey), a
+	ld (#_cRemainScrewdriver), a
+	ld (#_cRemainKnife), a
+	ld (#_cScoretoAdd), a
+	ld (#_cPlyRemainAmno), a
+	ld (#_cMSXDevCheatCount), a
+__endasm;
+
+/*
 		cLastMMColor = cLastShieldColor = cLastShotColor = cShieldUpdateTimer = cFlashLUpdateTimer = cGlbFLDelay = cShieldFrame = cMiniMapFrame = cPointsFrame = cPlyRemainFlashlight = cPlyHitTimer = cPlyDeadTimer = cScreenShiftDir = 0;
 		cGlbPlyJumpTimer = cRemainYellowCard = cRemainGreenCard = cRemainRedCard = cRemainKey = cRemainScrewdriver = cRemainKnife = cScoretoAdd = cPlyRemainAmno = cMSXDevCheatCount = 0;
-
+*/
 		ubox_wait(); // set baseline framerate
 
 		do  // loop at each screen map
@@ -10770,8 +10793,7 @@ __asm
 				jr nz, 00155$
 				ld a, #SONG_IN_GAME_2 ; level 2
 00155$:
-				ld	hl, #_SONG
-				call _mplayer_init_asm_direct
+				call _change_game_music
 __endasm;
 			}
 			cMiniMapX = SCORE_MINIMAP_X_POS * 8 + cMapX * 4 + 3;
@@ -10779,7 +10801,15 @@ __endasm;
 
 			// reset tile list for the first cycle
 			pAnimTileList = sAnimTileList;
-			cAnimCycleParityFlag = cGlbPlyFlag = cGlbSpObjID = cShotCount = cGameCycles = 0;
+__asm
+			xor a
+			ld (#_cAnimCycleParityFlag), a
+			ld( #_cGlbPlyFlag), a
+			ld (#_cGlbSpObjID), a
+			ld (#_cShotCount), a
+			ld (#_cGameCycles), a
+__endasm;
+			//cAnimCycleParityFlag = cGlbPlyFlag = cGlbSpObjID = cShotCount = cGameCycles = 0;
 			iGameCycles = 0;
 			cGlbPlyFlagCache = CACHE_INVALID;
 			do  // loop until player is dead (lives=0) or need to change map
@@ -11036,16 +11066,33 @@ __asm
 	call	_ubox_fill_screen
 	call _ubox_enable_screen
 	; mplayer_init(SONG, SONG_GAME_OVER);
-	ld	hl, #_SONG
-	ld a, #SONG_GAME_OVER
-	call _mplayer_init_asm_direct
+  ld a, #SONG_GAME_OVER
+  call _change_game_music
+
 	ld a, #GAME_TEXT_GAME_OVER_ID
 	call _search_text_block
-	ld bc, #0x0701
+	ld bc, #0x0701 ; YY / XX
+;;_display_msg_and_wait_ex :
 _display_msg_and_wait :
 	ld de, #0x0008
 	call _display_format_text_block
 	jp _wait_fire
+
+_display_msg_and_wait_ex :
+	ld de, #0x0008
+	call _display_format_text_block
+
+	ld	l, #ONE_SECOND_TIMER * #4 + #HALF_SECOND_TIMER
+	call _ubox_wait_for
+
+  ld a, #SONG_SILENCE
+	call _change_game_music
+	jp _wait_fire
+
+_change_game_music :
+  ld hl, #_SONG
+	call _mplayer_init_asm_direct
+	ret
 __endasm;
 }  // void draw_game_over()
 
@@ -11074,9 +11121,8 @@ __asm
 	call	_ubox_fill_screen
 
 	call _ubox_enable_screen
-	ld	hl, #_SONG
 	ld a, #SONG_SILENCE
-	call _mplayer_init_asm_direct
+	call _change_game_music
 
 	ld	l, #4
 	call _ubox_wait_for
@@ -11384,7 +11430,11 @@ void main(void)
 	ubox_wvdp(1, 0b11100010); //0xe2
 
 	// init the music/fx player
-	mplayer_init(SONG, SONG_SILENCE);
+__asm
+  ; mplayer_init(SONG, SONG_SILENCE);
+  ld a, #SONG_SILENCE
+  call _change_game_music
+__endasm;
 	mplayer_init_effects(EFFECTS);
 
   // attach the play function to ISR

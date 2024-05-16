@@ -17,6 +17,7 @@ AlienMSXSongfile_DisarkForceNonReferenceDuring2_2
 	dw AlienMSXSongfile_Subsong2
 	dw AlienMSXSongfile_Subsong3
 	dw AlienMSXSongfile_Subsong4
+	dw AlienMSXSongfile_Subsong5
 AlienMSXSongfile_DisarkPointerRegionEnd0
 
 ; The Instrument indexes.
@@ -2803,4 +2804,154 @@ AlienMSXSongfile_Subsong4DisarkByteRegionStart6
 	db 24	; Note for index 7.
 	db 72	; Note for index 8.
 AlienMSXSongfile_Subsong4DisarkByteRegionEnd6
+
+; Alien MSX Song file, Subsong 5.
+; ----------------------------------
+
+AlienMSXSongfile_Subsong5
+AlienMSXSongfile_Subsong5DisarkPointerRegionStart0
+	dw AlienMSXSongfile_Subsong5_NoteIndexes	; Index table for the notes.
+	dw AlienMSXSongfile_Subsong5_TrackIndexes	; Index table for the Tracks.
+AlienMSXSongfile_Subsong5DisarkPointerRegionEnd0
+
+AlienMSXSongfile_Subsong5DisarkByteRegionStart1
+	db 7	; Initial speed.
+
+	db 8	; Most used instrument.
+	db 18	; Second most used instrument.
+
+	db 0	; Most used wait.
+	db 1	; Second most used wait.
+
+	db 62	; Default start note in tracks.
+	db 0	; Default start instrument in tracks.
+	db 0	; Default start wait in tracks.
+
+	db 12	; Are there effects? 12 if yes, 13 if not. Don't ask.
+AlienMSXSongfile_Subsong5DisarkByteRegionEnd1
+
+; The Linker.
+AlienMSXSongfile_Subsong5DisarkByteRegionStart2
+; Pattern 0
+AlienMSXSongfile_Subsong5_Loop
+	db 170	; State byte.
+	db 35	; New height.
+	db ((AlienMSXSongfile_Subsong5_Track0 - ($ + 2)) & #ff00) / 256	; New track (0) for channel 1, as an offset. Offset MSB, then LSB.
+	db ((AlienMSXSongfile_Subsong5_Track0 - ($ + 1)) & 255)
+	db ((AlienMSXSongfile_Subsong5_Track1 - ($ + 2)) & #ff00) / 256	; New track (1) for channel 2, as an offset. Offset MSB, then LSB.
+	db ((AlienMSXSongfile_Subsong5_Track1 - ($ + 1)) & 255)
+	db ((AlienMSXSongfile_Subsong5_Track2 - ($ + 2)) & #ff00) / 256	; New track (2) for channel 3, as an offset. Offset MSB, then LSB.
+	db ((AlienMSXSongfile_Subsong5_Track2 - ($ + 1)) & 255)
+
+	db 1	; End of the Song.
+	db 0	; Speed to 0, meaning "end of song".
+AlienMSXSongfile_Subsong5DisarkByteRegionEnd2
+AlienMSXSongfile_Subsong5DisarkPointerRegionStart3
+	dw AlienMSXSongfile_Subsong5_Loop
+
+AlienMSXSongfile_Subsong5DisarkPointerRegionEnd3
+; The indexes of the tracks.
+AlienMSXSongfile_Subsong5_TrackIndexes
+AlienMSXSongfile_Subsong5DisarkPointerRegionStart4
+AlienMSXSongfile_Subsong5DisarkPointerRegionEnd4
+
+AlienMSXSongfile_Subsong5DisarkByteRegionStart5
+AlienMSXSongfile_Subsong5_Track0
+	db 12	; Note with effects flag.
+	db 95	; Primary instrument (8). Same escaped note: 62. Primary wait (0).
+	db 18	;    Volume effect, with inverted volume: 1.
+	db 94	; Primary instrument (8). New escaped note: 64. Primary wait (0).
+	db 64	;   Escape note value.
+	db 84	; Primary instrument (8). Note reference (4). Primary wait (0).
+	db 94	; Primary instrument (8). New escaped note: 62. Primary wait (0).
+	db 62	;   Escape note value.
+	db 95	; Primary instrument (8). Same escaped note: 62. Primary wait (0).
+	db 94	; Primary instrument (8). New escaped note: 64. Primary wait (0).
+	db 64	;   Escape note value.
+	db 84	; Primary instrument (8). Note reference (4). Primary wait (0).
+	db 94	; Primary instrument (8). New escaped note: 62. Primary wait (0).
+	db 62	;   Escape note value.
+	db 95	; Primary instrument (8). Same escaped note: 62. Primary wait (0).
+	db 84	; Primary instrument (8). Note reference (4). Primary wait (0).
+	db 82	; Primary instrument (8). Note reference (2). Primary wait (0).
+	db 84	; Primary instrument (8). Note reference (4). Primary wait (0).
+	db 94	; Primary instrument (8). New escaped note: 59. Primary wait (0).
+	db 59	;   Escape note value.
+	db 94	; Primary instrument (8). New escaped note: 62. Primary wait (0).
+	db 62	;   Escape note value.
+	db 86	; Primary instrument (8). Note reference (6). Primary wait (0).
+	db 94	; Primary instrument (8). New escaped note: 71. Primary wait (0).
+	db 71	;   Escape note value.
+	db 12	; Note with effects flag.
+	db 94	; Primary instrument (8). New escaped note: 55. Primary wait (0).
+	db 55	;   Escape note value.
+	db 2	;    Volume effect, with inverted volume: 0.
+	db 12	; Note with effects flag.
+	db 95	; Primary instrument (8). Same escaped note: 55. Primary wait (0).
+	db 18	;    Volume effect, with inverted volume: 1.
+	db 94	; Primary instrument (8). New escaped note: 51. Primary wait (0).
+	db 51	;   Escape note value.
+	db 94	; Primary instrument (8). New escaped note: 55. Primary wait (0).
+	db 55	;   Escape note value.
+	db 94	; Primary instrument (8). New escaped note: 53. Primary wait (0).
+	db 53	;   Escape note value.
+	db 95	; Primary instrument (8). Same escaped note: 53. Primary wait (0).
+	db 94	; Primary instrument (8). New escaped note: 57. Primary wait (0).
+	db 57	;   Escape note value.
+	db 94	; Primary instrument (8). New escaped note: 53. Primary wait (0).
+	db 53	;   Escape note value.
+	db 94	; Primary instrument (8). New escaped note: 59. Primary wait (0).
+	db 59	;   Escape note value.
+	db 12	; Note with effects flag.
+	db 94	; Primary instrument (8). New escaped note: 51. Primary wait (0).
+	db 51	;   Escape note value.
+	db 34	;    Volume effect, with inverted volume: 2.
+	db 12	; Note with effects flag.
+	db 222	; Primary instrument (8). New escaped note: 55. New wait (127).
+	db 55	;   Escape note value.
+	db 127	;   Escape wait value.
+	db 18	;    Volume effect, with inverted volume: 1.
+
+AlienMSXSongfile_Subsong5_Track1
+	db 12	; Note with effects flag.
+	db 222	; Primary instrument (8). New escaped note: 50. New wait (3).
+	db 50	;   Escape note value.
+	db 3	;   Escape wait value.
+	db 2	;    Volume effect, with inverted volume: 0.
+	db 30	; Primary instrument (8). New escaped note: 46. 
+	db 46	;   Escape note value.
+	db 12	; Note with effects flag.
+	db 30	; Primary instrument (8). New escaped note: 45. 
+	db 45	;   Escape note value.
+	db 18	;    Volume effect, with inverted volume: 1.
+	db 12	; Note with effects flag.
+	db 30	; Primary instrument (8). New escaped note: 55. 
+	db 55	;   Escape note value.
+	db 2	;    Volume effect, with inverted volume: 0.
+	db 30	; Primary instrument (8). New escaped note: 39. 
+	db 39	;   Escape note value.
+	db 30	; Primary instrument (8). New escaped note: 41. 
+	db 41	;   Escape note value.
+	db 222	; Primary instrument (8). New escaped note: 43. New wait (127).
+	db 43	;   Escape note value.
+	db 127	;   Escape wait value.
+
+AlienMSXSongfile_Subsong5_Track2
+	db 205	; New wait (127).
+	db 127	;   Escape wait value.
+
+AlienMSXSongfile_Subsong5DisarkByteRegionEnd5
+; The note indexes.
+AlienMSXSongfile_Subsong5_NoteIndexes
+AlienMSXSongfile_Subsong5DisarkByteRegionStart6
+	db 48	; Note for index 0.
+	db 60	; Note for index 1.
+	db 69	; Note for index 2.
+	db 36	; Note for index 3.
+	db 65	; Note for index 4.
+	db 63	; Note for index 5.
+	db 67	; Note for index 6.
+	db 24	; Note for index 7.
+	db 72	; Note for index 8.
+AlienMSXSongfile_Subsong5DisarkByteRegionEnd6
 

@@ -836,6 +836,7 @@ _ALIENMSXSONGFILE_START:: .dw ALIENMSXSONGFILE_INSTRUMENTINDEXES
     .dw ALIENMSXSONGFILE_SUBSONG2
     .dw ALIENMSXSONGFILE_SUBSONG3
     .dw ALIENMSXSONGFILE_SUBSONG4
+    .dw ALIENMSXSONGFILE_SUBSONG5
 ALIENMSXSONGFILE_INSTRUMENTINDEXES: .dw ALIENMSXSONGFILE_INSTRUMENT0
     .dw ALIENMSXSONGFILE_INSTRUMENT1
     .dw ALIENMSXSONGFILE_INSTRUMENT2
@@ -2907,6 +2908,116 @@ ALIENMSXSONGFILE_SUBSONG4_TRACK3: .db 0xc
     .db 0x7f
     .db 0x22
 ALIENMSXSONGFILE_SUBSONG4_NOTEINDEXES: .db 0x30
+    .db 0x3c
+    .db 0x45
+    .db 0x24
+    .db 0x41
+    .db 0x3f
+    .db 0x43
+    .db 0x18
+    .db 0x48
+ALIENMSXSONGFILE_SUBSONG5: .dw ALIENMSXSONGFILE_SUBSONG5_NOTEINDEXES
+    .dw ALIENMSXSONGFILE_SUBSONG5_TRACKINDEXES
+    .db 0x8
+    .db 0x8
+    .db 0x12
+    .db 0x0
+    .db 0x1
+    .db 0x3e
+    .db 0x0
+    .db 0x0
+    .db 0xc
+ALIENMSXSONGFILE_SUBSONG5_LOOP: .db 0xaa
+    .db 0x23
+    .db 0x0
+    .db 0x8
+    .db 0x0
+    .db 0x3c
+    .db 0x0
+    .db 0x50
+    .db 0x1
+    .db 0x0
+    .dw ALIENMSXSONGFILE_SUBSONG5_LOOP
+ALIENMSXSONGFILE_SUBSONG5_TRACKINDEXES:
+ALIENMSXSONGFILE_SUBSONG5_TRACK0: .db 0xc
+    .db 0x5f
+    .db 0x12
+    .db 0x5e
+    .db 0x40
+    .db 0x54
+    .db 0x5e
+    .db 0x3e
+    .db 0x5f
+    .db 0x5e
+    .db 0x40
+    .db 0x54
+    .db 0x5e
+    .db 0x3e
+    .db 0x5f
+    .db 0x54
+    .db 0x52
+    .db 0x54
+    .db 0x5e
+    .db 0x3b
+    .db 0x5e
+    .db 0x3e
+    .db 0x56
+    .db 0x5e
+    .db 0x47
+    .db 0xc
+    .db 0x5e
+    .db 0x37
+    .db 0x2
+    .db 0xc
+    .db 0x5f
+    .db 0x12
+    .db 0x5e
+    .db 0x33
+    .db 0x5e
+    .db 0x37
+    .db 0x5e
+    .db 0x35
+    .db 0x5f
+    .db 0x5e
+    .db 0x39
+    .db 0x5e
+    .db 0x35
+    .db 0x5e
+    .db 0x3b
+    .db 0xc
+    .db 0x5e
+    .db 0x33
+    .db 0x22
+    .db 0xc
+    .db 0xde
+    .db 0x37
+    .db 0x7f
+    .db 0x12
+ALIENMSXSONGFILE_SUBSONG5_TRACK1: .db 0xc
+    .db 0xde
+    .db 0x32
+    .db 0x3
+    .db 0x2
+    .db 0x1e
+    .db 0x2e
+    .db 0xc
+    .db 0x1e
+    .db 0x2d
+    .db 0x12
+    .db 0xc
+    .db 0x1e
+    .db 0x37
+    .db 0x2
+    .db 0x1e
+    .db 0x27
+    .db 0x1e
+    .db 0x29
+    .db 0xde
+    .db 0x2b
+    .db 0x7f
+ALIENMSXSONGFILE_SUBSONG5_TRACK2: .db 0xcd
+    .db 0x7f
+ALIENMSXSONGFILE_SUBSONG5_NOTEINDEXES: .db 0x30
     .db 0x3c
     .db 0x45
     .db 0x24
