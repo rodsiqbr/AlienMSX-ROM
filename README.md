@@ -46,6 +46,12 @@ png2sprites.py --zx0 -i enemy_sprite Enemies_12x2.png > enemies.h
 py txtgen2.py --zx0 gametext.json gametext >gametext.h
 ```
 
+## Processing Music/SFX Data
+
+``` shell
+py png2tiles.py -i intro --zx0 IntroTS_16x6.png >introts.h
+```
+
 ## Usage
 
 ``` shell
