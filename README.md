@@ -18,7 +18,7 @@ GitHub AlienMSX project
 
 
 
-## Install
+## Data Processing
 
 ``` shell
 pip install git+https://github.com/mori0091/ase2msx
