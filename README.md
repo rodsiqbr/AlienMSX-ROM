@@ -64,5 +64,6 @@ The following files will be generated:
 - aseprite's meta-data     : `A.json` (exported by aseprite)
 - aseprite's sprite sheet  : `A.png` (exported by aseprite)
 
-See also:  
+See also:
+- **MSXdev24** Game Contest (https://www.msxdev.org/2024/05/07/msxdev24-02-alienmsx/)
 - **ubox MSX Lib** by Juan J. Martínez (https://gitlab.com/reidrac/ubox-msx-lib)
