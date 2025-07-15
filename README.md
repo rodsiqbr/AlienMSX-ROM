@@ -51,20 +51,15 @@ py txtgen2.py --zx0 gametext.json gametext >gametext.h
 ## Processing Music/SFX Data
 
 ``` shell
-py png2tiles.py -i intro --zx0 IntroTS_16x6.png >introts.h
+xxxx
 ```
 
-## Usage
+## Compiling the game
 
-``` shell
-ase2msx A.ase
-```
+Use the build function in the VSCC UI itself (integrated directly with the buider from VSCC MSX Template)
 
-Creates xxx.  
-
-The following files will be generated:
-- aseprite's meta-data     : `A.json` (exported by aseprite)
-- aseprite's sprite sheet  : `A.png` (exported by aseprite)
+The project initially began in C, but during development, several critical routines were rewritten in Z80 assembly (performance and code size).
+This is why you'll see a lot of C and ASM code mixed together, making the project much more complex to understand.
 
 See also:
 - **MSXdev24** Game Contest (https://www.msxdev.org/2024/05/07/msxdev24-02-alienmsx/)
