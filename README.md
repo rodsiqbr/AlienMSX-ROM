@@ -50,8 +50,11 @@ py txtgen2.py --zx0 gametext.json gametext >gametext.h
 
 ## Pre-Processing Music/SFX Data
 
+
 ``` shell
-xxxx
+rasm akm.z80 -o akm -s -sl -sq
+"\Arkos Tracker 2\tools\Disark" --sourceProfile sdcc --symbolFile akm.sym --src16bitsValuesInHex --src8bitsValuesInHex --undocumentedOpcodesToBytes akm.bin akm_sdcc.asm
+sdasz80 -g -o akm.rel akm_sdcc.asm
 ```
 
 ## Compiling the game
