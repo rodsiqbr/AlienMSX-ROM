@@ -50,7 +50,7 @@ py txtgen2.py --zx0 gametext.json gametext >gametext.h
 
 ## Pre-Processing Music/SFX Data
 
-After changing the music or sound files (.akm and .aks formats) and exporting (.z80 format), use ArkosTracker utilities to generate the executable player (.rel format):
+After changing the music or sound files (.akm and .aks formats) and exporting (.asm format), use ArkosTracker utilities to generate the executable player (.rel format):
 
 ``` shell
 rasm akm.z80 -o akm -s -sl -sq
