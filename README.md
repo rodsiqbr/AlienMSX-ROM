@@ -20,7 +20,7 @@ GitHub AlienMSX project
 - **ZX0** compressor v1.5 (https://github.com/einar-saukas/ZX0/tree/main)
 - **Python** (https://www.python.org/)
 
-## Processing Game Data
+## Pre-Processing Game Data
 
 ``` shell
 py png2tiles.py -i intro --zx0 IntroTS_16x6.png >introts.h
@@ -48,7 +48,7 @@ png2sprites.py --zx0 -i enemy_sprite Enemies_12x2.png > enemies.h
 py txtgen2.py --zx0 gametext.json gametext >gametext.h
 ```
 
-## Processing Music/SFX Data
+## Pre-Processing Music/SFX Data
 
 ``` shell
 xxxx
