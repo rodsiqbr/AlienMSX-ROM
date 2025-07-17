@@ -95,6 +95,7 @@
     <None Include="data\png2tiles.py" />
     <None Include="data\txtgen2.py" />
     <None Include="data\zx0.exe" />
+    <None Include="Debug\bin\ALIENMSX.ROM" />
     <None Include="Make\make.bat" />
     <None Include="Make\make.sh" />
     <None Include="Make\symbol.py" />

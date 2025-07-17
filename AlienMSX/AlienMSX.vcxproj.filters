@@ -48,6 +48,9 @@
     <Filter Include="Sound Files\50Hz">
       <UniqueIdentifier>{530904ce-bd74-4197-8e92-2f776817fdca}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ROM">
+      <UniqueIdentifier>{3a453883-5bc7-41b3-bb95-849cb34399ab}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetconfig.h">
@@ -279,6 +282,9 @@
     </None>
     <None Include="sounds\50Hz\Songs50hz_playerconfig.asm">
       <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="Debug\bin\ALIENMSX.ROM">
+      <Filter>ROM</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
