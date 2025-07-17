@@ -367,28 +367,6 @@ const uint8_t cNostromo_img_guide[] = { ALIEN_RLE_BLACK_TILE | 6,
 #define PAT_ALIEN_TONGUE      0x0E
 #define PAT_ALIEN_TONGUE_FLIP 0x0F
 
-/*
-enum pattern_type
-{
-	PAT_PLAYER_WALK = 0,
-	PAT_PLAYER_WALK_FLIP,
-	PAT_PLAYER_FALL,
-	PAT_PLAYER_JUMP,
-	PAT_PLAYER_JUMP_FLIP,
-	PAT_PLAYER_CLIMB,
-	PAT_SHIELD,
-	PAT_SHOT,
-	PAT_SHOT_FLIP,
-	PAT_EXPLOSION,
-	PAT_MINIMAP,
-	PAT_PTS,
-	PAT_ENEMY_BASE,
-	PAT_ENEMY_BASE_FLIP,
-	PAT_ALIEN_TONGUE,
-	PAT_ALIEN_TONGUE_FLIP
-};
-*/
-
 // sub-songs matching our Arkos song
 // configure the song to use MSX AY
 #define SONG_IN_GAME   0

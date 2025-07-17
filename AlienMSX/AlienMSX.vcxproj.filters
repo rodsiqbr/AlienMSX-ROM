@@ -42,6 +42,12 @@
     <Filter Include="UBoxLib Files">
       <UniqueIdentifier>{884f3473-7da4-4ae7-bf0f-0d9b30310405}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Sound Files\60Hz">
+      <UniqueIdentifier>{eb0f7065-b485-41cd-b336-0d559fbe5959}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sound Files\50Hz">
+      <UniqueIdentifier>{530904ce-bd74-4197-8e92-2f776817fdca}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetconfig.h">
@@ -166,39 +172,6 @@
     <None Include="data\txtgen2.py">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="sounds\akm.rel">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\akm.z80">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\akm_ubox.asm">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\Effects.aks">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\Effects_playerconfig.asm">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\Songs.aks">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\Songs_playerconfig.asm">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\akm_sdcc.asm">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\Effects.asm">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\PlayerAkm.asm">
-      <Filter>Sound Files</Filter>
-    </None>
-    <None Include="sounds\Songs.asm">
-      <Filter>Sound Files</Filter>
-    </None>
     <None Include="uboxlib\src\ubox_ext\dzx0_standard.z80">
       <Filter>UBoxLib Files</Filter>
     </None>
@@ -219,6 +192,93 @@
     </None>
     <None Include="data\mapgen2.py">
       <Filter>Resource Files</Filter>
+    </None>
+    <None Include="data\zx0.exe">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="sounds\60Hz\akm.bin">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\akm.sym">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\akm.z80">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\akm_sdcc.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\akm_ubox.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\akm60hz.rel">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\Effects.aks">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\Effects.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\Effects_playerconfig.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\PlayerAkm.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\PlayerAkm_SoundEffects.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\Songs60hz.aks">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\Songs60hz.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\60Hz\Songs60hz_playerconfig.asm">
+      <Filter>Sound Files\60Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\akm.bin">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\akm.sym">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\akm.z80">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\akm_sdcc.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\akm_ubox.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\akm50hz.rel">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\Effects.aks">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\Effects.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\Effects_playerconfig.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\PlayerAkm.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\PlayerAkm_SoundEffects.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\Songs50hz.aks">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\Songs50hz.asm">
+      <Filter>Sound Files\50Hz</Filter>
+    </None>
+    <None Include="sounds\50Hz\Songs50hz_playerconfig.asm">
+      <Filter>Sound Files\50Hz</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
@@ -249,8 +309,11 @@
     <Text Include="Config\BuildEvents.txt">
       <Filter>Project Config</Filter>
     </Text>
-    <Text Include="sounds\build.txt">
-      <Filter>Sound Files</Filter>
+    <Text Include="sounds\60Hz\build.txt">
+      <Filter>Sound Files\60Hz</Filter>
+    </Text>
+    <Text Include="sounds\50Hz\build.txt">
+      <Filter>Sound Files\50Hz</Filter>
     </Text>
   </ItemGroup>
   <ItemGroup>
