@@ -12,10 +12,10 @@ GitHub AlienMSX project
 ## Requirements
 
 - **Visual Studio Community 2019**
-- **MSX Templates for VisualStudio** by Danilo Angelo (https://github.com/DamnedAngel/MSX-Templates-for-VisualStudio)
+- **MSX Templates for VisualStudio** v00.05.02 (Rubens) by Danilo Angelo (https://github.com/DamnedAngel/MSX-Templates-for-VisualStudio)
 - **SDCC** cross-compiler v4.1.0
 - **Hex2Bin** v2.5
-- **Tiled** Map Editor (https://www.mapeditor.org/)
+- **Tiled** Map Editor v1.10.2 or higher (https://www.mapeditor.org/)
 - **Arkos Tracker 2** (https://www.julien-nevo.com/arkostracker/)
 - **ZX0** compressor v1.5 (https://github.com/einar-saukas/ZX0/tree/main)
 - **Python** (https://www.python.org/)
