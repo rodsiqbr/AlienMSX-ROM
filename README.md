@@ -1,4 +1,4 @@
-# AlienMSX; MSX1-based platform game (based on Alien movie)
+# AlienMSX: MSX1-based platform game (based on 1979 movie Alien)
 
 ## LICENSE
 
